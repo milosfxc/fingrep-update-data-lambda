@@ -1,3 +1,5 @@
+import time
+
 import yfinance as yf
 import requests
 from selenium.webdriver.common.by import By
@@ -28,15 +30,15 @@ def get_yahoo_sector_and_industry(ticker):
 def get_finviz_sector_and_industry(ticker):
     ans = dict()
     options = uc.ChromeOptions()
-    options.add_argument("--headless")
-    options.add_argument('whitelisted-ips')
-    options.add_argument("no-sandbox")
+#    options.add_argument("--headless")
+#    options.add_argument('whitelisted-ips')
+#    options.add_argument("no-sandbox")
     options.add_argument("disable-dev-shm-usage")
     options.add_argument("--disable-extensions")
-    options.add_argument("enable-automation")
+#    options.add_argument("enable-automation")
     options.add_argument("--disable-browser-side-navigation")
-    options.add_argument("--disable-web-security")
-    options.add_argument("--disable-dev-shm-usage")
+#    options.add_argument("--disable-web-security")
+#    options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-infobars")
     options.add_argument("--disable-gpu")
     driver = uc.Chrome(version_main=120, options=options)
@@ -45,9 +47,12 @@ def get_finviz_sector_and_industry(ticker):
     if not elements:
         return None
     elements = elements[0].text.split('•')
+    if len(elements) < 2:
+        return None
     ans['sector'] = elements[0].strip()
     ans['industry'] = elements[1].strip()
     driver.quit()
     return ans
 
-get_finviz_sector_and_industry('TSLA')
+
+print(get_finviz_sector_and_industry('AMX'))
