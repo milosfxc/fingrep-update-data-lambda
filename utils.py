@@ -43,16 +43,15 @@ def get_finviz_sector_and_industry(ticker):
     options.add_argument("--disable-gpu")
     driver = uc.Chrome(version_main=120, options=options)
     driver.get(f'https://finviz.com/quote.ashx?t={ticker}&ty=c&ta=1&p=d')
-    elements = driver.find_elements(By.CLASS_NAME, 'quote-links')
-    if not elements:
+    element = driver.find_elements(By.CLASS_NAME, 'quote-links')
+    if not element:
+        print("utils#get_finviz_sector_and_industry: couldn't find the element by its class name")
         return None
-    elements = elements[0].text.split('•')
+    elements = element[0].text.split('•')
     if len(elements) < 2:
+        print("utils#get_finviz_sector_and_industry: elements array was empty")
         return None
     ans['sector'] = elements[0].strip()
     ans['industry'] = elements[1].strip()
     driver.quit()
     return ans
-
-
-print(get_finviz_sector_and_industry('AMX'))
