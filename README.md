@@ -19,3 +19,4 @@ https://financialmodelingprep.com/api/v3/symbol/NASDAQ?apikey=KAKTnsmvIxPYvpwuza
 * Closed-End Fund - Equity -> Asset Management (industry)
 * Closed-End Fund - Foreign -> Asset Management (industry)
 * Closed-End Fund - Debt -> Asset Management (industry)
+

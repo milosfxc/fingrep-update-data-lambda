@@ -1,0 +1,26 @@
+id,type,asset_class,locale,name,acronym,mic,operating_mic,participant_id,url
+1,exchange,stocks,us,"NYSE American, LLC",AMEX,XASE,XNYS,A,https://www.nyse.com/markets/nyse-american
+2,exchange,stocks,us,"Nasdaq OMX BX, Inc.",,XBOS,XNAS,B,https://www.nasdaq.com/solutions/nasdaq-bx-stock-market
+3,exchange,stocks,us,"NYSE National, Inc.",NSX,XCIS,XNYS,C,https://www.nyse.com/markets/nyse-national
+4,TRF,stocks,us,FINRA NYSE TRF,,FINY,XNYS,D,https://www.finra.org
+4,TRF,stocks,us,FINRA Nasdaq TRF Carteret,,FINN,FINR,D,https://www.finra.org
+4,TRF,stocks,us,FINRA Nasdaq TRF Chicago,,FINC,FINR,D,https://www.finra.org
+4,TRF,stocks,us,FINRA Alternative Display Facility,,XADF,FINR,D,https://www.finra.org
+5,SIP,stocks,us,Unlisted Trading Privileges,,,XNAS,E,https://www.utpplan.com
+6,TRF,stocks,us,"International Securities Exchange, LLC - Stocks",,XISE,XNAS,I,https://nasdaq.com/solutions/nasdaq-ise
+7,exchange,stocks,us,Cboe EDGA,,EDGA,XCBO,J,https://www.cboe.com/us/equities
+8,exchange,stocks,us,Cboe EDGX,,EDGX,XCBO,K,https://www.cboe.com/us/equities
+9,exchange,stocks,us,"NYSE Chicago, Inc.",,XCHI,XNYS,M,https://www.nyse.com/markets/nyse-chicago
+10,exchange,stocks,us,New York Stock Exchange,,XNYS,XNYS,N,https://www.nyse.com
+11,exchange,stocks,us,"NYSE Arca, Inc.",,ARCX,XNYS,P,https://www.nyse.com/markets/nyse-arca
+12,exchange,stocks,us,Nasdaq,,XNAS,XNAS,T,https://www.nasdaq.com
+13,SIP,stocks,us,Consolidated Tape Association,,,XNYS,S,https://www.nyse.com/data/cta
+14,exchange,stocks,us,Long-Term Stock Exchange,,LTSE,LTSE,L,https://www.ltse.com
+15,exchange,stocks,us,Investors Exchange,,IEXG,IEXG,V,https://www.iextrading.com
+16,TRF,stocks,us,Cboe Stock Exchange,,CBSX,XCBO,W,https://www.cboe.com
+17,exchange,stocks,us,Nasdaq Philadelphia Exchange LLC,,XPHL,XNAS,X,https://www.nasdaq.com/solutions/nasdaq-phlx
+18,exchange,stocks,us,Cboe BYX,,BATY,XCBO,Y,https://www.cboe.com/us/equities
+19,exchange,stocks,us,Cboe BZX,,BATS,XCBO,Z,https://www.cboe.com/us/equities
+20,exchange,stocks,us,MIAX Pearl,,EPRL,MIHI,H,https://www.miaxoptions.com/alerts/pearl-equities
+21,exchange,stocks,us,Members Exchange,,MEMX,MEMX,U,https://www.memx.com
+62,ORF,stocks,us,OTC Equity Security,,OOTC,FINR,,https://www.finra.org/filing-reporting/over-the-counter-reporting-facility-orf
