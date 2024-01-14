@@ -1,6 +1,6 @@
 import psycopg2
 from psycopg2.extras import DictCursor
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import requests
 import pandas as pd
@@ -146,6 +146,16 @@ def prepare_for_insert(df):
     df['id'] = df['id'].astype(int)
     df.rename(columns={'v': 'volume', 'o': 'open', 'c': 'close', 'h': 'high', 'l': 'low', 'id': 'share_id'},
               inplace=True)
+
+    utc_now = datetime.utcnow().replace(tzinfo=timezone.utc).date()
+    all_rows_current_utc_date = all(df['date'] == utc_now)
+    if not all_rows_current_utc_date:
+        all_tickers_count = len(df)
+        df.query("date != @utc_now", inplace=True)
+        current_date_tickers_count = len(df)
+        print(
+            f"Grouped daily bars API had {current_date_tickers_count} out of {all_tickers_count} tickers on {utc_now}")
+
     return df
 
 
@@ -222,7 +232,6 @@ def insert_new_ticker(connection, shares, shares_info):
         print(f"#insert_new_ticker({shares.get('ticker')}): ", e)
 
 
-
 #  Postgres params
 host = os.getenv("FINGREP_POSTGRES_HOST")
 database = os.getenv("FINGREP_POSTGRES_DATABASE")
@@ -231,28 +240,35 @@ password = os.getenv("FINGREP_POSTGRES_PASS")
 port = 5432
 engine = create_engine(f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}")
 conn = psycopg2.connect(database=database, user=user, host=host, port=port, password=password)
-# # Get existing tickers and new daily data
-# df_grouped_daily = get_grouped_daily_bars()
-# existing_tickers = get_existing_tickers()
-#
-# # Data frame for existing tickers
-# df_grouped_daily['id'] = df_grouped_daily['T'].map(existing_tickers)
-# df_grouped_daily_existing = df_grouped_daily.dropna(subset=['id'])
 
+# Get existing tickers and new daily data
+existing_tickers = get_existing_tickers()
+df_grouped_daily = get_grouped_daily_bars()
+
+# Data frame for existing tickers
+df_grouped_daily['id'] = df_grouped_daily['T'].map(existing_tickers)
+df_grouped_daily_existing = df_grouped_daily.dropna(subset=['id'])
+
+# Importing data for existing tickers
+df_grouped_daily_existing = prepare_for_insert(df_grouped_daily_existing.copy())
+try:
+    df_grouped_daily_existing.to_sql('d_timeframe', con=engine, if_exists='append', index=False,
+                                               index_label=['share_id', 'date'])
+except Exception as e:
+    print(f"Existing tickers insertion error: {e}")
+
+
+
+
+# get_ticker_details_v3('NUKK')
 
 # Data frame for new tickers
 # df_grouped_daily_new = df_grouped_daily[df_grouped_daily['id'].isna()]
 # loop over tickers that aren't in the database
-ticker_data = get_ticker_details_v3('CCJ')
-finviz_data = get_finviz_sector_and_industry_and_country(
-    'CCJ')  # maybe I should add here an if statement to try to scrape with yfinance
-shares_data, shares_info_data = extract_ticker_details_v3(ticker_data, get_foreign_keys(), finviz_data)
-insert_new_ticker(conn, shares_data, shares_info_data)
+# ticker_data = get_ticker_details_v3('CCJ')
+# finviz_data = get_finviz_sector_and_industry_and_country(
+#     'CCJ')  # maybe I should add here an if statement to try to scrape with yfinance
+# shares_data, shares_info_data = extract_ticker_details_v3(ticker_data, get_foreign_keys(), finviz_data)
+# insert_new_ticker(conn, shares_data, shares_info_data)
 
 # Inserting new ticker
-
-
-# Importing data for existing tickers
-# df_grouped_daily_existing = prepare_for_insert(df_grouped_daily_existing.copy())
-# df_grouped_daily_existing.to_sql('d_timeframe', con=engine, if_exists='append', index=False, index_label=['share_id', 'date'])
-# get_ticker_details_v3('NUKK')

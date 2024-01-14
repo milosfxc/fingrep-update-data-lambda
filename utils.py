@@ -2,8 +2,11 @@ import os
 import pandas as pd
 import yfinance as yf
 import requests
+from selenium.webdriver import Keys
 from selenium.webdriver.common.by import By
 import undetected_chromedriver as uc
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 # Pandas configuration
 pd.set_option('display.max_columns', None)
@@ -41,6 +44,7 @@ def get_finviz_sector_and_industry_and_country(ticker):
 #    options.add_argument("no-sandbox")
     options.add_argument("disable-dev-shm-usage")
     options.add_argument("--disable-extensions")
+    options.add_argument("--disable-page-load-strategy")
 #    options.add_argument("enable-automation")
     options.add_argument("--disable-browser-side-navigation")
 #    options.add_argument("--disable-web-security")
@@ -49,11 +53,18 @@ def get_finviz_sector_and_industry_and_country(ticker):
     options.add_argument("--disable-gpu")
     driver = uc.Chrome(version_main=120, options=options)
     driver.get(f'https://finviz.com/quote.ashx?t={ticker}&ty=c&ta=1&p=d')
-    element = driver.find_elements(By.CLASS_NAME, 'quote-links')
+    driver.implicitly_wait(1)
+    wait = WebDriverWait(driver, 5)
+
+    wait.until(EC.presence_of_element_located((By.TAG_NAME, 'body'))).send_keys(Keys.NULL)  # This line is to make sure the body is focused
+    wait.until(EC.presence_of_element_located((By.TAG_NAME, 'body'))).send_keys(Keys.NULL)  # This line is to make sure the body is focused
+    wait.until(EC.presence_of_element_located((By.TAG_NAME, 'body'))).send_keys(Keys.NULL)  # This line is to make sure the body is focused
+    wait.until(EC.presence_of_element_located((By.TAG_NAME, 'body'))).send_keys(    Keys.NULL)  # This line is to make sure the body is focused
+    element = wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'quote-links')))
     if not element:
         print(f"utils#get_finviz_sector_and_industry#{ticker}: couldn't find the element by its class name")
         return None
-    elements = element[0].text.split('•')
+    elements = element.text.split('•')
     if len(elements) < 2:
         print(f"utils#get_finviz_sector_and_industry#{ticker}: elements array was empty")
         return None
@@ -79,7 +90,6 @@ def get_polygon_undefined():
         return None
 
 
-
 # df = pd.read_csv('data/polygon_exchanges.csv', index_col='id')
 #
 # table = 'exchanges'
@@ -88,3 +98,4 @@ def get_polygon_undefined():
 #
 # statm = generate_insert_statement(table, columns, values)
 # print(statm)
+
