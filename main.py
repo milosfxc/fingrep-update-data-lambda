@@ -85,7 +85,7 @@ def get_foreign_keys():
 
 
 def get_grouped_daily_bars():
-    current_utc_date = datetime.utcnow() - timedelta(days=3)
+    current_utc_date = datetime.utcnow() - timedelta(days=1)
     current_utc_date = current_utc_date.strftime("%Y-%m-%d")
     url = f"https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/{current_utc_date}"
 
@@ -117,6 +117,38 @@ def get_grouped_daily_bars():
         print(f"Error: {response.status_code} - {response.text}")
 
 
+def get_and_insert_aggregated_bars(ticker, ticker_id, date_from, limit):
+    current_utc_date = datetime.utcnow().strftime("%Y-%m-%d")
+    url = (f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{date_from}/{current_utc_date}"
+           f"?adjusted=true&sort=asc&limit={limit}")
+    params = {
+        "apiKey": os.getenv("POLYGON_API_KEY")
+    }
+
+    response = requests.get(url, params=params)
+
+    if response.status_code == 200:
+        data = response.json()
+        df_aggregated_daily = pd.DataFrame(data['results'])
+
+        # Volume column conversion to integer
+        df_aggregated_daily['v'] = df_aggregated_daily['v'].astype(int)
+        df_aggregated_daily['share_id'] = ticker_id
+        df_aggregated_daily.drop('n', axis=1, inplace=True)
+        df_aggregated_daily.rename(columns={'v': 'volume', 'o': 'open', 'c': 'close', 'h': 'high', 'l': 'low',
+                                            'vw': 'vwap', 't': 'date'},
+                                   inplace=True)
+        df_aggregated_daily['date'] = pd.to_datetime(df_aggregated_daily['date'], unit='ms').dt.date
+        try:
+            df_aggregated_daily.to_sql('d_timeframe', con=engine, if_exists='append', index=False,
+                                     index_label=['share_id', 'date'])
+        except Exception as e:
+            print(f"#get_and_insert_aggregated_bars#{ticker}#Database insertion error: {e}")
+
+    else:
+        print(f"Error: {response.status_code} - {response.text}")
+
+
 def check_nan_ohlc(df):
     tickers_with_nan = df.loc[df[['o', 'h', 'l', 'c']].isna().any(axis=1), 'T'].tolist()
     if tickers_with_nan:
@@ -129,7 +161,7 @@ def check_nan_ohlc(df):
 
 def check_one_date(df):
     if not df['t'].nunique() == 1:
-        print("Not all tickers have the same date.")
+        print("#check_one_date#Not all tickers have the same date.")
 
 
 def check_row_number(resultsCount, resultsLength):
@@ -151,6 +183,7 @@ def prepare_for_insert(df):
     all_rows_current_utc_date = all(df['date'] == utc_now)
     if not all_rows_current_utc_date:
         all_tickers_count = len(df)
+        # Change operator from != to == for premium Polygon.io plan
         df.query("date != @utc_now", inplace=True)
         current_date_tickers_count = len(df)
         print(
@@ -223,7 +256,7 @@ def insert_new_ticker(connection, shares, shares_info):
             """.format(columns=', '.join(shares_info.keys()), placeholders=', '.join(['%s'] * len(shares_info)))
 
             cursor.execute(insert_shares_info_query, list(shares_info.values()))
-
+            return shares_info['share_id']
     except psycopg2.Error or Exception as e:
         # An exception will automatically trigger a rollback
         print(f"#insert_new_ticker({shares.get('ticker')}): ", e)
@@ -253,17 +286,41 @@ df_grouped_daily_existing = df_grouped_daily.dropna(subset=['id'])
 df_grouped_daily_existing = prepare_for_insert(df_grouped_daily_existing.copy())
 try:
     df_grouped_daily_existing.to_sql('d_timeframe', con=engine, if_exists='append', index=False,
-                                               index_label=['share_id', 'date'])
+                                     index_label=['share_id', 'date'])
 except Exception as e:
-    print(f"Existing tickers insertion error: {e}")
-
-
-
-
-# get_ticker_details_v3('NUKK')
+    print(f": {e}")
+Existing tickers insertion error
 
 # Data frame for new tickers
-# df_grouped_daily_new = df_grouped_daily[df_grouped_daily['id'].isna()]
+df_grouped_daily_new = df_grouped_daily[df_grouped_daily['id'].isna()]
+tickers_list = df_grouped_daily_new['T'].values.tolist()
+
+
+def get_new_ticker_data_and_insert(ticker):
+    ticker_data = get_ticker_details_v3(ticker)
+    finviz_data = get_finviz_sector_and_industry_and_country(ticker)
+    shares_data, shares_info_data = extract_ticker_details_v3(ticker_data, get_foreign_keys(), finviz_data)
+    ticker_id = insert_new_ticker(conn, shares_data, shares_info_data)
+
+    # Starter plan required for 2+ years historical data
+    three_years_before_now = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 3)
+    # Under basic plan up to 2 years historical data
+    two_years_before_now = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 2)
+
+    ipo_date = datetime.strptime(shares_info_data['ipo_date'], '%Y-%m-%d').date()
+    if ipo_date > two_years_before_now:
+        get_and_insert_aggregated_bars(ticker, ticker_id, ipo_date, 5000)
+    else:
+        get_and_insert_aggregated_bars(ticker, ticker_id, two_years_before_now, 5000)
+
+
+counter = 0
+for new_ticker in tickers_list:
+    get_new_ticker_data_and_insert(new_ticker)
+    counter = counter + 1
+    if counter == 1:
+        break
+
 # loop over tickers that aren't in the database
 # ticker_data = get_ticker_details_v3('CCJ')
 # finviz_data = get_finviz_sector_and_industry_and_country(
@@ -272,3 +329,5 @@ except Exception as e:
 # insert_new_ticker(conn, shares_data, shares_info_data)
 
 # Inserting new ticker
+
+

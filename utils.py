@@ -39,6 +39,7 @@ def get_yahoo_sector_and_industry(ticker):
 def get_finviz_sector_and_industry_and_country(ticker):
     ans = dict()
     options = uc.ChromeOptions()
+    options.page_load_strategy = 'none'
 #    options.add_argument("--headless")
 #    options.add_argument('whitelisted-ips')
 #    options.add_argument("no-sandbox")
@@ -49,6 +50,7 @@ def get_finviz_sector_and_industry_and_country(ticker):
     options.add_argument("--disable-browser-side-navigation")
 #    options.add_argument("--disable-web-security")
 #    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument('--disable-popup-blocking')
     options.add_argument("--disable-infobars")
     options.add_argument("--disable-gpu")
     driver = uc.Chrome(version_main=120, options=options)
