@@ -144,6 +144,7 @@ def get_and_insert_aggregated_bars(ticker, ticker_id, date_from, limit):
         df_aggregated_daily['date'] = pd.to_datetime(df_aggregated_daily['date'], unit='ms').dt.date
         df_aggregated_daily['rsi'] = rsi_tradingview_new_ticker(df_aggregated_daily.copy())
         df_aggregated_daily['abs_atr'] = atr_new_ticker(df_aggregated_daily.copy())
+        df_aggregated_daily['rel_atr'] = (df_aggregated_daily['abs_atr']/df_aggregated_daily['close'] * 100).round(2)
         #df_aggregated_daily['avg_volume'] = df_aggregated_daily['volume'].rolling(window=20).mean()
         #df_aggregated_daily['sma10'] = df_aggregated_daily['close'].rolling(window=10).mean().round(4)
         #df_aggregated_daily['sma20'] = df_aggregated_daily['close'].rolling(window=20).mean().round(4)
