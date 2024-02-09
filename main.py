@@ -10,6 +10,7 @@ import utils
 from utils import get_finviz_sector_and_industry_and_country
 from sqlalchemy import create_engine
 from utils import atr_new_ticker
+
 # Pandas configuration
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 400)
@@ -144,28 +145,29 @@ def get_and_insert_aggregated_bars(ticker, ticker_id, date_from, limit):
         df_aggregated_daily['date'] = pd.to_datetime(df_aggregated_daily['date'], unit='ms').dt.date
         df_aggregated_daily['rsi'] = rsi_tradingview_new_ticker(df_aggregated_daily.copy())
         df_aggregated_daily['abs_atr'] = atr_new_ticker(df_aggregated_daily.copy())
-        #df_aggregated_daily['avg_volume'] = df_aggregated_daily['volume'].rolling(window=20).mean()
-        #df_aggregated_daily['sma10'] = df_aggregated_daily['close'].rolling(window=10).mean().round(4)
-        #df_aggregated_daily['sma20'] = df_aggregated_daily['close'].rolling(window=20).mean().round(4)
-        #df_aggregated_daily['sma50'] = df_aggregated_daily['close'].rolling(window=50).mean().round(4)
-        #df_aggregated_daily['sma100'] = df_aggregated_daily['close'].rolling(window=100).mean().round(4)
-        #df_aggregated_daily['sma200'] = df_aggregated_daily['close'].rolling(window=200).mean().round(4)
-        #df_aggregated_daily['adr(%)'] = (100 * ((df_aggregated_daily['high'] / df_aggregated_daily['low'])
+        df_aggregated_daily['rel_atr'] = (df_aggregated_daily['abs_atr']/df_aggregated_daily['close'] * 100).round(2)
+        # df_aggregated_daily['avg_volume'] = df_aggregated_daily['volume'].rolling(window=20).mean()
+        # df_aggregated_daily['sma10'] = df_aggregated_daily['close'].rolling(window=10).mean().round(4)
+        # df_aggregated_daily['sma20'] = df_aggregated_daily['close'].rolling(window=20).mean().round(4)
+        # df_aggregated_daily['sma50'] = df_aggregated_daily['close'].rolling(window=50).mean().round(4)
+        # df_aggregated_daily['sma100'] = df_aggregated_daily['close'].rolling(window=100).mean().round(4)
+        # df_aggregated_daily['sma200'] = df_aggregated_daily['close'].rolling(window=200).mean().round(4)
+        # df_aggregated_daily['adr(%)'] = (100 * ((df_aggregated_daily['high'] / df_aggregated_daily['low'])
         #                                       .rolling(window=20).mean() - 1)).round(2)
-        #df_aggregated_daily['adr($)'] = ((df_aggregated_daily['high'] - df_aggregated_daily['low'])
+        # df_aggregated_daily['adr($)'] = ((df_aggregated_daily['high'] - df_aggregated_daily['low'])
         #                                 .rolling(window=20).mean()).round(2)
-        #df_aggregated_daily['rel_volume'] = (df_aggregated_daily['volume']/df_aggregated_daily['avg_volume']).round(2)
-        #df_aggregated_daily['rsi'] = utils.rsi_tradingview(df_aggregated_daily)
-        #df_aggregated_daily['atr'] = utils.calculate_atr(df_aggregated_daily)
-        #print(df_aggregated_daily['atr'])
+        # df_aggregated_daily['rel_volume'] = (df_aggregated_daily['volume']/df_aggregated_daily['avg_volume']).round(2)
+        # df_aggregated_daily['rsi'] = utils.rsi_tradingview(df_aggregated_daily)
+        # df_aggregated_daily['atr'] = utils.calculate_atr(df_aggregated_daily)
+        # print(df_aggregated_daily['atr'])
         try:
             df_aggregated_daily.to_sql('d_timeframe', con=engine, if_exists='append', index=False,
-                                     index_label=['share_id', 'date'])
+                                       index_label=['share_id', 'date'])
         except Exception as e:
             print(f"#get_and_insert_aggregated_bars#{ticker}#Database insertion error: {e}")
 
     else:
-        print(f"Error: {response.status_code} - {response.text}")
+        print(f"#get_and_insert_aggregated_bars: {response.status_code} - {response.text}")
 
 
 def check_nan_ohlc(df):
@@ -189,7 +191,6 @@ def check_row_number(resultsCount, resultsLength):
         print("Number of results: ", resultsLength)
     if resultsCount != resultsLength:
         print(f"resultCount length {resultsCount} doesn't match with the results length {resultsLength}")
-
 
 
 def prepare_for_insert(df):
@@ -231,7 +232,7 @@ def get_ticker_details_v3(ticker):
         print(f"#get_ticker_details_v3({ticker}): Error: {response.status_code} - {response.text}")
 
 
-def extract_ticker_details_v3(ticker_details, foreign_keys, scraped_data):
+def extract_ticker_details_v3(ticker_details, foreign_keys):
     ticker_data = {
         'ticker': ticker_details.get('ticker'),
         'cik': ticker_details.get('cik'),
@@ -243,9 +244,6 @@ def extract_ticker_details_v3(ticker_details, foreign_keys, scraped_data):
         'share_type_id': foreign_keys['share_types'].get(ticker_details.get('type')),
         'shares_outstanding': ticker_details.get('share_class_shares_outstanding'),
         'weighted_shares_outstanding': ticker_details.get('weighted_shares_outstanding'),
-        'sector_id': foreign_keys['sectors'].get(scraped_data.get('sector')),
-        'industry_id': foreign_keys['industries'].get(scraped_data.get('industry')),
-        'country_id': foreign_keys['countries'].get(scraped_data.get('country'))
     }
     shares = {key: value for key, value in ticker_data.items() if
               key not in ['weighted_shares_outstanding', 'ipo_date', 'shares_outstanding', 'cik', 'homepage_url']}
@@ -285,44 +283,13 @@ def insert_new_ticker(connection, shares, shares_info):
         print(f"#insert_new_ticker({shares.get('ticker')}): ", e)
 
 
-#  Postgres params
-host = os.getenv("FINGREP_POSTGRES_HOST")
-database = os.getenv("FINGREP_POSTGRES_DATABASE")
-user = os.getenv("FINGREP_POSTGRES_USER")
-password = os.getenv("FINGREP_POSTGRES_PASS")
-port = 5432
-engine = create_engine(f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}")
-conn = psycopg2.connect(database=database, user=user, host=host, port=port, password=password)
-#
-# # Get existing tickers and new daily data
-# existing_tickers = get_existing_tickers()
-# df_grouped_daily = get_grouped_daily_bars()
-#
-# # Data frame for existing tickers
-# df_grouped_daily['id'] = df_grouped_daily['T'].map(existing_tickers)
-# df_grouped_daily_existing = df_grouped_daily.dropna(subset=['id'])
-#
-# # Importing data for existing tickers
-# df_grouped_daily_existing = prepare_for_insert(df_grouped_daily_existing.copy())
-# try:
-#     df_grouped_daily_existing.to_sql('d_timeframe', con=engine, if_exists='append', index=False,
-#                                      index_label=['share_id', 'date'])
-# except Exception as e:
-#     print(f": {e}")
-#
-# # Data frame for new tickers
-# df_grouped_daily_new = df_grouped_daily[df_grouped_daily['id'].isna()]
-# tickers_list = df_grouped_daily_new['T'].values.tolist()
-
-
 def get_new_ticker_data_and_insert(ticker):
     ticker_data = get_ticker_details_v3(ticker)
-    finviz_data = get_finviz_sector_and_industry_and_country(ticker)
-    shares_data, shares_info_data = extract_ticker_details_v3(ticker_data, get_foreign_keys(), finviz_data)
+    shares_data, shares_info_data = extract_ticker_details_v3(ticker_data, get_foreign_keys())
     ticker_id = insert_new_ticker(conn, shares_data, shares_info_data)
 
     # Starter plan required for 2+ years historical data
-    three_years_before_now = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 3)
+    # three_years_before_now = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 3)
     # Under basic plan up to 2 years historical data
     two_years_before_now = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 2)
 
@@ -333,14 +300,41 @@ def get_new_ticker_data_and_insert(ticker):
         get_and_insert_aggregated_bars(ticker, ticker_id, two_years_before_now, 5000)
 
 
+#  Postgres params
+host = os.getenv("FINGREP_POSTGRES_HOST")
+database = os.getenv("FINGREP_POSTGRES_DATABASE")
+user = os.getenv("FINGREP_POSTGRES_USER")
+password = os.getenv("FINGREP_POSTGRES_PASS")
+port = 5432
+engine = create_engine(f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}")
+conn = psycopg2.connect(database=database, user=user, host=host, port=port, password=password)
 
+# Get existing tickers and new daily data
+existing_tickers = get_existing_tickers()
+df_grouped_daily = get_grouped_daily_bars()
 
-# counter = 0
-# for new_ticker in tickers_list:
-#     get_new_ticker_data_and_insert(new_ticker)
-#     counter = counter + 1
-#     if counter == 1:
-#         break
+# Data frame for existing tickers
+df_grouped_daily['id'] = df_grouped_daily['T'].map(existing_tickers)
+df_grouped_daily_existing = df_grouped_daily.dropna(subset=['id'])
+
+# Importing data for existing tickers
+df_grouped_daily_existing = prepare_for_insert(df_grouped_daily_existing.copy())
+try:
+    df_grouped_daily_existing.to_sql('d_timeframe', con=engine, if_exists='append', index=False,
+                                     index_label=['share_id', 'date'])
+except Exception as e:
+    print(f"Error occurred while trying to insert daily data for existing tickers: {e}")
+
+# Data frame for new tickers
+df_grouped_daily_new = df_grouped_daily[df_grouped_daily['id'].isna()]
+tickers_list = df_grouped_daily_new['T'].values.tolist()
+
+counter = 0
+for new_ticker in tickers_list:
+    get_new_ticker_data_and_insert(new_ticker)
+    counter = counter + 1
+    if counter == 3:
+        break
 
 # loop over tickers that aren't in the database
 # ticker_data = get_ticker_details_v3('CCJ')
@@ -352,6 +346,6 @@ def get_new_ticker_data_and_insert(ticker):
 # Inserting new ticker
 
 
-#get_new_ticker_data_and_insert('BRK.A')
-get_new_ticker_data_and_insert('CCJ')
+# get_new_ticker_data_and_insert('BRK.A')
+#get_new_ticker_data_and_insert('CCJ')
 # get_new_ticker_data_and_insert('AAA')
