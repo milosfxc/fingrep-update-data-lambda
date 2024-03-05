@@ -1,90 +1,14 @@
-import psycopg2
-from psycopg2.extras import DictCursor
-from datetime import datetime, timezone
+from db_ops import *
+from datetime import datetime, timezone, timedelta
 import os
 import requests
 import pandas as pd
-from datetime import timedelta
-from utils import rsi_tradingview_new_ticker
-import utils
-from utils import get_finviz_sector_and_industry_and_country
-from sqlalchemy import create_engine
-from utils import atr_new_ticker
+from ta_utils import rsi_tv_new_tickers, rsi_tv_existing_tickers, atr_new_tickers, atr_existing_tickers, convergence
+from bs4 import BeautifulSoup
 
 # Pandas configuration
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 400)
-
-
-def get_existing_tickers():
-    conn = None
-    try:
-        conn = psycopg2.connect(
-            host=os.getenv("FINGREP_POSTGRES_HOST"),
-            database=os.getenv("FINGREP_POSTGRES_DATABASE"),
-            user=os.getenv("FINGREP_POSTGRES_USER"),
-            password=os.getenv("FINGREP_POSTGRES_PASS"))
-        cur = conn.cursor(cursor_factory=DictCursor)
-
-        # execute a statement
-        cur.execute('SELECT ticker, id FROM shares;')
-        ticker_dict = {}
-        for record in cur:
-            ticker_dict[record['ticker']] = record['id']
-
-        cur.close()
-        return ticker_dict
-    except (Exception, psycopg2.DatabaseError) as error:
-        print(error)
-    finally:
-        if conn is not None:
-            conn.close()
-
-
-def get_foreign_keys():
-    conn = None
-    try:
-        conn = psycopg2.connect(
-            host=os.getenv("FINGREP_POSTGRES_HOST"),
-            database=os.getenv("FINGREP_POSTGRES_DATABASE"),
-            user=os.getenv("FINGREP_POSTGRES_USER"),
-            password=os.getenv("FINGREP_POSTGRES_PASS"))
-        cur = conn.cursor(cursor_factory=DictCursor)
-
-        # Countries
-        cur.execute('SELECT country_name, id FROM countries;')
-        ans = {'countries': {}, 'sectors': {}, 'industries': {}, 'share_types': {}, 'exchanges': {}, 'currencies': {}}
-        for record in cur:
-            ans['countries'][record['country_name']] = record['id']
-        # Sectors
-        cur.execute('SELECT sector_name, id FROM sectors;')
-        for record in cur:
-            ans['sectors'][record['sector_name']] = record['id']
-        # Industries
-        cur.execute('SELECT industry_name, id FROM industries;')
-        for record in cur:
-            ans['industries'][record['industry_name']] = record['id']
-        # Share types
-        cur.execute('SELECT short_name, id FROM share_types;')
-        for record in cur:
-            ans['share_types'][record['short_name']] = record['id']
-        # Exchanges
-        cur.execute('SELECT mic, id FROM exchanges;')
-        for record in cur:
-            ans['exchanges'][record['mic']] = record['id']
-        # Currencies
-        cur.execute('SELECT symbol, id FROM currencies;')
-        for record in cur:
-            ans['currencies'][record['symbol']] = record['id']
-
-        cur.close()
-        return ans
-    except (Exception, psycopg2.DatabaseError) as error:
-        print("#get_foreign_keys: Couldn't get foreign keys.")
-        return None
-    finally:
-        if conn is not None:
-            conn.close()
 
 
 def get_grouped_daily_bars():
@@ -99,25 +23,24 @@ def get_grouped_daily_bars():
     }
 
     response = requests.get(url, params=params)
-
     if response.status_code == 200:
         data = response.json()
-        df_grouped_daily = pd.DataFrame(data['results'])
+        df_grouped_daily_polygon = pd.DataFrame(data['results'])
         # Checks resultsCount and the actual results array length
-        check_row_number(data['resultsCount'], len(df_grouped_daily))
+        check_row_number(data['resultsCount'], len(df_grouped_daily_polygon))
         # Removes rows that contain at least one NaN OHLC value
-        df_grouped_daily = check_nan_ohlc(df_grouped_daily)
+        df_grouped_daily_polygon = check_nan_ohlc(df_grouped_daily_polygon)
         # Removes rows if the ticker column contains anything other than capital letters:
-        df_grouped_daily = df_grouped_daily[df_grouped_daily['T'].str.isupper()]
-        df_grouped_daily = df_grouped_daily[~df_grouped_daily['T'].str.contains('\.')]
+        df_grouped_daily_polygon = df_grouped_daily_polygon[df_grouped_daily_polygon['T'].str.isupper()]
+        df_grouped_daily_polygon = df_grouped_daily_polygon[~df_grouped_daily_polygon['T'].str.contains('\.')]
         # Check if all tickers have the same UTC date
-        check_one_date(df_grouped_daily)
+        check_one_date(df_grouped_daily_polygon)
         # Volume column conversion to integer
-        df_grouped_daily['v'] = df_grouped_daily['v'].astype(int)
-        return df_grouped_daily
+        df_grouped_daily_polygon['v'] = df_grouped_daily_polygon['v'].astype(int)
+        return df_grouped_daily_polygon
 
     else:
-        print(f"Error: {response.status_code} - {response.text}")
+        raise Exception(f"Error: {response.status_code} - {response.text}")
 
 
 def get_and_insert_aggregated_bars(ticker, ticker_id, date_from, limit):
@@ -141,11 +64,11 @@ def get_and_insert_aggregated_bars(ticker, ticker_id, date_from, limit):
                                             'vw': 'vwap', 't': 'date'},
                                    inplace=True)
         df_aggregated_daily.dropna(subset=['open', 'high', 'low'], inplace=True)
-        df_aggregated_daily['volume'].fillna(0, inplace=True)
+        df_aggregated_daily['volume'] = df_aggregated_daily['volume'].fillna(0)
         df_aggregated_daily['date'] = pd.to_datetime(df_aggregated_daily['date'], unit='ms').dt.date
-        df_aggregated_daily['rsi'] = rsi_tradingview_new_ticker(df_aggregated_daily.copy())
-        df_aggregated_daily['abs_atr'] = atr_new_ticker(df_aggregated_daily.copy())
-        df_aggregated_daily['rel_atr'] = (df_aggregated_daily['abs_atr']/df_aggregated_daily['close'] * 100).round(2)
+        df_aggregated_daily['rsi'] = rsi_tv_new_tickers(df_aggregated_daily.copy())
+        df_aggregated_daily['abs_atr'] = atr_new_tickers(df_aggregated_daily.copy())
+        df_aggregated_daily['rel_atr'] = (df_aggregated_daily['abs_atr'] / df_aggregated_daily['close'] * 100).round(2)
         # df_aggregated_daily['avg_volume'] = df_aggregated_daily['volume'].rolling(window=20).mean()
         # df_aggregated_daily['sma10'] = df_aggregated_daily['close'].rolling(window=10).mean().round(4)
         # df_aggregated_daily['sma20'] = df_aggregated_daily['close'].rolling(window=20).mean().round(4)
@@ -161,11 +84,11 @@ def get_and_insert_aggregated_bars(ticker, ticker_id, date_from, limit):
         # df_aggregated_daily['atr'] = utils.calculate_atr(df_aggregated_daily)
         # print(df_aggregated_daily['atr'])
         try:
-            df_aggregated_daily.to_sql('d_timeframe', con=engine, if_exists='append', index=False,
+            df_aggregated_daily.to_sql('d_timeframe', con=postgres_engine(), if_exists='append', index=False,
                                        index_label=['share_id', 'date'])
         except Exception as e:
             print(f"#get_and_insert_aggregated_bars#{ticker}#Database insertion error: {e}")
-
+            raise
     else:
         print(f"#get_and_insert_aggregated_bars: {response.status_code} - {response.text}")
 
@@ -185,31 +108,31 @@ def check_one_date(df):
         print("#check_one_date#Not all tickers have the same date.")
 
 
-def check_row_number(resultsCount, resultsLength):
-    if resultsCount < 8000:
-        print("resultsCount number is bellow 8000: ", resultsCount)
-        print("Number of results: ", resultsLength)
-    if resultsCount != resultsLength:
-        print(f"resultCount length {resultsCount} doesn't match with the results length {resultsLength}")
+def check_row_number(results_count, results_length):
+    if results_count < 8000:
+        print("resultsCount number is bellow 8000: ", results_count)
+        print("Number of results: ", results_length)
+    if results_count != results_length:
+        print(f"resultCount length {results_count} doesn't match with the results length {results_length}")
 
 
 def prepare_for_insert(df):
     df['date'] = pd.to_datetime(df['t'], unit='ms').dt.date
-    df = df.drop(['vw', 'T', 'n', 't'], axis=1)
+    df = df.drop(['T', 'n', 't'], axis=1)
     df['id'] = df['id'].astype(int)
-    df.rename(columns={'v': 'volume', 'o': 'open', 'c': 'close', 'h': 'high', 'l': 'low', 'id': 'share_id'},
-              inplace=True)
+    df.rename(
+        columns={'v': 'volume', 'o': 'open', 'c': 'close', 'h': 'high', 'l': 'low', 'id': 'share_id', 'vw': 'vwap'},
+        inplace=True)
 
     utc_now = datetime.utcnow().replace(tzinfo=timezone.utc).date()
     all_rows_current_utc_date = all(df['date'] == utc_now)
     if not all_rows_current_utc_date:
         all_tickers_count = len(df)
         # Change operator from != to == for premium Polygon.io plan
-        df.query("date != @utc_now", inplace=True)
+        df.query("date == @utc_now", inplace=True)
         current_date_tickers_count = len(df)
         print(
             f"Grouped daily bars API had {current_date_tickers_count} out of {all_tickers_count} tickers on {utc_now}")
-
     return df
 
 
@@ -232,7 +155,7 @@ def get_ticker_details_v3(ticker):
         print(f"#get_ticker_details_v3({ticker}): Error: {response.status_code} - {response.text}")
 
 
-def extract_ticker_details_v3(ticker_details, foreign_keys):
+def extract_ticker_details_v3(ticker_details, finviz_data, foreign_keys):
     ticker_data = {
         'ticker': ticker_details.get('ticker'),
         'cik': ticker_details.get('cik'),
@@ -244,6 +167,9 @@ def extract_ticker_details_v3(ticker_details, foreign_keys):
         'share_type_id': foreign_keys['share_types'].get(ticker_details.get('type')),
         'shares_outstanding': ticker_details.get('share_class_shares_outstanding'),
         'weighted_shares_outstanding': ticker_details.get('weighted_shares_outstanding'),
+        'sector_id': foreign_keys['sectors'].get(finviz_data.get('sector')),
+        'industry_id': foreign_keys['industries'].get(finviz_data.get('industry')),
+        'country_id': foreign_keys['countries'].get(finviz_data.get('country'))
     }
     shares = {key: value for key, value in ticker_data.items() if
               key not in ['weighted_shares_outstanding', 'ipo_date', 'shares_outstanding', 'cik', 'homepage_url']}
@@ -275,39 +201,93 @@ def insert_new_ticker(connection, shares, shares_info):
 
             cursor.execute(insert_shares_info_query, list(shares_info.values()))
             return shares_info['share_id']
-    except psycopg2.Error or Exception as e:
+    except psycopg2.Error or Exception as insert_error:
         # An exception will automatically trigger a rollback
-        print(f"#insert_new_ticker({shares.get('ticker')}): ", e)
+        print(f"#insert_new_ticker_exception_block_1({shares.get('ticker')}): {insert_error}", )
     # No need to explicitly commit; it's handled by the 'with' block
     except Exception as e:
-        print(f"#insert_new_ticker({shares.get('ticker')}): ", e)
+        print(f"#insert_new_ticker_exception_block_2({shares.get('ticker')}): {e}")
 
 
 def get_new_ticker_data_and_insert(ticker):
     ticker_data = get_ticker_details_v3(ticker)
-    shares_data, shares_info_data = extract_ticker_details_v3(ticker_data, get_foreign_keys())
-    ticker_id = insert_new_ticker(conn, shares_data, shares_info_data)
-
+    finviz_data = get_finviz_sic(ticker)
+    shares_data, shares_info_data = extract_ticker_details_v3(ticker_data, finviz_data, foreign_keys_db)
+    ticker_id = insert_new_ticker(postgres_connection(), shares_data, shares_info_data)
     # Starter plan required for 2+ years historical data
     # three_years_before_now = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 3)
     # Under basic plan up to 2 years historical data
     two_years_before_now = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 2)
-
     ipo_date = datetime.strptime(shares_info_data['ipo_date'], '%Y-%m-%d').date()
+
     if ipo_date > two_years_before_now:
         get_and_insert_aggregated_bars(ticker, ticker_id, ipo_date, 5000)
     else:
         get_and_insert_aggregated_bars(ticker, ticker_id, two_years_before_now, 5000)
 
 
-#  Postgres params
-host = os.getenv("FINGREP_POSTGRES_HOST")
-database = os.getenv("FINGREP_POSTGRES_DATABASE")
-user = os.getenv("FINGREP_POSTGRES_USER")
-password = os.getenv("FINGREP_POSTGRES_PASS")
-port = 5432
-engine = create_engine(f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}")
-conn = psycopg2.connect(database=database, user=user, host=host, port=port, password=password)
+def update_atr_and_rsi_existing_tickers():
+    df_last_100 = get_last_100()
+    df_last_100.sort_values(by='date', ascending=True, inplace=True)
+    df_last_100['rsi'] = df_last_100.groupby('share_id', as_index=False).apply(
+        lambda group: rsi_tv_existing_tickers(group), include_groups=False).reset_index(level=0, drop=True)
+    df_last_100['abs_atr'] = df_last_100.groupby('share_id', as_index=False).apply(
+        lambda group: atr_existing_tickers(group), include_groups=False).reset_index(level=0, drop=True)
+    df_last_100['rel_atr'] = (df_last_100['abs_atr'] / df_last_100['close'] * 100).round(2)
+    convergence_tickers = df_last_100.groupby('share_id').apply(convergence, include_groups=False)
+    df_last_100 = pd.merge(df_last_100, convergence_tickers.rename('convergence'), on=['share_id'], how='left')
+    utc_now = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=1)
+    df_last_100 = df_last_100.query("date == @utc_now")
+    df_last_100 = df_last_100.drop(columns=['close', 'high', 'low'])
+    update_data = [(row['rsi'], row['abs_atr'], row['rel_atr'], row['share_id'], row['date'], row['convergence'])
+                   for index, row in df_last_100.iterrows()]
+    # Construct the SQL query
+    sql_update = """UPDATE d_timeframe AS d
+             SET rsi = t.rsi, abs_adr = t.abs_adr, rel_adr = t.rel_adr, convergence = t.convergence
+             FROM (VALUES %s) AS t(rsi, abs_adr, rel_adr, share_id, date, convergence)
+             WHERE d.share_id = t.share_id AND d.date = t.date"""
+    conn = postgres_connection()
+    try:
+        # Execute the query
+        cur = conn.cursor()
+        execute_values(cur, sql_update, update_data, page_size=len(update_data))
+        conn.commit()
+        cur.close()
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(f"#update_atr_and_rsi_existing_tickers: {error}")
+    finally:
+        if conn is not None:
+            conn.close()
+    # Close the connection
+    conn.close()
+
+
+def get_finviz_sic(ticker):
+    finviz_url = f"https://finviz.com/quote.ashx?t={ticker}&ty=c&p=d&b=1"
+    headers = {'User-Agent': 'Mozilla/5.0'}
+
+    try:
+        page = requests.get(url=finviz_url, headers=headers, timeout=10)  # Timeout set to 10 seconds
+        page.raise_for_status()  # Raise an HTTPError for bad requests
+        soup = BeautifulSoup(page.content, 'html.parser')
+
+        quote_links_div = soup.find('div', class_='quote-links')
+        links_text = [link.text.strip() for link in quote_links_div.find_all('a')][:3]
+
+        sic_data = {
+            'sector': links_text[0],
+            'industry': links_text[1],
+            'country': links_text[2]
+        }
+        return sic_data
+    except requests.exceptions.Timeout:
+        print(f"#get_finviz_sic({ticker}):Request timed out.")
+        return None
+    except requests.exceptions.RequestException as e:
+        print(f"#get_finviz_sic({ticker}): {e}")
+        return None
+
 
 # Get existing tickers and new daily data
 existing_tickers = get_existing_tickers()
@@ -320,32 +300,21 @@ df_grouped_daily_existing = df_grouped_daily.dropna(subset=['id'])
 # Importing data for existing tickers
 df_grouped_daily_existing = prepare_for_insert(df_grouped_daily_existing.copy())
 try:
-    df_grouped_daily_existing.to_sql('d_timeframe', con=engine, if_exists='append', index=False,
-                                     index_label=['share_id', 'date'])
+     df_grouped_daily_existing.to_sql('d_timeframe', con=postgres_engine(), if_exists='append', index=False,
+                                      index_label=['share_id', 'date'])
 except Exception as e:
     print(f"Error occurred while trying to insert daily data for existing tickers: {e}")
 
 # Data frame for new tickers
 df_grouped_daily_new = df_grouped_daily[df_grouped_daily['id'].isna()]
 tickers_list = df_grouped_daily_new['T'].values.tolist()
-
 counter = 0
+foreign_keys_db = get_foreign_keys()
 for new_ticker in tickers_list:
     get_new_ticker_data_and_insert(new_ticker)
     counter = counter + 1
-    if counter == 3:
+    if counter == 2:
         break
 
-# loop over tickers that aren't in the database
-# ticker_data = get_ticker_details_v3('CCJ')
-# finviz_data = get_finviz_sector_and_industry_and_country(
-#     'CCJ')  # maybe I should add here an if statement to try to scrape with yfinance
-# shares_data, shares_info_data = extract_ticker_details_v3(ticker_data, get_foreign_keys(), finviz_data)
-# insert_new_ticker(conn, shares_data, shares_info_data)
-
-# Inserting new ticker
-
-
-# get_new_ticker_data_and_insert('BRK.A')
-#get_new_ticker_data_and_insert('CCJ')
-# get_new_ticker_data_and_insert('AAA')
+# Update ATR and RSI for existing tickers
+update_atr_and_rsi_existing_tickers()
