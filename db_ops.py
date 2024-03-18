@@ -25,6 +25,16 @@ def postgres_engine():
     return engine
 
 
+def postgres_engine_v2():
+    host = os.getenv("FINGREP_POSTGRES_HOST")
+    database = 'fingrep_v2'
+    user = os.getenv("FINGREP_POSTGRES_USER")
+    password = os.getenv("FINGREP_POSTGRES_PASS")
+    port = 5432
+    engine = create_engine(f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{database}")
+    return engine
+
+
 def get_existing_tickers():
     conn = postgres_connection()
     try:
@@ -47,7 +57,6 @@ def get_existing_tickers():
 
 
 def get_last_100():
-    conn = postgres_connection()
     try:
         query = """
         SELECT share_id, date, close, high, low
@@ -65,9 +74,21 @@ def get_last_100():
     except (Exception, psycopg2.DatabaseError) as error:
         print(f"#get_last_100: {error}")
         raise
-    finally:
-        if conn is not None:
-            conn.close()
+
+
+def get_all():
+    try:
+        query = """
+        SELECT share_id, date, open, high, low, close, volume
+        FROM d_timeframe;
+        """
+        # execute a statement
+        df = pd.read_sql_query(query, postgres_engine_v2())
+        return df
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(f"#get_last_100: {error}")
+        raise
 
 
 def get_foreign_keys():

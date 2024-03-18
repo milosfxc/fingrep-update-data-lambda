@@ -14,7 +14,7 @@ pd.set_option('display.width', 400)
 def generate_insert_statement(table_name, column_names, values):
     sql_statement = f"INSERT INTO {table_name} ({column_names[0]}) VALUES "
     for i in range(0, len(values)):
-        value = f"('{values[i][0]}', '{values[i][1]}', '{values[i][2]}'), "
+        value = f"('{values[i]}'), "
         sql_statement = sql_statement + value
     return sql_statement
 
@@ -76,7 +76,7 @@ def atr_new_tickers(data, period=14):
 
 
 def atr_existing_tickers(data, period=14):
-    if len(data) > 14:
+    if len(data) > period:
         data = data.tail(15).copy()
         # Calculate True Range (TR)
         data['High-Low'] = data['high'] - data['low']
@@ -90,7 +90,7 @@ def atr_existing_tickers(data, period=14):
 
         # Drop intermediate columns
         data = data.drop(['High-Low', 'High-PrevClose', 'Low-PrevClose', 'TrueRange'], axis=1)
-        return data['abs_atr']
+        return data[['abs_atr']]
     else:
         return None
 
@@ -139,5 +139,21 @@ def convergence(df: pd.DataFrame):
             df_last_3['high'].iloc[0] == df_last_3['high'].max())
 
 
+def atr_existing_tickers_v2(data, period=14):
+    for share_id, group in data.groupby('share_id'):
+        if len(group) > 14:
+            group = group.tail(15).copy()
+            # Calculate True Range (TR)
+            group['High-Low'] = group['high'] - group['low']
+            group['High-PrevClose'] = np.abs(group['high'] - group['close'].shift(1))
+            group['Low-PrevClose'] = np.abs(group['low'] - group['close'].shift(1))
 
+            group['TrueRange'] = np.maximum.reduce([group['High-Low'], group['High-PrevClose'], group['Low-PrevClose']])
 
+            # Calculate Average True Range (ATR)
+            group['abs_atr'] = group['TrueRange'].rolling(window=period).mean().round(4)
+
+            # Drop intermediate columns
+            group = group.drop(['High-Low', 'High-PrevClose', 'Low-PrevClose', 'TrueRange'], axis=1)
+            data.loc[group.index, 'abs_atr'] = group['abs_atr']
+    return data['abs_atr']

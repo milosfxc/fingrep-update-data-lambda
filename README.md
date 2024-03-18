@@ -21,7 +21,7 @@ https://financialmodelingprep.com/api/v3/symbol/NASDAQ?apikey=KAKTnsmvIxPYvpwuza
 * Closed-End Fund - Debt -> Asset Management (industry)
 
 # trigger function for database
-CREATE OR REPLACE FUNCTION update_sma_test() 
+CREATE OR REPLACE FUNCTION update_d_timeframe() 
 RETURNS TRIGGER AS $$
 DECLARE 
     _sma10 d_timeframe.sma10%type;
@@ -36,12 +36,15 @@ DECLARE
 	_abs_change d_timeframe.abs_change%type;
 	_rel_change d_timeframe.rel_change%type;
 	_rel_gap d_timeframe.rel_gap%type;
+	_dense_volume d_timeframe.dense_volume%type;
+	_avg_volume_40 NUMERIC;
+	_avg_volume_ytd NUMERIC;
 BEGIN
 --SMA10
 WITH last_10 AS (
 	SELECT close
 	FROM d_timeframe
-	WHERE date <= NEW.date AND share_id = NEW.share_id
+	WHERE share_id = NEW.share_id
 	ORDER BY date DESC
 	LIMIT 10
 )
@@ -51,7 +54,7 @@ SELECT CASE WHEN (SELECT COUNT(*) FROM last_10) = 10 THEN ROUND(AVG(close), 4) E
 WITH last_20 AS (
 	SELECT high, low, close, volume
 	FROM d_timeframe
-	WHERE date <= NEW.date AND share_id = NEW.share_id
+	WHERE share_id = NEW.share_id
 	ORDER BY date DESC
 	LIMIT 20
 )
@@ -59,19 +62,45 @@ SELECT
 	CASE WHEN (SELECT COUNT(*) FROM last_20) = 20 THEN ROUND(100 * (AVG(high/low) - 1), 2) END AS _rel_adr,
 	CASE WHEN (SELECT COUNT(*) FROM last_20) = 20 THEN ROUND((AVG(high - low)), 2) END AS _abs_adr,
 	CASE WHEN (SELECT COUNT(*) FROM last_20) = 20 THEN ROUND(AVG(close), 4) END AS _sma20,
-	CASE WHEN (SELECT COUNT(*) FROM last_20) = 20 THEN ROUND(AVG(volume)) END AS _avg_volume
+	CASE WHEN (SELECT COUNT(*) FROM last_20) = 20 THEN ROUND(AVG(volume)) ELSE 0 END AS _avg_volume
 INTO 
 	_rel_adr, _abs_adr, _sma20, _avg_volume
 FROM last_20;
+--DENSE VOLUME
+WITH last_40 AS (
+	SELECT volume
+	FROM d_timeframe
+	WHERE share_id = NEW.share_id
+	ORDER BY date DESC
+	LIMIT 40
+)
+SELECT 
+	CASE WHEN (SELECT COUNT(*) FROM last_40) = 40 THEN ROUND(AVG(volume)) ELSE 0 END AS _avg_volume_40
+INTO _avg_volume_40
+FROM last_40;
 
+WITH last_252 AS (
+	SELECT volume FROM d_timeframe
+	WHERE share_id = NEW.share_id
+	ORDER BY date DESC
+	LIMIT 252
+)
+SELECT 
+	CASE WHEN (SELECT COUNT(*) FROM last_252) = 252 THEN ROUND(AVG(volume)) ELSE 0 END AS _avg_volume_ytd
+INTO _avg_volume_ytd
+FROM last_252;
+
+SELECT 
+	CASE WHEN _avg_volume_40 != 0 AND _avg_volume_ytd != 0 THEN ROUND(_avg_volume_40/_avg_volume_ytd, 2) ELSE 0 END AS _dense_volume
+INTO _dense_volume;
 --RVOL
-SELECT CASE WHEN _avg_volume IS NOT NULL THEN ROUND(volume::numeric/_avg_volume, 2) END INTO _rel_volume 
+SELECT CASE WHEN _avg_volume != 0 THEN ROUND(volume::numeric/_avg_volume, 2) END INTO _rel_volume 
 FROM d_timeframe WHERE share_id = NEW.share_id AND date = NEW.date;
 --SMA50
 WITH last_50 AS (
 	SELECT close
 	FROM d_timeframe
-	WHERE date <= NEW.date AND share_id = NEW.share_id
+	WHERE share_id = NEW.share_id
 	ORDER BY date DESC
 	LIMIT 50
 )
@@ -81,7 +110,7 @@ SELECT CASE WHEN (SELECT COUNT(*) FROM last_50) = 50 THEN ROUND(AVG(close), 4) E
 WITH last_100 AS (
 	SELECT close
 	FROM d_timeframe
-	WHERE date <= NEW.date AND share_id = NEW.share_id
+	WHERE share_id = NEW.share_id
 	ORDER BY date DESC
 	LIMIT 100
 )
@@ -91,7 +120,7 @@ SELECT CASE WHEN (SELECT COUNT(*) FROM last_100) = 100 THEN ROUND(AVG(close), 4)
 WITH last_200 AS (
 	SELECT close
 	FROM d_timeframe
-	WHERE date <= NEW.date AND share_id = NEW.share_id
+	WHERE share_id = NEW.share_id
 	ORDER BY date DESC
 	LIMIT 200
 )
@@ -101,7 +130,7 @@ SELECT CASE WHEN (SELECT COUNT(*) FROM last_200) = 200 THEN ROUND(AVG(close), 4)
 WITH last_2 AS (
 	SELECT date, close, open 
 	FROM d_timeframe
-	WHERE share_id = NEW.share_id AND date <= NEW.date
+	WHERE share_id = NEW.share_id
 	ORDER BY date DESC LIMIT 2
 )
 SELECT close - LAG(close, 1) OVER (ORDER BY date ASC) AS _abs_change, 
@@ -112,7 +141,7 @@ INTO _abs_change, _rel_change, _rel_gap FROM last_2 ORDER BY date DESC LIMIT 1;
 --UPDATE
 UPDATE d_timeframe SET sma10 = _sma10, sma20 = _sma20, sma50 = _sma50, sma100 = _sma100, sma200 = _sma200, 
 rel_adr = _rel_adr, abs_adr = _abs_adr, 
-avg_volume = _avg_volume, rel_volume = _rel_volume, 
+avg_volume = _avg_volume, rel_volume = _rel_volume, dense_volume = _dense_volume, 
 abs_change = _abs_change, rel_change = _rel_change, rel_gap = _rel_gap 
 WHERE share_id = NEW.share_id AND date = NEW.date; 
 
@@ -120,7 +149,7 @@ RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER update_sma_test_trigger
+CREATE TRIGGER update_d_timeframe_trigger
 AFTER INSERT ON d_timeframe
 FOR EACH ROW
-EXECUTE FUNCTION update_sma_test();
+EXECUTE FUNCTION update_d_timeframe();
