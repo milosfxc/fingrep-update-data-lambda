@@ -92,7 +92,7 @@ def atr_existing_tickers(data, period=14):
         data = data.drop(['High-Low', 'High-PrevClose', 'Low-PrevClose', 'TrueRange'], axis=1)
         return data[['abs_atr']]
     else:
-        return None
+        return pd.DataFrame(columns=['abs_atr'])
 
 
 def rsi_tv_new_tickers(ohlc: pd.DataFrame, period: int = 14):

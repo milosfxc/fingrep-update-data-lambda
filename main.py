@@ -204,7 +204,13 @@ def insert_new_ticker(connection, shares, shares_info):
 
 
 def get_new_ticker_data_and_insert(ticker, finviz_df):
-    ticker_data = get_ticker_details_v3(ticker)
+    try:
+        ticker_data = get_ticker_details_v3(ticker)
+    except requests.exceptions.HTTPError as e:
+        print(f"get_new_ticker_data_and_insert({ticker}): Couldn't obtain ticker details. "
+              f"The HTTP status code: {e.response.status_code}")
+        return
+
     finviz_ticker_df = finviz_df.query("ticker == @ticker")
     if not finviz_ticker_df.empty:
         finviz_data = {
@@ -214,6 +220,7 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
         }
     else:
         finviz_data = get_finviz_sic(ticker)
+
     shares_data, shares_info_data = extract_ticker_details_v3(ticker_data, finviz_data, foreign_keys_db)
     ticker_id = insert_new_ticker(postgres_connection(), shares_data, shares_info_data)
     # Starter plan required for 2+ years historical data
@@ -315,13 +322,9 @@ finviz_df = pd.read_csv('data/finviz_sic.csv')
 
 for new_ticker in tickers_list:
     get_new_ticker_data_and_insert(new_ticker, finviz_df)
-    if counter == 50:
+    if counter == 100:
         break
     counter += 1
 
 # Update ATR and RSI for existing tickers
 update_atr_and_rsi_existing_tickers()
-
-
-
-
