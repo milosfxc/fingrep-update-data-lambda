@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 import os
 import requests
 import pandas as pd
-from ta_utils import rsi_tv_new_tickers, rsi_tv_existing_tickers, atr_new_tickers, convergence, atr_existing_tickers
+from ta_utils import rsi_tv_new_tickers, rsi_tv_existing_tickers
 from bs4 import BeautifulSoup
 from retry import retry
 import constant
@@ -69,8 +69,8 @@ def get_and_insert_aggregated_bars(ticker, ticker_id, date_from, limit):
     df_aggregated_daily['volume'] = df_aggregated_daily['volume'].fillna(0)
     df_aggregated_daily['date'] = pd.to_datetime(df_aggregated_daily['date'], unit='ms').dt.date
     df_aggregated_daily['rsi'] = rsi_tv_new_tickers(df_aggregated_daily.copy())
-    df_aggregated_daily['abs_atr'] = atr_new_tickers(df_aggregated_daily.copy())
-    df_aggregated_daily['rel_atr'] = (df_aggregated_daily['abs_atr'] / df_aggregated_daily['close'] * 100).round(2)
+    #df_aggregated_daily['abs_atr'] = atr_new_tickers(df_aggregated_daily.copy())
+    #df_aggregated_daily['rel_atr'] = (df_aggregated_daily['abs_atr'] / df_aggregated_daily['close'] * 100).round(2)
     # df_aggregated_daily['avg_volume'] = df_aggregated_daily['volume'].rolling(window=20).mean()
     # df_aggregated_daily['sma10'] = df_aggregated_daily['close'].rolling(window=10).mean().round(4)
     # df_aggregated_daily['sma20'] = df_aggregated_daily['close'].rolling(window=20).mean().round(4)
@@ -224,8 +224,8 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
     shares_data, shares_info_data = extract_ticker_details_v3(ticker_data, finviz_data, foreign_keys_db)
     ticker_id = insert_new_ticker(postgres_connection(), shares_data, shares_info_data)
     # Starter plan required for 2+ years historical data
-    five_years_before_now = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 5)
-    get_and_insert_aggregated_bars(ticker, ticker_id, five_years_before_now, 5000)
+    two_years_before_now = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 5)
+    get_and_insert_aggregated_bars(ticker, ticker_id, two_years_before_now, 5000)
 
 
 def update_atr_and_rsi_existing_tickers():
@@ -233,20 +233,15 @@ def update_atr_and_rsi_existing_tickers():
     df_last_100.sort_values(by='date', ascending=True, inplace=True)
     df_last_100['rsi'] = df_last_100.groupby('share_id', as_index=False).apply(
         lambda group: rsi_tv_existing_tickers(group), include_groups=False).reset_index(level=0, drop=True)
-    df_last_100['abs_atr'] = df_last_100.groupby('share_id', as_index=False).apply(
-        lambda group: atr_existing_tickers(group), include_groups=False).reset_index(level=0, drop=True)
-    df_last_100['rel_atr'] = (df_last_100['abs_atr'] / df_last_100['close'] * 100).round(2)
-    convergence_tickers = df_last_100.groupby('share_id').apply(convergence, include_groups=False)
-    df_last_100 = pd.merge(df_last_100, convergence_tickers.rename('convergence'), on=['share_id'], how='left')
     utc_now = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=constant.DAYS)
     df_last_100 = df_last_100.query("date == @utc_now")
     df_last_100 = df_last_100.drop(columns=['close', 'high', 'low'])
-    update_data = [(row['rsi'], row['abs_atr'], row['rel_atr'], row['share_id'], row['date'], row['convergence'])
+    update_data = [(row['rsi'], row['share_id'], row['date'])
                    for index, row in df_last_100.iterrows()]
     # Construct the SQL query
     sql_update = """UPDATE d_timeframe AS d
-             SET rsi = t.rsi, abs_atr = t.abs_atr, rel_atr = t.rel_atr, convergence = t.convergence
-             FROM (VALUES %s) AS t(rsi, abs_atr, rel_atr, share_id, date, convergence)
+             SET rsi = t.rsi
+             FROM (VALUES %s) AS t(rsi, share_id, date)
              WHERE d.share_id = t.share_id AND d.date = t.date"""
     conn = postgres_connection()
     try:
@@ -299,12 +294,12 @@ df_grouped_daily['id'] = df_grouped_daily['T'].map(existing_tickers)
 existing_tickers_id = [int(id) for id in df_grouped_daily['id'].dropna().tolist()]
 df_grouped_daily_existing = df_grouped_daily.dropna(subset=['id'])
 # Importing data for existing tickers
-# df_grouped_daily_existing = prepare_for_insert(df_grouped_daily_existing.copy())
-# try:
-#     df_grouped_daily_existing.to_sql('d_timeframe', con=postgres_engine(), if_exists='append', index=False,
-#                                      index_label=['share_id', 'date'])
-# except Exception as e:
-#     print(f"Error occurred while trying to insert daily data for existing tickers: {e}")
+df_grouped_daily_existing = prepare_for_insert(df_grouped_daily_existing.copy())
+try:
+    df_grouped_daily_existing.to_sql('d_timeframe', con=postgres_engine(), if_exists='append', index=False,
+                                     index_label=['share_id', 'date'])
+except Exception as e:
+    print(f"Error occurred while trying to insert daily data for existing tickers: {e}")
 
 # Data frame for new tickers
 df_grouped_daily_new = df_grouped_daily[df_grouped_daily['id'].isna()]
@@ -315,9 +310,12 @@ finviz_df = pd.read_csv('data/finviz_sic.csv')
 
 for new_ticker in tickers_list:
     get_new_ticker_data_and_insert(new_ticker, finviz_df)
-    if counter == 25:
+    if counter == 10:
         break
     counter += 1
+
+get_new_ticker_data_and_insert('ESAB', finviz_df)
+
 
 # Update ATR and RSI for existing tickers
 update_atr_and_rsi_existing_tickers()
