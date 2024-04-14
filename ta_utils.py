@@ -1,9 +1,4 @@
 import pandas as pd
-from selenium.webdriver import Keys
-from selenium.webdriver.common.by import By
-import undetected_chromedriver as uc
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 import numpy as np
 
 # Pandas configuration
@@ -17,46 +12,6 @@ def generate_insert_statement(table_name, column_names, values):
         value = f"('{values[i]}'), "
         sql_statement = sql_statement + value
     return sql_statement
-
-
-def apr_joke():
-    url = "https://pretraga2.apr.gov.rs/unifiedentitysearch"
-    options = uc.ChromeOptions()
-    options.page_load_strategy = 'none'
-    #    options.add_argument("--headless")
-    #    options.add_argument('whitelisted-ips')
-    #    options.add_argument("no-sandbox")
-    options.add_argument("disable-dev-shm-usage")
-    options.add_argument("--disable-extensions")
-    options.add_argument("--disable-page-load-strategy")
-    #    options.add_argument("enable-automation")
-    options.add_argument("--disable-browser-side-navigation")
-    #    options.add_argument("--disable-web-security")
-    #    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument('--disable-popup-blocking')
-    options.add_argument("--disable-infobars")
-    options.add_argument("--disable-gpu")
-    driver = uc.Chrome(version_main=120, options=options)
-    driver.get(url)
-    driver.implicitly_wait(1)
-    wait = WebDriverWait(driver, 5)
-
-    wait.until(EC.presence_of_element_located((By.TAG_NAME, 'body'))).send_keys(
-        Keys.NULL)  # This line is to make sure the body is focused
-    wait.until(EC.presence_of_element_located((By.TAG_NAME, 'body'))).send_keys(
-        Keys.NULL)  # This line is to make sure the body is focused
-    wait.until(EC.presence_of_element_located((By.TAG_NAME, 'body'))).send_keys(
-        Keys.NULL)  # This line is to make sure the body is focused
-    wait.until(EC.presence_of_element_located((By.TAG_NAME, 'body'))).send_keys(
-        Keys.NULL)  # This line is to make sure the body is focused
-    element = wait.until(EC.presence_of_element_located((By.CLASS_NAME, 'quote-links')))
-#
-# table = 'exchanges'
-# columns = ['exchange_name', 'mic', 'operating_mic']
-# values = df[['name', 'mic', 'operating_mic']].values.tolist()
-#
-# statm = generate_insert_statement(table, columns, values)
-# print(statm)
 
 
 def atr_new_tickers(data, period=14):
@@ -133,8 +88,6 @@ def convergence(df: pd.DataFrame):
     df_last_3 = df.copy()
     df_last_3.sort_values(by='date', ascending=False, inplace=True)
     df_last_3 = df_last_3.head(3)
-    #print(df_last_3)
-    #print(f"min: {df_last_3['low'].iloc[0]}, max: {df_last_3['high'].iloc[0]}, xmin: {df_last_3['low'].min()}, xmax: {df_last_3['high'].max()}")
     return (len(df_last_3) == 3 and df_last_3['low'].iloc[0] == df_last_3['low'].min() and
             df_last_3['high'].iloc[0] == df_last_3['high'].max())
 
