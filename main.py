@@ -7,16 +7,20 @@ from ta_utils import rsi_tv_new_tickers, rsi_tv_existing_tickers
 from bs4 import BeautifulSoup
 from retry import retry
 import constant
+
 # Pandas configuration
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 400)
 
 
+def get_formatted_utc_date():
+    current_utc_date = datetime.utcnow() - timedelta(days=constant.DAYS)
+    return current_utc_date.strftime("%Y-%m-%d")
+
+
 @retry(exceptions=requests.RequestException, tries=3, delay=2, backoff=2)
 def get_grouped_daily_bars():
-    current_utc_date = datetime.utcnow() - timedelta(days=constant.DAYS)
-    current_utc_date = current_utc_date.strftime("%Y-%m-%d")
-    url = f"https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/{current_utc_date}"
+    url = f"https://api.polygon.io/v2/aggs/grouped/locale/us/market/stocks/{get_formatted_utc_date()}"
 
     params = {
         "adjusted": "true",
@@ -46,8 +50,7 @@ def get_grouped_daily_bars():
 
 @retry(exceptions=requests.RequestException, tries=3, delay=2, backoff=2)
 def get_and_insert_aggregated_bars(ticker, ticker_id, date_from, limit):
-    current_utc_date = datetime.utcnow().strftime("%Y-%m-%d")
-    url = (f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{date_from}/{current_utc_date}"
+    url = (f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{date_from}/{get_formatted_utc_date()}"
            f"?adjusted=true&sort=asc&limit={limit}")
     params = {
         "apiKey": os.getenv("POLYGON_API_KEY")
@@ -224,8 +227,8 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
     shares_data, shares_info_data = extract_ticker_details_v3(ticker_data, finviz_data, foreign_keys_db)
     ticker_id = insert_new_ticker(postgres_connection(), shares_data, shares_info_data)
     # Starter plan required for 2+ years historical data
-    two_years_before_now = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 5)
-    get_and_insert_aggregated_bars(ticker, ticker_id, two_years_before_now, 5000)
+    date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 5)
+    get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
 
 
 def update_atr_and_rsi_existing_tickers():
@@ -286,6 +289,21 @@ def get_finviz_sic(ticker):
         return dict()
 
 
+@retry(exceptions=requests.RequestException, tries=3, delay=2, backoff=2)
+def get_stock_splits():
+    url = (f"https://api.polygon.io/v3/reference/splits?execution_date={get_formatted_utc_date()}"
+           f"&reverse_split=true&limit=100")
+
+    params = {
+        "apiKey": os.getenv("POLYGON_API_KEY")
+    }
+
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    data = response.json().get('results')
+    return [entry['ticker'] for entry in data]
+
+
 # Get existing tickers and new daily data
 existing_tickers = get_existing_tickers()
 df_grouped_daily = get_grouped_daily_bars()
@@ -316,6 +334,16 @@ for new_ticker in tickers_list:
 
 get_new_ticker_data_and_insert('ESAB', finviz_df)
 
-
 # Update ATR and RSI for existing tickers
 update_atr_and_rsi_existing_tickers()
+
+# Stock splits check
+tickers_split = get_stock_splits()
+for ticker in tickers_split:
+    if ticker in existing_tickers:
+        ticker_id = existing_tickers[ticker]
+        if delete_aggregate_bars(ticker_id):
+            date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 5)
+            get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
+        else:
+            print(f"Couldn't delete and reinsert ticker {ticker} for stock split.")

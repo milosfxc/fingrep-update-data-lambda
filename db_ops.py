@@ -130,3 +130,17 @@ def get_foreign_keys():
     finally:
         if conn is not None:
             conn.close()
+
+
+def delete_aggregate_bars(ticker_id):
+    delete_statement = "DELETE FROM d_timeframe WHERE share_id = %s"
+    try:
+        # Establish a connection and open a cursor using "with" statement
+        with postgres_connection() as conn:
+            with conn.cursor() as curr:
+                curr.execute(delete_statement, (ticker_id,))
+                conn.commit()  # Commit the transaction
+                return True
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(f"#delete_aggregate_bars: {error}")
+        return False
