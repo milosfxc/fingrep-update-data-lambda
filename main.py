@@ -328,11 +328,9 @@ finviz_df = pd.read_csv('data/finviz_sic.csv')
 
 for new_ticker in tickers_list:
     get_new_ticker_data_and_insert(new_ticker, finviz_df)
-    if counter == 10:
+    if counter == 500:
         break
     counter += 1
-
-get_new_ticker_data_and_insert('ESAB', finviz_df)
 
 # Update ATR and RSI for existing tickers
 update_atr_and_rsi_existing_tickers()
