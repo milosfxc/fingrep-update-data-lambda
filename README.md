@@ -43,9 +43,8 @@ DECLARE
 	_avg_volume_40 NUMERIC;
 	_avg_volume_ytd NUMERIC;
 	_convergence d_timeframe.convergence%type;
-	_market_cap share_info.market_cap%type;
+	_market_cap shares_info.market_cap%type;
 	_rel_change_from_open d_timeframe.rel_change_from_open%type;
-	_abs_change_from_open d_timeframe.abs_change_from_open%type;
 BEGIN
 --SMA10
 WITH last_10 AS (
@@ -81,7 +80,7 @@ SELECT CASE WHEN _abs_atr IS NOT NULL AND NEW.close <> 0 THEN ROUND(_abs_atr/NEW
 IF NEW.volume IS NOT NULL AND NEW.vwap IS NOT NULL THEN
     _dollar_volume := NEW.volume * NEW.vwap;
 ELSE
-    _dollar_volume := 0; -- Set to zero
+    _dollar_volume := 0;
 END IF;
 
 --SMA20 & ADR & AVGVOL 
@@ -180,10 +179,6 @@ ROUND(((open/ LAG(close, 1) OVER (ORDER BY date ASC)) - 1) * 100, 2) AS _rel_gap
 INTO _abs_change, _rel_change, _rel_gap FROM last_2 ORDER BY date DESC LIMIT 1;
 
 --AFTER HOURS CHANGE
-IF _abs_change IS NOT NULL AND _abs_gap IS NOT NULL THEN
-	_abs_change_from_open := _abs_change - _abs_gap;
-END IF;
-
 IF _rel_change IS NOT NULL AND _rel_gap IS NOT NULL THEN
 	_rel_change_from_open := _rel_change - _rel_gap;
 END IF;
@@ -216,7 +211,7 @@ FROM shares_info;
 UPDATE d_timeframe SET sma10 = _sma10, sma20 = _sma20, sma50 = _sma50, sma100 = _sma100, sma200 = _sma200, 
 abs_atr = _abs_atr, rel_atr = _rel_atr, abs_adr = _abs_adr, rel_adr = _rel_adr, 
 dollar_volume = _dollar_volume, avg_volume = _avg_volume, rel_volume = _rel_volume, dense_volume = _dense_volume, 
-abs_change = _abs_change, rel_change = _rel_change, rel_gap = _rel_gap, abs_change_from_open = _abs_change_from_open, rel_change_from_open = _rel_change_from_open,
+abs_change = _abs_change, rel_change = _rel_change, rel_gap = _rel_gap, rel_change_from_open = _rel_change_from_open,
 convergence = _convergence
 WHERE share_id = NEW.share_id AND date = NEW.date; 
 

@@ -97,18 +97,18 @@ def get_foreign_keys():
         cur = conn.cursor(cursor_factory=DictCursor)
 
         # Countries
-        cur.execute('SELECT country_name, id FROM countries;')
+        cur.execute('SELECT name, id FROM countries;')
         ans = {'countries': {}, 'sectors': {}, 'industries': {}, 'share_types': {}, 'exchanges': {}, 'currencies': {}}
         for record in cur:
-            ans['countries'][record['country_name']] = record['id']
+            ans['countries'][record['name']] = record['id']
         # Sectors
-        cur.execute('SELECT sector_name, id FROM sectors;')
+        cur.execute('SELECT name, id FROM sectors;')
         for record in cur:
-            ans['sectors'][record['sector_name']] = record['id']
+            ans['sectors'][record['name']] = record['id']
         # Industries
-        cur.execute('SELECT industry_name, id FROM industries;')
+        cur.execute('SELECT name, id FROM industries;')
         for record in cur:
-            ans['industries'][record['industry_name']] = record['id']
+            ans['industries'][record['name']] = record['id']
         # Share types
         cur.execute('SELECT short_name, id FROM share_types;')
         for record in cur:
