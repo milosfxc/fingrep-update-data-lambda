@@ -72,22 +72,7 @@ def get_and_insert_aggregated_bars(ticker, ticker_id, date_from, limit):
     df_aggregated_daily['volume'] = df_aggregated_daily['volume'].fillna(0)
     df_aggregated_daily['date'] = pd.to_datetime(df_aggregated_daily['date'], unit='ms').dt.date
     df_aggregated_daily['rsi'] = rsi_tv_new_tickers(df_aggregated_daily.copy())
-    #df_aggregated_daily['abs_atr'] = atr_new_tickers(df_aggregated_daily.copy())
-    #df_aggregated_daily['rel_atr'] = (df_aggregated_daily['abs_atr'] / df_aggregated_daily['close'] * 100).round(2)
-    # df_aggregated_daily['avg_volume'] = df_aggregated_daily['volume'].rolling(window=20).mean()
-    # df_aggregated_daily['sma10'] = df_aggregated_daily['close'].rolling(window=10).mean().round(4)
-    # df_aggregated_daily['sma20'] = df_aggregated_daily['close'].rolling(window=20).mean().round(4)
-    # df_aggregated_daily['sma50'] = df_aggregated_daily['close'].rolling(window=50).mean().round(4)
-    # df_aggregated_daily['sma100'] = df_aggregated_daily['close'].rolling(window=100).mean().round(4)
-    # df_aggregated_daily['sma200'] = df_aggregated_daily['close'].rolling(window=200).mean().round(4)
-    # df_aggregated_daily['adr(%)'] = (100 * ((df_aggregated_daily['high'] / df_aggregated_daily['low'])
-    #                                       .rolling(window=20).mean() - 1)).round(2)
-    # df_aggregated_daily['adr($)'] = ((df_aggregated_daily['high'] - df_aggregated_daily['low'])
-    #                                 .rolling(window=20).mean()).round(2)
-    # df_aggregated_daily['rel_volume'] = (df_aggregated_daily['volume']/df_aggregated_daily['avg_volume']).round(2)
-    # df_aggregated_daily['rsi'] = utils.rsi_tradingview(df_aggregated_daily)
-    # df_aggregated_daily['atr'] = utils.calculate_atr(df_aggregated_daily)
-    # print(df_aggregated_daily['atr'])
+
     try:
         df_aggregated_daily.to_sql('d_timeframe', con=postgres_engine(), if_exists='append', index=False,
                                    index_label=['share_id', 'date'])
@@ -231,7 +216,7 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
     get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
 
 
-def update_atr_and_rsi_existing_tickers():
+def update_rsi_existing_tickers():
     df_last_100 = get_last_100()
     df_last_100.sort_values(by='date', ascending=True, inplace=True)
     df_last_100['rsi'] = df_last_100.groupby('share_id', as_index=False).apply(
@@ -239,6 +224,7 @@ def update_atr_and_rsi_existing_tickers():
     utc_now = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=constant.DAYS)
     df_last_100 = df_last_100.query("date == @utc_now")
     df_last_100 = df_last_100.drop(columns=['close', 'high', 'low'])
+    df_last_100.dropna(subset=['rsi'], inplace=True)
     update_data = [(row['rsi'], row['share_id'], row['date'])
                    for index, row in df_last_100.iterrows()]
     # Construct the SQL query
@@ -325,7 +311,6 @@ tickers_list = df_grouped_daily_new['T'].values.tolist()
 counter = 0
 foreign_keys_db = get_foreign_keys()
 finviz_df = pd.read_csv('data/finviz_sic.csv')
-
 for new_ticker in tickers_list:
     get_new_ticker_data_and_insert(new_ticker, finviz_df)
     if counter == 10:
@@ -333,15 +318,15 @@ for new_ticker in tickers_list:
     counter += 1
 
 # Update ATR and RSI for existing tickers
-update_atr_and_rsi_existing_tickers()
+update_rsi_existing_tickers()
 
 # Stock splits check
-# tickers_split = get_stock_splits()
-# for ticker in tickers_split:
-#     if ticker in existing_tickers:
-#         ticker_id = existing_tickers[ticker]
-#         if delete_aggregate_bars(ticker_id):
-#             date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 5)
-#             get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
-#         else:
-#             print(f"Couldn't delete and reinsert ticker {ticker} for stock split.")
+tickers_split = get_stock_splits()
+for ticker in tickers_split:
+    if ticker in existing_tickers:
+        ticker_id = existing_tickers[ticker]
+        if delete_aggregate_bars(ticker_id):
+            date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 5)
+            get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
+        else:
+            print(f"Couldn't delete and reinsert ticker {ticker} for stock split.")
