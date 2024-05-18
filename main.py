@@ -313,7 +313,7 @@ foreign_keys_db = get_foreign_keys()
 finviz_df = pd.read_csv('data/finviz_sic.csv')
 for new_ticker in tickers_list:
     get_new_ticker_data_and_insert(new_ticker, finviz_df)
-    if counter == 10:
+    if counter == 5:
         break
     counter += 1
 
@@ -321,12 +321,12 @@ for new_ticker in tickers_list:
 update_rsi_existing_tickers()
 
 # Stock splits check
-tickers_split = get_stock_splits()
-for ticker in tickers_split:
-    if ticker in existing_tickers:
-        ticker_id = existing_tickers[ticker]
-        if delete_aggregate_bars(ticker_id):
-            date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 5)
-            get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
-        else:
-            print(f"Couldn't delete and reinsert ticker {ticker} for stock split.")
+# tickers_split = get_stock_splits()
+# for ticker in tickers_split:
+#     if ticker in existing_tickers:
+#         ticker_id = existing_tickers[ticker]
+#         if delete_aggregate_bars(ticker_id):
+#             date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 5)
+#             get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
+#         else:
+#             print(f"Couldn't delete and reinsert ticker {ticker} for stock split.")

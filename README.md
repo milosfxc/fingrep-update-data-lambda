@@ -45,6 +45,12 @@ DECLARE
 	_convergence d_timeframe.convergence%type;
 	_market_cap shares_info.market_cap%type;
 	_rel_change_from_open d_timeframe.rel_change_from_open%type;
+	_rel_w_change d_timeframe.rel_w_change%type;
+	_rel_m_change d_timeframe.rel_m_change%type;
+	_rel_q_change d_timeframe.rel_q_change%type;
+	_rel_6m_change d_timeframe.rel_6m_change%type;
+	_rel_y_change d_timeframe.rel_y_change%type;
+	_rel_ytd_change d_timeframe.rel_ytd_change%type;
 BEGIN
 --SMA10
 WITH last_10 AS (
@@ -206,13 +212,39 @@ SELECT
 	END
 	INTO _market_cap 
 FROM shares_info;
-	
+
+--WEEKLY CHANGE
+SELECT ROUND((NEW.close / close - 1) * 100, 4) INTO _rel_w_change FROM d_timeframe WHERE date <= (NEW.date - INTERVAL '1 week') 
+AND share_id = NEW.share_id ORDER BY date DESC LIMIT 1;
+
+--MONTHLY CHANGE
+SELECT ROUND((NEW.close / close - 1) * 100, 4) INTO _rel_m_change FROM d_timeframe WHERE date <= (NEW.date - INTERVAL '1 month') 
+AND share_id = NEW.share_id ORDER BY date DESC LIMIT 1;
+
+--QUARTERLY CHANGE
+SELECT ROUND((NEW.close / close - 1) * 100, 4) INTO _rel_q_change FROM d_timeframe WHERE date <= (NEW.date - INTERVAL '3 month') 
+AND share_id = NEW.share_id ORDER BY date DESC LIMIT 1;
+
+--6M CHANGE
+SELECT ROUND((NEW.close / close - 1) * 100, 4) INTO _rel_6m_change FROM d_timeframe WHERE date <= (NEW.date - INTERVAL '6 month') 
+AND share_id = NEW.share_id ORDER BY date DESC LIMIT 1;
+
+--YTD CHANGE
+SELECT ROUND((NEW.close / close - 1) * 100, 4) INTO _rel_ytd_change FROM d_timeframe WHERE date <= (NEW.date - INTERVAL '1 year') 
+AND share_id = NEW.share_id ORDER BY date DESC LIMIT 1;
+
+--YEAR CHANGE
+SELECT ROUND((NEW.close / close - 1) * 100, 4) INTO _rel_y_change FROM d_timeframe WHERE date <= (DATE_TRUNC('year', NEW.date) - INTERVAL '1 day') 
+AND share_id = NEW.share_id ORDER BY date DESC LIMIT 1;
+
 --UPDATE
 UPDATE d_timeframe SET sma10 = _sma10, sma20 = _sma20, sma50 = _sma50, sma100 = _sma100, sma200 = _sma200, 
 abs_atr = _abs_atr, rel_atr = _rel_atr, abs_adr = _abs_adr, rel_adr = _rel_adr, 
 dollar_volume = _dollar_volume, avg_volume = _avg_volume, rel_volume = _rel_volume, dense_volume = _dense_volume, 
 abs_change = _abs_change, rel_change = _rel_change, rel_gap = _rel_gap, rel_change_from_open = _rel_change_from_open,
-convergence = _convergence
+convergence = _convergence,
+rel_w_change = _rel_w_change, rel_m_change = _rel_m_change, rel_q_change = _rel_q_change, rel_6m_change = _rel_6m_change, 
+rel_ytd_change = _rel_ytd_change, rel_y_change = _rel_y_change
 WHERE share_id = NEW.share_id AND date = NEW.date; 
 
 IF _market_cap IS NOT NULL THEN
