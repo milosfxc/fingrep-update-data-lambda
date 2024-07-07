@@ -1,8 +1,11 @@
+import logging
+
 import psycopg2
 from psycopg2.extras import DictCursor, execute_values
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Table, MetaData
 import os
 import pandas as pd
+from sqlalchemy.dialects.postgresql import insert
 
 
 def postgres_connection():
@@ -144,3 +147,36 @@ def delete_aggregate_bars(ticker_id):
     except (Exception, psycopg2.DatabaseError) as error:
         print(f"#delete_aggregate_bars: {error}")
         return False
+
+
+def upsert_financials(df: pd.DataFrame, table_name: str):
+    # Create a list of column update expressions for ON CONFLICT
+    update_columns = ', '.join([f"{col} = EXCLUDED.{col}" for col in df.columns if col not in ['share_id', 'date']])
+
+    # Create the SQL query for upserting
+    upsert_financials_query = f"""
+        INSERT INTO {table_name} ({', '.join(df.columns)}) 
+        VALUES ({', '.join(['%s'] * len(df.columns))})
+        ON CONFLICT (share_id, date) DO UPDATE SET
+        {update_columns};
+    """
+
+    try:
+        logging.info("Starting database connection.")
+        # Open a connection to the PostgreSQL database
+        with postgres_connection() as conn:
+            logging.info("Database connection established.")
+            # Open a cursor to perform database operations
+            with conn.cursor() as cursor:
+                logging.info("Cursor created, starting data upsert.")
+                # Iterate over each row in the DataFrame
+                for row in df.itertuples(index=False, name=None):
+                    cursor.execute(upsert_financials_query, row)
+                logging.info("Data upsert completed, committing the transaction.")
+            # Commit the transaction
+            conn.commit()
+    except Exception as e:
+        logging.error(f"Error during database operation: {e}")
+        if 'conn' in locals():
+            conn.rollback()
+            logging.info("Transaction rolled back due to error.")

@@ -7,6 +7,7 @@ from ta_utils import rsi_tv_new_tickers, rsi_tv_existing_tickers
 from bs4 import BeautifulSoup
 from retry import retry
 import constant
+from fmp import get_fundamentals
 
 # Pandas configuration
 pd.set_option('display.max_columns', None)
@@ -211,6 +212,8 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
 
     shares_data, shares_info_data = extract_ticker_details_v3(ticker_data, finviz_data, foreign_keys_db)
     ticker_id = insert_new_ticker(postgres_connection(), shares_data, shares_info_data)
+    get_fundamentals(cik=shares_info_data.get('cik'), share_id=ticker_id, currency_id=shares_data.get('currency_id'),
+                     ticker=ticker, period='annual')
     # Starter plan required for 2+ years historical data
     date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 1)
     get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
@@ -313,20 +316,21 @@ foreign_keys_db = get_foreign_keys()
 finviz_df = pd.read_csv('data/finviz_sic.csv')
 for new_ticker in tickers_list:
     get_new_ticker_data_and_insert(new_ticker, finviz_df)
-    if counter == 5:
+    if counter == 2:
         break
     counter += 1
 
 # Update ATR and RSI for existing tickers
 update_rsi_existing_tickers()
 
+
 # Stock splits check
-# tickers_split = get_stock_splits()
-# for ticker in tickers_split:
-#     if ticker in existing_tickers:
-#         ticker_id = existing_tickers[ticker]
-#         if delete_aggregate_bars(ticker_id):
-#             date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 5)
-#             get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
-#         else:
-#             print(f"Couldn't delete and reinsert ticker {ticker} for stock split.")
+tickers_split = get_stock_splits()
+for ticker in tickers_split:
+    if ticker in existing_tickers:
+        ticker_id = existing_tickers[ticker]
+        if delete_aggregate_bars(ticker_id):
+            date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 5)
+            get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
+        else:
+            print(f"Couldn't delete and reinsert ticker {ticker} for stock split.")

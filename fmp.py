@@ -1,52 +1,37 @@
 import os
 import pandas as pd
-import requests
-import certifi
-import json
-
+import utils
+from db_ops import upsert_financials
+import logging
+import fmpsdk as fmp
+import datetime
 # Pandas configuration
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 400)
 
 
-def get_exchange_prices(exchange):
-    url = f"https://financialmodelingprep.com/api/v3/symbol/{exchange}?apikey={os.getenv('FMP_API_KEY')}"
-    response = requests.get(url, verify=certifi.where())
-    data = response.text
-    return json.loads(data)
-
-
-def get_stock_screener():
-    url = f"https://financialmodelingprep.com/api/v3/stock-screener?apikey={os.getenv('FMP_API_KEY')}"
-    response = requests.get(url, verify=certifi.where())
-    data = response.text
-    return json.loads(data)
-
-
-# df_nasdaq = pd.DataFrame(get_exchange_prices('NASDAQ'))
-# df_nyse = pd.DataFrame(get_exchange_prices('NYSE'))
-# df_amex = pd.DataFrame(get_exchange_prices('AMEX'))
-#
-# df = pd.concat([df_nasdaq, df_nyse, df_amex], ignore_index=True)
-# df.to_csv('data/fmp.csv', index=False)
-
-
-# diff_sectors = set()
-# industries = df_finviz['industry'].unique()
-# for industry in industries:
-#     df = df_finviz[df_finviz['industry'] == industry]
-#     df.reset_index(inplace=True)
-#     ticker, industry, sector = df.loc[[0], ['ticker', 'industry', 'sector']].iloc[0]
-#     data = get_yahoo_data(ticker)
-#     if data is None:
-#         print('No data for ', ticker)
-#         continue
-#     if data['industry'] != industry:
-#         print(f"Industry not the same for {ticker} ticker")
-#         print('Yahoo industry name: ', data['industry'])
-#         print('Finviz industry name: ', industry)
-#     if data['sector'] != sector and sector not in diff_sectors:
-#         print(f"Sector not the same for {ticker} ticker")
-#         print('Yahoo sector name: ', data['sector'])
-#         print('Finviz sector name: ', sector)
-#         diff_sectors.add(sector)
+def get_fundamentals(cik: str, share_id: int, currency_id: int, ticker: str, period: str, date: datetime = None):
+    try:
+        fmp_api_key = os.getenv('FMP_API_KEY')
+        data_dict = {
+            'balance_sheet': fmp.balance_sheet_statement(apikey=fmp_api_key, symbol=ticker, period=period),
+            'income_statement': fmp.income_statement(apikey=fmp_api_key, symbol=ticker, period=period),
+            'cash_flow': fmp.cash_flow_statement(apikey=fmp_api_key, symbol=ticker, period=period)
+        }
+        for table_name, data in data_dict.items():
+            if 'Error Message' in data:
+                logging.error(f"Error message for {ticker}: {data['Error Message']}")
+            else:
+                df = pd.DataFrame(data)
+                if date is not None:
+                    date_str = date.strftime('%Y-%m-%d')
+                    df = df.query('date > @date_str')
+                if 'cik' not in df.columns or df.iloc[0]['cik'] != cik.zfill(10):
+                    logging.error(f"CIK number not present or mismatch for {ticker}")
+                    return None
+                df.loc[:, ['period', 'share_id', 'currency_id']] = 'Annual', share_id, currency_id
+                df = df[utils.pg_tables.get(table_name).keys()]
+                df = df.rename(columns=utils.pg_tables.get(table_name))
+                upsert_financials(df, table_name)
+    except Exception as e:
+        logging.error(f"API request error: {e}")
