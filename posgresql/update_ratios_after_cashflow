@@ -1,0 +1,66 @@
+CREATE OR REPLACE FUNCTION update_ratios_after_cashflow()
+RETURNS TRIGGER AS $$
+DECLARE
+    _price d_timeframe.close%type;
+    _pcf ratios.pcf%type;
+    _pfcf ratios.free_cash_flow%type;
+    --calculated
+    _wei_shs_out NUMERIC;
+    _shs_out NUMERIC;
+    _ocfps NUMERIC;
+    _market_cap NUMERIC;
+
+
+BEGIN
+--Price
+SELECT close INTO _price FROM d_timeframe WHERE share_id = NEW.share_id AND date <= NEW.date ORDER BY date DESC LIMIT 1;
+
+--WEIGHTED SHARES OUTSTANDING
+    SELECT weighted_avg_shares_outstanding INTO _wei_shs_out FROM income_statement WHERE share_id = NEW.share_id AND date = NEW.date;
+
+--SHARES OUTSTANDING
+    SELECT common_shares_outstanding INTO _shs_out FROM trade_info WHERE share_id = NEW.share_id AND date = NEW.date;
+
+--OPERATING CASH FLOW PER SHARE
+IF NEW.operating_cash_flow IS NOT NULL AND _wei_shs_out IS NOT NULL AND _wei_shs_out <> 0 THEN
+	_ocfps := ROUND(NEW.operating_cash_flow / _wei_shs_out, 2);
+ELSE
+	_ocfps := NULL;
+END IF;
+
+--PCF
+IF _price IS NOT NULL AND _ocfps IS NOT NULL AND _ocfps <> 0 THEN
+	_pcf := ROUND(_price / _ocfps, 2);
+ELSE
+	_pcf := NULL;
+END IF;
+
+--MARKET CAP
+IF _shs_out IS NOT NULL AND _shs_out <> 0 AND _price IS NOT NULL AND _price <> 0 THEN
+    _market_cap := _shs_out * _price;
+ELSE
+    _market_cap := NULL;
+END IF;
+--PFCF
+IF _market_cap IS NOT NULL AND NEW.free_cash_flow IS NOT NULL THEN
+    _pfcf := ROUND(_market_cap / NEW.free_cash_flow, 2);
+ELSE
+    _pfcf := NULL;
+END IF;
+
+-- Upsert
+INSERT INTO ratios (share_id, date, pcf, pfcf)
+VALUES (NEW.share_id, NEW.date, _pcf, _pfcf)
+ON CONFLICT (share_id, date) DO UPDATE SET
+    pe = EXCLUDED.pe,
+    pcf = EXCLUDED.pcf,
+    pcfc = EXCLUDED.pfcf;
+
+RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_ratios_after_cashflow
+AFTER INSERT ON cashflow
+FOR EACH ROW
+EXECUTE FUNCTION update_ratios_after_cashflow();

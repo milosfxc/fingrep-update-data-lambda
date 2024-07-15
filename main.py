@@ -1,5 +1,5 @@
 from db_ops import *
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, date, timezone, timedelta
 import os
 import requests
 import pandas as pd
@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 from retry import retry
 import constant
 from fmp import get_fundamentals
+from fingrep_service import get_and_insert_trading_info
 
 # Pandas configuration
 pd.set_option('display.max_columns', None)
@@ -212,8 +213,11 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
 
     shares_data, shares_info_data = extract_ticker_details_v3(ticker_data, finviz_data, foreign_keys_db)
     ticker_id = insert_new_ticker(postgres_connection(), shares_data, shares_info_data)
-    get_fundamentals(cik=shares_info_data.get('cik'), share_id=ticker_id, currency_id=shares_data.get('currency_id'),
-                     ticker=ticker, period='annual')
+    cik = shares_info_data.get('cik')
+    if cik is not None and ticker_id is not None:
+        get_and_insert_trading_info(cik=cik, share_id=ticker_id, date=date(2019, 12, 30))
+        get_fundamentals(cik=cik, share_id=ticker_id, currency_id=shares_data.get('currency_id'),
+                         ticker=ticker, period='annual')
     # Starter plan required for 2+ years historical data
     date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 1)
     get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)

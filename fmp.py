@@ -1,10 +1,16 @@
 import os
 import pandas as pd
 import utils
-from db_ops import upsert_financials
+from db_ops import upsert_dataframe
 import logging
 import fmpsdk as fmp
 import datetime
+import logging
+
+# Logging configuration
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Pandas configuration
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 400)
@@ -20,18 +26,23 @@ def get_fundamentals(cik: str, share_id: int, currency_id: int, ticker: str, per
         }
         for table_name, data in data_dict.items():
             if 'Error Message' in data:
-                logging.error(f"Error message for {ticker}: {data['Error Message']}")
+                logger.info(f"Error message for {ticker}: {data['Error Message']}")
             else:
                 df = pd.DataFrame(data)
                 if date is not None:
                     date_str = date.strftime('%Y-%m-%d')
                     df = df.query('date > @date_str')
-                if 'cik' not in df.columns or df.iloc[0]['cik'] != cik.zfill(10):
-                    logging.error(f"CIK number not present or mismatch for {ticker}")
+                if 'cik' not in df.columns:
+                    logger.info(f"CIK column not present in data frame for {ticker}.")
                     return None
-                df.loc[:, ['period', 'share_id', 'currency_id']] = 'Annual', share_id, currency_id
+                if df.iloc[0]['cik'] != cik.zfill(10):
+                    logger.info(f"Mismatch between FMP CIK '{df.iloc[0]['cik']}' and Polygon CIK '{cik.zfill(10)}'")
+                    return None
+
+                df.loc[:, ['period', 'share_id', 'currency_id']] = 'A', share_id, currency_id
                 df = df[utils.pg_tables.get(table_name).keys()]
                 df = df.rename(columns=utils.pg_tables.get(table_name))
-                upsert_financials(df, table_name)
+                df.sort_values(by=['date'], inplace=True, ascending=True)
+                upsert_dataframe(df, table_name)
     except Exception as e:
-        logging.error(f"API request error: {e}")
+        logger.error(f"API request error: {e}")

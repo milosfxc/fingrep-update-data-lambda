@@ -59,7 +59,8 @@ pg_income_statement_columns = {'share_id': 'share_id',
                                'operatingIncome': 'operating_income',
                                'netIncome': 'net_income',
                                'eps': 'eps',
-                               'epsdiluted': 'diluted_eps'}
+                               'epsdiluted': 'diluted_eps',
+                               'weightedAverageShsOut': 'weighted_avg_shares_outstanding'}
 
 pg_cash_flow_columns = {'share_id': 'share_id',
                         'date': 'date',
@@ -98,4 +99,9 @@ pg_tables = {
     'balance_sheet': pg_balance_sheet_columns,
     'income_statement': pg_income_statement_columns,
     'cash_flow': pg_cash_flow_columns
+}
+
+edgar_company_facts_positions_path = {
+    'EntityCommonStockSharesOutstanding': ['facts', 'dei', 'EntityCommonStockSharesOutstanding', 'units', 'shares'],
+    'CommonStockSharesOutstanding': ['facts', 'us-gaap', 'CommonStockSharesOutstanding', 'units', 'shares'],
 }

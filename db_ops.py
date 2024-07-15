@@ -149,7 +149,7 @@ def delete_aggregate_bars(ticker_id):
         return False
 
 
-def upsert_financials(df: pd.DataFrame, table_name: str):
+def upsert_dataframe(df: pd.DataFrame, table_name: str):
     # Create a list of column update expressions for ON CONFLICT
     update_columns = ', '.join([f"{col} = EXCLUDED.{col}" for col in df.columns if col not in ['share_id', 'date']])
 
@@ -160,7 +160,6 @@ def upsert_financials(df: pd.DataFrame, table_name: str):
         ON CONFLICT (share_id, date) DO UPDATE SET
         {update_columns};
     """
-
     try:
         logging.info("Starting database connection.")
         # Open a connection to the PostgreSQL database
