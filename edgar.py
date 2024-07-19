@@ -31,7 +31,8 @@ def get_trading_info(cik: str, date: datetime.date):
         return None
 
     if df_entity is not None:
-        df_entity.set_index('end', inplace=True)
+        df_entity.rename(columns={'end': 'date'}, inplace=True)
+        df_entity.set_index('date', inplace=True)
         df_entity = df_entity[['EntityCommonStockSharesOutstanding']]
         if df_common is None:
             df_entity.rename(columns={'EntityCommonStockSharesOutstanding': 'common_shares_outstanding'},
@@ -39,7 +40,8 @@ def get_trading_info(cik: str, date: datetime.date):
             return df_entity
 
     if df_common is not None:
-        df_common.set_index('end', inplace=True)
+        df_common.rename(columns={'end': 'date'}, inplace=True)
+        df_common.set_index('date', inplace=True)
         df_common = df_common[['CommonStockSharesOutstanding']]
         if df_entity is None:
             df_common.rename(columns={'CommonStockSharesOutstanding': 'common_shares_outstanding'},
@@ -96,7 +98,6 @@ def get_position(response, position_name, date: datetime.date):
         try:
             response = response[position]
         except KeyError:
-            logger.error(f"Position {position_name} not found in the response.")
             return None
     df = pd.DataFrame(response)
     df['end'] = pd.to_datetime(df['end'])

@@ -150,9 +150,10 @@ def delete_aggregate_bars(ticker_id):
 
 
 def upsert_dataframe(df: pd.DataFrame, table_name: str):
+    # Replace NaN with None
+    df = df.astype(object).where(pd.notnull(df), None)
     # Create a list of column update expressions for ON CONFLICT
     update_columns = ', '.join([f"{col} = EXCLUDED.{col}" for col in df.columns if col not in ['share_id', 'date']])
-
     # Create the SQL query for upserting
     upsert_financials_query = f"""
         INSERT INTO {table_name} ({', '.join(df.columns)}) 
@@ -161,17 +162,17 @@ def upsert_dataframe(df: pd.DataFrame, table_name: str):
         {update_columns};
     """
     try:
-        logging.info("Starting database connection.")
+        #logging.info("Starting database connection.")
         # Open a connection to the PostgreSQL database
         with postgres_connection() as conn:
-            logging.info("Database connection established.")
+            #logging.info("Database connection established.")
             # Open a cursor to perform database operations
             with conn.cursor() as cursor:
-                logging.info("Cursor created, starting data upsert.")
+                #logging.info("Cursor created, starting data upsert.")
                 # Iterate over each row in the DataFrame
                 for row in df.itertuples(index=False, name=None):
                     cursor.execute(upsert_financials_query, row)
-                logging.info("Data upsert completed, committing the transaction.")
+                #logging.info("Data upsert completed, committing the transaction.")
             # Commit the transaction
             conn.commit()
     except Exception as e:
