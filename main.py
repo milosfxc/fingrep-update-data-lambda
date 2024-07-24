@@ -1,5 +1,6 @@
 import logging
 
+import db_ops
 from db_ops import *
 from datetime import datetime, date, timezone, timedelta
 import os
@@ -308,13 +309,10 @@ df_grouped_daily = get_grouped_daily_bars()
 df_grouped_daily['id'] = df_grouped_daily['T'].map(existing_tickers)
 existing_tickers_id = [int(id) for id in df_grouped_daily['id'].dropna().tolist()]
 df_grouped_daily_existing = df_grouped_daily.dropna(subset=['id'])
+
 # Importing data for existing tickers
 df_grouped_daily_existing = prepare_for_insert(df_grouped_daily_existing.copy())
-# try:
-#     df_grouped_daily_existing.to_sql('d_timeframe', con=postgres_engine(), if_exists='append', index=False,
-#                                      index_label=['share_id', 'date'])
-# except Exception as e:
-#     print(f"Error occurred while trying to insert daily data for existing tickers: {e}")
+db_ops.upsert_dataframe(df_grouped_daily_existing, 'd_timeframe')
 
 # Data frame for new tickers
 df_grouped_daily_new = df_grouped_daily[df_grouped_daily['id'].isna()]
