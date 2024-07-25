@@ -12,6 +12,7 @@ DECLARE
     _abs_adr d_timeframe.abs_adr%type;
 	_dollar_volume d_timeframe.dollar_volume%type;
 	_avg_volume d_timeframe.avg_volume%type;
+	_avg_dollar_volume d_timeframe.avg_dollar_volume%type;
 	_rel_volume d_timeframe.rel_volume%type;
 	_abs_change d_timeframe.abs_change%type;
 	_rel_change d_timeframe.rel_change%type;
@@ -68,7 +69,7 @@ END IF;
 
 --SMA20 & ADR & AVGVOL
 WITH last_20 AS (
-	SELECT high, low, close, volume
+	SELECT high, low, close, volume, vwap
 	FROM d_timeframe
 	WHERE share_id = NEW.share_id
 	AND date <= NEW.date
@@ -79,9 +80,10 @@ SELECT
 	CASE WHEN (SELECT COUNT(*) FROM last_20) = 20 THEN ROUND(100 * (AVG(high/low) - 1), 2) END AS _rel_adr,
 	CASE WHEN (SELECT COUNT(*) FROM last_20) = 20 THEN ROUND((AVG(high - low)), 2) END AS _abs_adr,
 	CASE WHEN (SELECT COUNT(*) FROM last_20) = 20 THEN ROUND(AVG(close), 4) END AS _sma20,
-	CASE WHEN (SELECT COUNT(*) FROM last_20) = 20 THEN ROUND(AVG(volume)) ELSE 0 END AS _avg_volume
+	CASE WHEN (SELECT COUNT(*) FROM last_20) = 20 THEN ROUND(AVG(volume)) END AS _avg_volume,
+	CASE WHEN (SELECT COUNT(*) FROM last_20) = 20 THEN AVG(volume::NUMERIC * vwap)::BIGINT END AS _avg_dollar_volume
 INTO
-	_rel_adr, _abs_adr, _sma20, _avg_volume
+	_rel_adr, _abs_adr, _sma20, _avg_volume, _avg_dollar_volume
 FROM last_20;
 --DENSE VOLUME
 WITH last_40 AS (
@@ -217,7 +219,7 @@ AND share_id = NEW.share_id ORDER BY date DESC LIMIT 1;
 --UPDATE
 UPDATE d_timeframe SET sma10 = _sma10, sma20 = _sma20, sma50 = _sma50, sma100 = _sma100, sma200 = _sma200,
 abs_atr = _abs_atr, rel_atr = _rel_atr, abs_adr = _abs_adr, rel_adr = _rel_adr,
-dollar_volume = _dollar_volume, avg_volume = _avg_volume, rel_volume = _rel_volume, dense_volume = _dense_volume,
+dollar_volume = _dollar_volume, avg_volume = _avg_volume, avg_dollar_volume = _avg_dollar_volume, rel_volume = _rel_volume, dense_volume = _dense_volume,
 abs_change = _abs_change, rel_change = _rel_change, rel_gap = _rel_gap, rel_change_from_open = _rel_change_from_open,
 convergence = _convergence,
 rel_w_change = _rel_w_change, rel_m_change = _rel_m_change, rel_q_change = _rel_q_change, rel_6m_change = _rel_6m_change,
