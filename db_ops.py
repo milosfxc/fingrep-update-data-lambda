@@ -1,3 +1,4 @@
+import datetime
 import logging
 
 import psycopg2
@@ -5,6 +6,8 @@ from psycopg2.extras import DictCursor, execute_values
 from sqlalchemy import create_engine, Table, MetaData
 import os
 import pandas as pd
+logger = logging.getLogger(__name__)
+
 from sqlalchemy.dialects.postgresql import insert
 
 
@@ -180,3 +183,16 @@ def upsert_dataframe(df: pd.DataFrame, table_name: str):
         if 'conn' in locals():
             conn.rollback()
             logging.info("Transaction rolled back due to error.")
+
+
+def update_market_breadth(date: str):
+    try:
+        with postgres_connection() as conn:
+            with conn.cursor() as cursor:  # Note the parentheses here
+                cursor.execute("SELECT update_market_breadth(%s)", (date,))
+                # Commit the transaction
+                conn.commit()
+    except Exception as e:
+        logger.critical(f"An error occurred while trying to update the market_breadth table for date: {date} {e}")
+
+

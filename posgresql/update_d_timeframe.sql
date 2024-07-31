@@ -29,6 +29,14 @@ DECLARE
 	_rel_6m_change d_timeframe.rel_6m_change%type;
 	_rel_y_change d_timeframe.rel_y_change%type;
 	_rel_ytd_change d_timeframe.rel_ytd_change%type;
+    _twenty_day_low d_timeframe.twenty_day_low%type;
+	_twenty_day_high d_timeframe.twenty_day_high%type;
+    _fifty_day_low d_timeframe.fifty_day_low%type;
+	_fifty_day_high d_timeframe.fifty_day_high%type;
+	_ytd_low d_timeframe.ytd_high%type;
+	_ytd_high d_timeframe.ytd_low%type;
+	_all_time_low d_timeframe.all_time_low%type;
+	_all_time_high d_timeframe.all_time_high%type;
 BEGIN
 --SMA10
 WITH last_10 AS (
@@ -216,6 +224,88 @@ AND share_id = NEW.share_id ORDER BY date DESC LIMIT 1;
 SELECT ROUND((NEW.close / close - 1) * 100, 4) INTO _rel_y_change FROM d_timeframe WHERE date <= (DATE_TRUNC('year', NEW.date) - INTERVAL '1 day')
 AND share_id = NEW.share_id ORDER BY date DESC LIMIT 1;
 
+--20 DAY HIGH & LOW
+WITH last_20 AS (
+    SELECT low, high
+    FROM d_timeframe
+    WHERE date < NEW.date
+    AND share_id = NEW.share_id
+    ORDER BY date DESC
+    LIMIT 19
+),
+row_count AS (
+    SELECT COUNT(*) as cnt FROM last_20
+),
+min_max AS (
+    SELECT MIN(low), MAX(high) FROM last_20
+)
+SELECT
+    CASE WHEN cnt = 19 AND (SELECT min FROM min_max) > NEW.low THEN (SELECT min FROM min_max) ELSE NULL END,
+    CASE WHEN cnt = 19 AND (SELECT max FROM min_max) < NEW.high THEN (SELECT max FROM min_max) ELSE NULL END
+INTO _twenty_day_low, _twenty_day_high
+FROM row_count;
+
+--50 DAY HIGH & LOW
+WITH last_50 AS (
+    SELECT low, high
+    FROM d_timeframe
+    WHERE date < NEW.date
+    AND share_id = NEW.share_id
+    ORDER BY date DESC
+    LIMIT 49
+),
+row_count AS (
+    SELECT COUNT(*) as cnt FROM last_50
+),
+min_max AS (
+    SELECT MIN(low), MAX(high) FROM last_50
+)
+SELECT
+    CASE WHEN cnt = 49 AND (SELECT min FROM min_max) > NEW.low THEN (SELECT min FROM min_max) ELSE NULL END,
+    CASE WHEN cnt = 49 AND (SELECT max FROM min_max) < NEW.high THEN (SELECT max FROM min_max) ELSE NULL END
+INTO _fifty_day_low, _fifty_day_high
+FROM row_count;
+
+--52 WEEK HIGH & LOW
+WITH last_250 AS (
+    SELECT low, high
+    FROM d_timeframe
+    WHERE date < NEW.date
+    AND share_id = NEW.share_id
+    ORDER BY date DESC
+    LIMIT 249
+),
+row_count AS (
+    SELECT COUNT(*) as cnt FROM last_250
+),
+min_max AS (
+    SELECT MIN(low), MAX(high) FROM last_250
+)
+SELECT
+    CASE WHEN cnt = 249 AND (SELECT min FROM min_max) > NEW.low THEN (SELECT min FROM min_max) ELSE NULL END,
+    CASE WHEN cnt = 249 AND (SELECT max FROM min_max) < NEW.high THEN (SELECT max FROM min_max) ELSE NULL END
+INTO _ytd_low, _ytd_high
+FROM row_count;
+
+--ALL TIME HIGH & LOW
+WITH last_all AS (
+    SELECT low, high
+    FROM d_timeframe
+    WHERE date < NEW.date
+    AND share_id = NEW.share_id
+),
+row_count AS (
+    SELECT COUNT(*) as cnt FROM last_all
+),
+min_max AS (
+    SELECT MIN(low), MAX(high) FROM last_all
+)
+SELECT
+    CASE WHEN cnt > 0 AND (SELECT min FROM min_max) > NEW.low THEN (SELECT min FROM min_max) ELSE NULL END,
+    CASE WHEN cnt > 0 AND (SELECT max FROM min_max) < NEW.high THEN (SELECT max FROM min_max) ELSE NULL END
+INTO _all_time_low, _all_time_high
+FROM row_count;
+
 --UPDATE
 UPDATE d_timeframe SET sma10 = _sma10, sma20 = _sma20, sma50 = _sma50, sma100 = _sma100, sma200 = _sma200,
 abs_atr = _abs_atr, rel_atr = _rel_atr, abs_adr = _abs_adr, rel_adr = _rel_adr,
@@ -223,7 +313,8 @@ dollar_volume = _dollar_volume, avg_volume = _avg_volume, avg_dollar_volume = _a
 abs_change = _abs_change, rel_change = _rel_change, rel_gap = _rel_gap, rel_change_from_open = _rel_change_from_open,
 convergence = _convergence,
 rel_w_change = _rel_w_change, rel_m_change = _rel_m_change, rel_q_change = _rel_q_change, rel_6m_change = _rel_6m_change,
-rel_ytd_change = _rel_ytd_change, rel_y_change = _rel_y_change
+rel_ytd_change = _rel_ytd_change, rel_y_change = _rel_y_change,
+twenty_day_low = _twenty_day_low, twenty_day_high = _twenty_day_high, fifty_day_low = _fifty_day_low, fifty_day_high = _fifty_day_high, ytd_low = _ytd_low, ytd_high = _ytd_high, all_time_low = _all_time_low, all_time_high = _all_time_high
 WHERE share_id = NEW.share_id AND date = NEW.date;
 
 IF _market_cap IS NOT NULL THEN

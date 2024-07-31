@@ -329,6 +329,8 @@ for new_ticker in tickers_list:
 # Update ATR and RSI for existing tickers
 #update_rsi_existing_tickers()
 
+# Update market breadth
+update_market_breadth(get_formatted_utc_date())
 
 # Stock splits check
 # tickers_split = get_stock_splits()

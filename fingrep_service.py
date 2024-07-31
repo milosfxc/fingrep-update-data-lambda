@@ -4,8 +4,9 @@ import time
 import numpy as np
 import pandas as pd
 
+import db_ops
 import utils
-from db_ops import upsert_dataframe
+from db_ops import upsert_dataframe, update_market_breadth
 from edgar import get_trading_info
 import logging
 from fmp import get_fundamentals_v2
@@ -54,3 +55,7 @@ def get_and_insert_trading_info(cik: str, share_id: int, date: datetime.date):
         logger.error(
             f"Error occurred while trying to rename and reindex data frame for upsert into database for CIK {cik} "
             f"and share ID {share_id}: {e}")
+
+
+def call_and_update_market_breadth(date):
+    db_ops.update_market_breadth(date)
