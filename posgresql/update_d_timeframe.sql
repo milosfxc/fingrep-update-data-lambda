@@ -75,7 +75,7 @@ ELSE
     _dollar_volume := 0;
 END IF;
 
---SMA20 & ADR & AVGVOL
+--SMA20 & ADR & AVGVOL & TWENTY DAY HIGH/LOW
 WITH last_20 AS (
 	SELECT high, low, close, volume, vwap
 	FROM d_timeframe
@@ -83,15 +83,20 @@ WITH last_20 AS (
 	AND date <= NEW.date
 	ORDER BY date DESC
 	LIMIT 20
+),
+row_count AS (
+    SELECT COUNT(*) AS cnt FROM last_20
 )
 SELECT
-	CASE WHEN (SELECT COUNT(*) FROM last_20) = 20 THEN ROUND(100 * (AVG(high/low) - 1), 2) END AS _rel_adr,
-	CASE WHEN (SELECT COUNT(*) FROM last_20) = 20 THEN ROUND((AVG(high - low)), 2) END AS _abs_adr,
-	CASE WHEN (SELECT COUNT(*) FROM last_20) = 20 THEN ROUND(AVG(close), 4) END AS _sma20,
-	CASE WHEN (SELECT COUNT(*) FROM last_20) = 20 THEN ROUND(AVG(volume)) END AS _avg_volume,
-	CASE WHEN (SELECT COUNT(*) FROM last_20) = 20 THEN AVG(volume::NUMERIC * vwap)::BIGINT END AS _avg_dollar_volume
+	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN ROUND(100 * (AVG(high/low) - 1), 2) END AS _rel_adr,
+	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN ROUND((AVG(high - low)), 2) END AS _abs_adr,
+	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN ROUND(AVG(close), 4) END AS _sma20,
+	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN ROUND(AVG(volume)) END AS _avg_volume,
+	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(volume::NUMERIC * vwap)::BIGINT END AS _avg_dollar_volume,
+	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN MIN(low) END AS _twenty_day_low,
+	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN MAX(high) END AS _twenty_day_high
 INTO
-	_rel_adr, _abs_adr, _sma20, _avg_volume, _avg_dollar_volume
+	_rel_adr, _abs_adr, _sma20, _avg_volume, _avg_dollar_volume, _twenty_day_low, _twenty_day_high
 FROM last_20;
 --DENSE VOLUME
 WITH last_40 AS (
@@ -108,15 +113,20 @@ INTO _avg_volume_40
 FROM last_40;
 
 WITH last_252 AS (
-	SELECT volume FROM d_timeframe
+	SELECT volume, low, high FROM d_timeframe
 	WHERE share_id = NEW.share_id
 	AND date <= NEW.date
 	ORDER BY date DESC
 	LIMIT 252
+),
+row_count AS (
+    SELECT COUNT(*) AS cnt FROM last_252
 )
 SELECT
-	CASE WHEN (SELECT COUNT(*) FROM last_252) = 252 THEN ROUND(AVG(volume)) ELSE 0 END AS _avg_volume_ytd
-INTO _avg_volume_ytd
+	CASE WHEN (SELECT cnt FROM row_count) = 252 THEN ROUND(AVG(volume)) ELSE 0 END,
+	CASE WHEN (SELECT cnt FROM row_count) >= 250 THEN MIN(low) END,
+	CASE WHEN (SELECT cnt FROM row_count) >= 250 THEN MAX(high) END
+INTO _avg_volume_ytd, _ytd_low, _ytd_high
 FROM last_252;
 
 SELECT
@@ -125,16 +135,24 @@ INTO _dense_volume;
 --RVOL
 SELECT CASE WHEN _avg_volume != 0 THEN ROUND(volume::numeric/_avg_volume, 2) END INTO _rel_volume
 FROM d_timeframe WHERE share_id = NEW.share_id AND date = NEW.date;
---SMA50
+--SMA50 & FIFTY DAY HIGH/LOW
 WITH last_50 AS (
-	SELECT close
+	SELECT close, low, high
 	FROM d_timeframe
 	WHERE share_id = NEW.share_id
 	AND date <= NEW.date
 	ORDER BY date DESC
 	LIMIT 50
+),
+row_count AS (
+    SELECT COUNT(*) AS cnt FROM last_50
 )
-SELECT CASE WHEN (SELECT COUNT(*) FROM last_50) = 50 THEN ROUND(AVG(close), 4) END INTO _sma50 FROM last_50;
+SELECT
+    CASE WHEN (SELECT cnt FROM row_count) = 50 THEN ROUND(AVG(close), 4) END,
+    CASE WHEN (SELECT cnt FROM row_count) = 50 THEN MIN(low) END,
+	CASE WHEN (SELECT cnt FROM row_count) = 50 THEN MAX(high) END
+INTO _sma50, _fifty_day_low, _fifty_day_high
+FROM last_50;
 
 --SMA100
 WITH last_100 AS (
@@ -224,87 +242,14 @@ AND share_id = NEW.share_id ORDER BY date DESC LIMIT 1;
 SELECT ROUND((NEW.close / close - 1) * 100, 4) INTO _rel_y_change FROM d_timeframe WHERE date <= (DATE_TRUNC('year', NEW.date) - INTERVAL '1 day')
 AND share_id = NEW.share_id ORDER BY date DESC LIMIT 1;
 
---20 DAY HIGH & LOW
-WITH last_20 AS (
-    SELECT low, high
-    FROM d_timeframe
-    WHERE date < NEW.date
-    AND share_id = NEW.share_id
-    ORDER BY date DESC
-    LIMIT 19
-),
-row_count AS (
-    SELECT COUNT(*) as cnt FROM last_20
-),
-min_max AS (
-    SELECT MIN(low), MAX(high) FROM last_20
-)
+--ALL TIME HIGH/LOW
 SELECT
-    CASE WHEN cnt = 19 AND (SELECT min FROM min_max) > NEW.low THEN (SELECT min FROM min_max) ELSE NULL END,
-    CASE WHEN cnt = 19 AND (SELECT max FROM min_max) < NEW.high THEN (SELECT max FROM min_max) ELSE NULL END
-INTO _twenty_day_low, _twenty_day_high
-FROM row_count;
-
---50 DAY HIGH & LOW
-WITH last_50 AS (
-    SELECT low, high
-    FROM d_timeframe
-    WHERE date < NEW.date
-    AND share_id = NEW.share_id
-    ORDER BY date DESC
-    LIMIT 49
-),
-row_count AS (
-    SELECT COUNT(*) as cnt FROM last_50
-),
-min_max AS (
-    SELECT MIN(low), MAX(high) FROM last_50
-)
-SELECT
-    CASE WHEN cnt = 49 AND (SELECT min FROM min_max) > NEW.low THEN (SELECT min FROM min_max) ELSE NULL END,
-    CASE WHEN cnt = 49 AND (SELECT max FROM min_max) < NEW.high THEN (SELECT max FROM min_max) ELSE NULL END
-INTO _fifty_day_low, _fifty_day_high
-FROM row_count;
-
---52 WEEK HIGH & LOW
-WITH last_250 AS (
-    SELECT low, high
-    FROM d_timeframe
-    WHERE date < NEW.date
-    AND share_id = NEW.share_id
-    ORDER BY date DESC
-    LIMIT 249
-),
-row_count AS (
-    SELECT COUNT(*) as cnt FROM last_250
-),
-min_max AS (
-    SELECT MIN(low), MAX(high) FROM last_250
-)
-SELECT
-    CASE WHEN cnt = 249 AND (SELECT min FROM min_max) > NEW.low THEN (SELECT min FROM min_max) ELSE NULL END,
-    CASE WHEN cnt = 249 AND (SELECT max FROM min_max) < NEW.high THEN (SELECT max FROM min_max) ELSE NULL END
-INTO _ytd_low, _ytd_high
-FROM row_count;
-
---ALL TIME HIGH & LOW
-WITH last_all AS (
-    SELECT low, high
-    FROM d_timeframe
-    WHERE date < NEW.date
-    AND share_id = NEW.share_id
-),
-row_count AS (
-    SELECT COUNT(*) as cnt FROM last_all
-),
-min_max AS (
-    SELECT MIN(low), MAX(high) FROM last_all
-)
-SELECT
-    CASE WHEN cnt > 0 AND (SELECT min FROM min_max) > NEW.low THEN (SELECT min FROM min_max) ELSE NULL END,
-    CASE WHEN cnt > 0 AND (SELECT max FROM min_max) < NEW.high THEN (SELECT max FROM min_max) ELSE NULL END
+	MIN(low),
+	MAX(high)
 INTO _all_time_low, _all_time_high
-FROM row_count;
+FROM d_timeframe
+WHERE share_id = NEW.share_id
+AND date <= NEW.date;
 
 --UPDATE
 UPDATE d_timeframe SET sma10 = _sma10, sma20 = _sma20, sma50 = _sma50, sma100 = _sma100, sma200 = _sma200,
