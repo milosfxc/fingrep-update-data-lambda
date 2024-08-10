@@ -7,7 +7,6 @@ from yahoo_api import request_ohlc_data
 
 def get_index_details(tickers: list, currency_mapping: dict):
     data = []
-    print(currency_mapping)
     for ticker in tickers:
         ticker_details = yahoo_api.request_ticker_details(ticker)
         if ticker_details:

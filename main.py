@@ -10,12 +10,14 @@ pd.set_option('display.width', 400)
 
 # Foreign keys
 foreign_keys = db_ops.get_foreign_keys()
-currency_mapping = foreign_keys.get('currencies')
-indices_mapping = foreign_keys.get('indices')
 
 # Index details
-ticker = yahoo_service.get_index_details(utils.indices_list, currency_mapping)
+ticker = yahoo_service.get_index_details(utils.indices_list, foreign_keys.get('currencies'))
 db_ops.upsert_dataframe(ticker, 'indices')
+
+# Foreign keys
+foreign_keys = db_ops.get_foreign_keys()
+indices_mapping = foreign_keys.get('indices')
 
 # OHLCV data
 date = datetime.date.today() - datetime.timedelta(days=utils.DAYS_OFFSET)
