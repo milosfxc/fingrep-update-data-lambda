@@ -1,18 +1,23 @@
 import datetime
 import logging
-
 import pandas as pd
-
 import db_ops
 import utils
 import yahoo_service
-from db_ops import upsert_dataframe
-import yahoo_api
+
 pd.set_option('display.max_columns', None)
 pd.set_option('display.width', 400)
-# df = yahoo_service.get_indices(['^IXIC', '^SPX'], date=datetime.date(2022, 8, 1))
-# upsert_dataframe(df=df, table_name='daily_d_timeframe')
+
+# Foreign keys
 foreign_keys = db_ops.get_foreign_keys()
 currency_mapping = foreign_keys.get('currencies')
+indices_mapping = foreign_keys.get('indices')
+
+# Index details
 ticker = yahoo_service.get_index_details(utils.indices_list, currency_mapping)
 db_ops.upsert_dataframe(ticker, 'indices')
+
+# OHLCV data
+date = datetime.date.today() - datetime.timedelta(days=utils.DAYS_OFFSET)
+ohlcv_data = yahoo_service.get_indices_ohlcv(utils.indices_list, date=date, indices_mapping=indices_mapping)
+db_ops.upsert_dataframe_composite_id(ohlcv_data, 'indices_d_timeframe')
