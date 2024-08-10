@@ -1,5 +1,4 @@
 import datetime
-import logging
 import pandas as pd
 import db_ops
 import utils
