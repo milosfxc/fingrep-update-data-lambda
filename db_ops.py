@@ -138,30 +138,16 @@ def get_foreign_keys():
             conn.close()
 
 
-def delete_aggregate_bars(ticker_id):
-    delete_statement = "DELETE FROM d_timeframe WHERE share_id = %s"
-    try:
-        # Establish a connection and open a cursor using "with" statement
-        with postgres_connection() as conn:
-            with conn.cursor() as curr:
-                curr.execute(delete_statement, (ticker_id,))
-                conn.commit()  # Commit the transaction
-                return True
-    except (Exception, psycopg2.DatabaseError) as error:
-        print(f"#delete_aggregate_bars: {error}")
-        return False
-
-
 def upsert_dataframe(df: pd.DataFrame, table_name: str):
     # Replace NaN with None
     df = df.astype(object).where(pd.notnull(df), None)
     # Create a list of column update expressions for ON CONFLICT
-    update_columns = ', '.join([f"{col} = EXCLUDED.{col}" for col in df.columns if col not in ['share_id', 'date']])
+    update_columns = ', '.join([f"{col} = EXCLUDED.{col}" for col in df.columns if col not in ['index_id', 'date']])
     # Create the SQL query for upserting
     upsert_financials_query = f"""
         INSERT INTO {table_name} ({', '.join(df.columns)}) 
         VALUES ({', '.join(['%s'] * len(df.columns))})
-        ON CONFLICT (share_id, date) DO UPDATE SET
+        ON CONFLICT (index_id, date) DO UPDATE SET
         {update_columns};
     """
     try:
@@ -184,15 +170,5 @@ def upsert_dataframe(df: pd.DataFrame, table_name: str):
             conn.rollback()
             logging.info("Transaction rolled back due to error.")
 
-
-def update_market_breadth(date: str):
-    try:
-        with postgres_connection() as conn:
-            with conn.cursor() as cursor:  # Note the parentheses here
-                cursor.execute("SELECT update_market_breadth(%s)", (date,))
-                # Commit the transaction
-                conn.commit()
-    except Exception as e:
-        logger.critical(f"An error occurred while trying to update the market_breadth table for date: {date} {e}")
 
 

@@ -1,7 +1,6 @@
 import datetime
 
 import pandas as pd
-
 import yahoo_api
 from yahoo_api import request_ohlc_data
 
@@ -19,14 +18,15 @@ def get_indices(tickers: list, date: datetime.date):
     return pd.concat(frames)
 
 
-def get_index_details(tickers: list):
+def get_index_details(tickers: list, currency_mapping: dict):
     data = []
+    print(currency_mapping)
     for ticker in tickers:
         ticker_details = yahoo_api.request_ticker_details(ticker)
         if ticker_details:
             data.append({
                 "ticker": ticker,
                 "name": ticker_details.get('shortName'),
-                "currency": ticker_details.get('currency')
+                "currency_id": currency_mapping.get(ticker_details.get('currency'))
             })
     return pd.DataFrame(data)
