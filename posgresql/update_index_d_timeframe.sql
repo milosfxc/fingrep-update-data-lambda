@@ -4,7 +4,7 @@ DECLARE
 	_rel_change indices_d_timeframe.rel_change%type;
 	_rel_gap indices_d_timeframe.rel_gap%type;
 BEGIN
---CHANGE FROM PREVIOUS DAY
+--CHANGE & GAP
 WITH last_2 AS (
 	SELECT date, close, open
 	FROM indices_d_timeframe

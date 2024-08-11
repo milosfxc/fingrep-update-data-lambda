@@ -4,9 +4,10 @@ DECLARE
     _date market_breadth.date%type := arg_date;
     _four_up market_breadth.four_up%type;
     _four_down market_breadth.four_down%type;
-
     _five_day_ratio market_breadth.five_day_ratio%type;
     _teen_day_ratio market_breadth.teen_day_ratio%type;
+    _up25month market_breadth.up25month%type;
+    _down25month market_breadth.down25month%type;
     _up25quarter market_breadth.up25quarter%type;
     _down25quarter market_breadth.down25quarter%type;
 BEGIN
@@ -76,6 +77,38 @@ WITH q_data AS (
     FROM
         q_perf;
 
+--25% MONTH
+WITH m_data AS (
+    SELECT
+        share_id,
+        date,
+		avg_dollar_volume,
+		avg_volume,
+        close AS end_price,
+        MIN(close) OVER (PARTITION BY share_id) AS min_price,
+		MAX(close) OVER (PARTITION BY share_id) AS max_price
+    FROM
+        d_timeframe
+    WHERE
+        date >= _date::DATE - INTERVAL '1 MONTH'
+), m_perf AS (
+	SELECT
+	    share_id,
+	    date,
+	    end_price / NULLIF(min_price, 0) AS up_from_mth_low,
+		end_price / NULLIF(max_price, 0) AS down_from_mth_high
+	FROM
+	    m_data
+	WHERE
+	    min_price IS NOT NULL AND min_price > 0 AND date = _date
+	)
+    SELECT
+        COUNT(*) FILTER (WHERE up_from_mth_low >= 1.25),
+        COUNT(*) FILTER (WHERE down_from_mth_high <= 0.75) INTO _up25month, _down25month
+    FROM
+        m_perf;
+
+
 
 INSERT INTO market_breadth (
     date,
@@ -83,6 +116,8 @@ INSERT INTO market_breadth (
     four_down,
     five_day_ratio,
     teen_day_ratio,
+    up25month,
+    down25month,
     up25quarter,
     down25quarter
     ) VALUES (
@@ -91,6 +126,8 @@ INSERT INTO market_breadth (
     _four_down,
     _five_day_ratio,
     _teen_day_ratio,
+    _up25month,
+    _down25month,
     _up25quarter,
     _down25quarter
     ) ON CONFLICT (date) DO UPDATE SET
@@ -98,6 +135,8 @@ INSERT INTO market_breadth (
     four_down = EXCLUDED.four_down,
     five_day_ratio = EXCLUDED.five_day_ratio,
     teen_day_ratio = EXCLUDED.teen_day_ratio,
+    up25month = EXCLUDED.up25month,
+    down25month = EXCLUDED.down25month,
     up25quarter = EXCLUDED.up25quarter,
     down25quarter = EXCLUDED.down25quarter;
 
