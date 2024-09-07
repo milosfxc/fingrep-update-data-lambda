@@ -8,6 +8,8 @@ DECLARE
     _teen_day_ratio market_breadth.teen_day_ratio%type;
     _up25month market_breadth.up25month%type;
     _down25month market_breadth.down25month%type;
+    _up50month market_breadth.up50month%type;
+    _down50month market_breadth.down50month%type;
     _up25quarter market_breadth.up25quarter%type;
     _down25quarter market_breadth.down25quarter%type;
 BEGIN
@@ -77,7 +79,7 @@ WITH q_data AS (
     FROM
         q_perf;
 
---25% MONTH
+--25% & 50% MONTH
 WITH m_data AS (
     SELECT
         share_id,
@@ -104,9 +106,12 @@ WITH m_data AS (
 	)
     SELECT
         COUNT(*) FILTER (WHERE up_from_mth_low >= 1.25),
-        COUNT(*) FILTER (WHERE down_from_mth_high <= 0.75) INTO _up25month, _down25month
+        COUNT(*) FILTER (WHERE down_from_mth_high <= 0.75),
+        COUNT(*) FILTER (WHERE up_from_mth_low >= 1.5),
+        COUNT(*) FILTER (WHERE down_from_mth_high <= 0.5) INTO _up25month, _down25month, _up50month, _down50month
     FROM
         m_perf;
+
 
 
 
@@ -118,6 +123,8 @@ INSERT INTO market_breadth (
     teen_day_ratio,
     up25month,
     down25month,
+    up50month,
+    down50month,
     up25quarter,
     down25quarter
     ) VALUES (
@@ -128,6 +135,8 @@ INSERT INTO market_breadth (
     _teen_day_ratio,
     _up25month,
     _down25month,
+    _up50month,
+    _down50month,
     _up25quarter,
     _down25quarter
     ) ON CONFLICT (date) DO UPDATE SET
@@ -137,6 +146,8 @@ INSERT INTO market_breadth (
     teen_day_ratio = EXCLUDED.teen_day_ratio,
     up25month = EXCLUDED.up25month,
     down25month = EXCLUDED.down25month,
+    up50month = EXCLUDED.up50month,
+    down50month = EXCLUDED.down50month,
     up25quarter = EXCLUDED.up25quarter,
     down25quarter = EXCLUDED.down25quarter;
 

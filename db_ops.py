@@ -6,9 +6,9 @@ from psycopg2.extras import DictCursor, execute_values
 from sqlalchemy import create_engine, Table, MetaData
 import os
 import pandas as pd
-logger = logging.getLogger(__name__)
+from websockets import connect
 
-from sqlalchemy.dialects.postgresql import insert
+logger = logging.getLogger(__name__)
 
 
 def postgres_connection():
@@ -56,6 +56,44 @@ def get_existing_tickers():
         return ticker_dict
     except (Exception, psycopg2.DatabaseError) as error:
         print(f"#get_existing_tickers: {error}")
+        raise
+    finally:
+        if conn is not None:
+            conn.close()
+
+def get_banned_tickers():
+    conn = postgres_connection()
+    try:
+        cur = conn.cursor(cursor_factory=DictCursor)
+
+        # execute a statement
+        cur.execute("SELECT ticker, id FROM banned_tickers WHERE ban_date >= NOW() - INTERVAL '3 MONTHS';")
+        ticker_dict = {}
+        for record in cur:
+            ticker_dict[record['ticker']] = record['id']
+
+        cur.close()
+        return ticker_dict
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(f"#get_banned_tickers: {error}")
+        raise
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+def insert_banned_ticker(ticker):
+    conn = postgres_connection()
+    try:
+        cur = conn.cursor()
+
+        # execute a parameterized statement
+        cur.execute("INSERT INTO banned_tickers (ticker, ban_date) VALUES (%s, NOW());", (ticker,))
+
+        conn.commit()  # Commit the transaction
+        cur.close()
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(f"#insert_banned_ticker: {error}")
         raise
     finally:
         if conn is not None:

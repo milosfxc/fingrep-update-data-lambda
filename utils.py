@@ -105,3 +105,5 @@ edgar_company_facts_positions_path = {
     'EntityCommonStockSharesOutstanding': ['facts', 'dei', 'EntityCommonStockSharesOutstanding', 'units', 'shares'],
     'CommonStockSharesOutstanding': ['facts', 'us-gaap', 'CommonStockSharesOutstanding', 'units', 'shares'],
 }
+
+allowed_share_type_ids = [1, 6, 10, 14, 17, 18, 19, 21, 24]

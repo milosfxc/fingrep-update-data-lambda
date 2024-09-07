@@ -1,6 +1,7 @@
 import logging
 
 import db_ops
+import utils
 from db_ops import *
 from datetime import datetime, date, timezone, timedelta
 import os
@@ -41,9 +42,6 @@ def get_grouped_daily_bars():
         check_row_number(data['resultsCount'], len(df_grouped_daily_polygon))
         # Removes rows that contain at least one NaN OHLC value
         df_grouped_daily_polygon = check_nan_ohlc(df_grouped_daily_polygon)
-        # Removes rows if the ticker column contains anything other than capital letters:
-        df_grouped_daily_polygon = df_grouped_daily_polygon[df_grouped_daily_polygon['T'].str.isupper()]
-        df_grouped_daily_polygon = df_grouped_daily_polygon[~df_grouped_daily_polygon['T'].str.contains('\.')]
         # Check if all tickers have the same UTC date
         check_one_date(df_grouped_daily_polygon)
         # Volume column conversion to integer
@@ -143,6 +141,7 @@ def get_ticker_details_v3(ticker):
 
 
 def extract_ticker_details_v3(ticker_details, finviz_data, foreign_keys):
+
     ticker_data = {
         'ticker': ticker_details.get('ticker'),
         'cik': ticker_details.get('cik'),
@@ -215,10 +214,18 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
         finviz_data = get_finviz_sic(ticker)
 
     shares_data, shares_info_data = extract_ticker_details_v3(ticker_data, finviz_data, foreign_keys_db)
+
+    # Check if ticker type is allowed
+    if shares_data.get("share_type_id") is None:
+        return
+    elif shares_data.get("share_type_id") not in utils.allowed_share_type_ids:
+        insert_banned_ticker(ticker)
+        return
+
     ticker_id = insert_new_ticker(postgres_connection(), shares_data, shares_info_data)
 
     # Starter plan required for 2+ years historical data
-    date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * 2)
+    date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * constant.YEARS)
     get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
     # Fundamental data and trade info
     cik = shares_info_data.get('cik')
@@ -302,8 +309,9 @@ def get_stock_splits():
     return [entry['ticker'] for entry in data]
 
 
-# Get existing tickers and new daily data
+# Get existing tickers, banned tickers and new daily data
 existing_tickers = get_existing_tickers()
+banned_tickers = get_banned_tickers()
 df_grouped_daily = get_grouped_daily_bars()
 # Data frame for existing tickers
 df_grouped_daily['id'] = df_grouped_daily['T'].map(existing_tickers)
@@ -316,13 +324,14 @@ db_ops.upsert_dataframe(df_grouped_daily_existing, 'd_timeframe')
 
 # Data frame for new tickers
 df_grouped_daily_new = df_grouped_daily[df_grouped_daily['id'].isna()]
+df_grouped_daily_new = df_grouped_daily_new[~df_grouped_daily_new['T'].isin(banned_tickers.keys())]
 tickers_list = df_grouped_daily_new['T'].values.tolist()
 counter = 0
 foreign_keys_db = get_foreign_keys()
 finviz_df = pd.read_csv('data/finviz_sic.csv')
 for new_ticker in tickers_list:
     get_new_ticker_data_and_insert(new_ticker, finviz_df)
-    if counter == 1:
+    if counter == 100:
         break
     counter += 1
 
