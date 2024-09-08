@@ -1,3 +1,5 @@
+import re
+
 headers = {"User-Agent": "milosfxc@gmail.com"}
 
 pg_balance_sheet_columns = {'share_id': 'share_id',
@@ -107,3 +109,10 @@ edgar_company_facts_positions_path = {
 }
 
 allowed_share_type_ids = [1, 6, 10, 14, 17, 18, 19, 21, 24]
+
+
+def remove_stock_suffix(input_string):
+    if not input_string:
+        return input_string
+    pattern = r'(Class A Common Stock|Common Stock|Class A Ordinary Shares|Ordinary Shares)\s*(\(.+?\))?$'
+    return re.sub(pattern, '', input_string).strip()

@@ -145,7 +145,7 @@ def extract_ticker_details_v3(ticker_details, finviz_data, foreign_keys):
     ticker_data = {
         'ticker': ticker_details.get('ticker'),
         'cik': ticker_details.get('cik'),
-        'name': ticker_details.get('name'),
+        'name': utils.remove_stock_suffix(ticker_details.get('name')),
         'exchange_id': foreign_keys['exchanges'].get(ticker_details.get('primary_exchange')),
         'currency_id': foreign_keys['currencies'].get(ticker_details.get('currency_name').upper()),
         'homepage_url': ticker_details.get('homepage_url'),
@@ -331,7 +331,7 @@ foreign_keys_db = get_foreign_keys()
 finviz_df = pd.read_csv('data/finviz_sic.csv')
 for new_ticker in tickers_list:
     get_new_ticker_data_and_insert(new_ticker, finviz_df)
-    if counter == 100:
+    if counter == 3:
         break
     counter += 1
 
@@ -339,6 +339,12 @@ for new_ticker in tickers_list:
 #update_rsi_existing_tickers()
 
 # Update market breadth
+# for i in range(3,50):
+#     date_str = datetime.utcnow() - timedelta(days=i)
+#     date_str = date_str.strftime("%Y-%m-%d")
+#     print(date_str)
+#     update_market_breadth(date_str)
+
 update_market_breadth(get_formatted_utc_date())
 
 # Stock splits check

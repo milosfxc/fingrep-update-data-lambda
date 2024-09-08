@@ -14,6 +14,13 @@ DECLARE
     _down25quarter market_breadth.down25quarter%type;
 BEGIN
 
+
+--CHECK IF THE STOCK MARKET IS OPEN
+IF (SELECT COUNT(*) FROM d_timeframe WHERE date = _date) < 1 THEN
+    RETURN;
+END IF;
+
+
 --4% RATIO
 SELECT COUNT(*) INTO _four_up FROM d_timeframe WHERE date = _date AND (avg_volume >= 100000 OR avg_dollar_volume >= 250000) AND rel_change >= 4;
 SELECT COUNT(*) INTO _four_down FROM d_timeframe WHERE date = _date AND (avg_volume >= 100000 OR avg_dollar_volume >= 250000) AND rel_change <= -4;
@@ -22,13 +29,13 @@ SELECT COUNT(*) INTO _four_down FROM d_timeframe WHERE date = _date AND (avg_vol
 WITH last_4 AS (
     SELECT four_up, four_down
     FROM market_breadth
-    WHERE date <= _date
+    WHERE date < _date
     ORDER BY date DESC
     LIMIT 4
 )
 SELECT
     CASE WHEN COUNT(*) = 4
-         THEN (SUM(four_up) + _four_up) / NULLIF(SUM(four_down) + _four_down, 0)
+         THEN ROUND((SUM(four_up) + _four_up) / NULLIF(SUM(four_down) + _four_down, 0)::NUMERIC, 2)
          ELSE NULL
     END INTO _five_day_ratio
 FROM last_4;
@@ -37,16 +44,17 @@ FROM last_4;
 WITH last_9 AS (
     SELECT four_up, four_down
     FROM market_breadth
-    WHERE date <= _date
+    WHERE date < _date
     ORDER BY date DESC
     LIMIT 9
 )
 SELECT
     CASE WHEN COUNT(*) = 9
-         THEN (SUM(four_up) + _four_up) / NULLIF(SUM(four_down) + _four_down, 0)
+         THEN ROUND((SUM(four_up) + _four_up) / NULLIF(SUM(four_down) + _four_down, 0)::NUMERIC, 2)
          ELSE NULL
     END INTO _teen_day_ratio
 FROM last_9;
+
 
 --25% QUARTER
 WITH q_data AS (
