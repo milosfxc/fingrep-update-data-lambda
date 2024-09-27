@@ -1,9 +1,15 @@
 import datetime
 import time
+from http.client import responses
+import re
 
 import pandas as pd
 import requests
 import logging
+
+from bs4 import BeautifulSoup
+from fmpsdk import cik_list
+
 import utils
 
 # Set up logging
@@ -104,3 +110,64 @@ def get_position(response, position_name, date: datetime.date):
     df = df.query("end >= @date")
     df = df.rename(columns={'val': position_name}, inplace=False)
     return df
+
+
+
+
+
+def request_latest_fillings(form: str = '10-K', retries: int = 3, delay: int = 5):
+    """
+    Fetch company facts from SEC EDGAR API for a given CIK.
+
+    Parameters:
+    form (str): Form filling type
+    retries (int): Number of retries before giving up.
+    delay (int): Delay between retries in seconds.
+
+    Returns:
+    requests.models.Response: Response containing latest fillings if successful, None otherwise.
+    """
+    url = f"https://www.sec.gov/cgi-bin/browse-edgar?company=&CIK=&type={form}&owner=include&count=100&action=getcurrent"
+    for attempt in range(retries):
+        try:
+            response = requests.get(url, headers=utils.headers)
+            response.raise_for_status()
+            return response
+        except requests.exceptions.RequestException as e:
+            if attempt < retries - 1:
+                time.sleep(delay)
+            else:
+                logger.error(f"get_latest_fillings - {e}")
+    return None
+
+
+def get_latest_fillings():
+    ans = []
+    response = request_latest_fillings()
+    if response:
+        # Parse the HTML response using BeautifulSoup
+        soup = BeautifulSoup(response.text, 'html.parser')
+        filings_table = soup.find_all('table')[6]
+        rows = filings_table.find_all('tr')
+        cik, accepted = None, None
+        for row in rows[1:]:
+            cells = row.find_all('td')
+            if len(cells) == 3:
+                description = cells[2]
+                anchor = description.find('a')
+                if anchor and anchor['href']:
+                    cik_match = re.search(r'CIK=(\d{10})', anchor['href'])
+                    if cik_match:
+                        cik = cik_match.group(1)
+                        continue
+
+            if len(cells) == 6:
+                date_part, time_part = cells[3].get_text(separator=' ').split()
+                accepted = date_part + ' ' + time_part
+
+                if cik and accepted:
+                    ans.append((cik, accepted))
+                cik, filling_date = None, None
+        if not ans:
+            logger.error(f"get_latest_fillings: The method may not be working because it hasn't collected any fillings.")
+        return ans

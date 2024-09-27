@@ -110,3 +110,4 @@ def atr_existing_tickers_v2(data, period=14):
             group = group.drop(['High-Low', 'High-PrevClose', 'Low-PrevClose', 'TrueRange'], axis=1)
             data.loc[group.index, 'abs_atr'] = group['abs_atr']
     return data['abs_atr']
+

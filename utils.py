@@ -1,4 +1,6 @@
 import re
+from datetime import datetime, timedelta
+import constant
 
 headers = {"User-Agent": "milosfxc@gmail.com"}
 
@@ -114,5 +116,32 @@ allowed_share_type_ids = [1, 6, 10, 14, 17, 18, 19, 21, 24]
 def remove_stock_suffix(input_string):
     if not input_string:
         return input_string
-    pattern = r'(Class A Common Stock|Common Stock|Class A Ordinary Shares|Ordinary Shares)\s*(\(.+?\))?$'
+    pattern = r'(Class A Common Stock|Common Stock|Class A Ordinary Shares|Ordinary Shares|Ordinary Share)\s*(\(.+?\))?$'
     return re.sub(pattern, '', input_string).strip()
+
+def get_formatted_utc_date():
+    current_utc_date = datetime.utcnow() - timedelta(days=constant.DAYS)
+    return current_utc_date.strftime("%Y-%m-%d")
+
+
+def check_nan_ohlc(df):
+    tickers_with_nan = df.loc[df[['o', 'h', 'l', 'c']].isna().any(axis=1), 'T'].tolist()
+    if tickers_with_nan:
+        print("The following tickers had at least one NaN OHLC value on the date ", datetime.utcnow(), ":",
+              tickers_with_nan)
+        return df.dropna(subset=['o', 'h', 'l', 'c'])
+    else:
+        return df
+
+
+def check_one_date(df):
+    if not df['t'].nunique() == 1:
+        print("#check_one_date#Not all tickers have the same date.")
+
+
+def check_row_number(results_count, results_length):
+    if results_count < 8000:
+        print("resultsCount number is bellow 8000: ", results_count)
+        print("Number of results: ", results_length)
+    if results_count != results_length:
+        print(f"resultCount length {results_count} doesn't match with the results length {results_length}")
