@@ -1,12 +1,14 @@
 from datetime import datetime,date, timezone, timedelta
 import inspect
 import time
+from xxsubtype import bench
 
 import pandas as pd
 import requests
 
 import constant
 import db_ops
+import edgar
 import finviz
 import polygon
 import utils
@@ -19,7 +21,7 @@ pd.set_option("future.no_silent_downcasting", True)
 logger = logging.getLogger(__name__)
 
 
-def get_and_insert_fundamentals(cik: str, share_id: int, currency_id: int, ticker: str, period: str,
+def get_and_insert_fundamentals(cik: str, share_id: int, ticker: str, period: str,
                                 date: datetime = None):
     method_name = inspect.currentframe().f_code.co_name
     for statement in ['income_statement', 'cash_flow', 'balance_sheet']:
@@ -36,11 +38,17 @@ def get_and_insert_fundamentals(cik: str, share_id: int, currency_id: int, ticke
             if date is not None:
                 date_str = date.strftime('%Y-%m-%d')
                 df = df.query('date > @date_str')
-            if 'cik' not in df.columns or df.iloc[0]['cik'] != cik.zfill(10):
-                logger.error(f"{method_name} - CIK {cik} mismatch if CIK column is present here: {df.columns}")
-                break
-            currency_mapping = db_ops.get_foreign_keys()['currencies']
 
+            if 'cik' not in df.columns or df.iloc[0]['cik'] == '0000000000':
+                edgar_ticker = edgar.get_ticker_by_cik(cik)
+                if edgar_ticker and edgar_ticker != ticker:
+                    logger.warning(f"{method_name} - CIK {cik} mismatch for ticker {ticker}")
+                    break
+            elif df.iloc[0]['cik'] != cik.zfill(10):
+                logger.warning(f"{method_name} - CIK {cik} mismatch for ticker {ticker}")
+                break
+
+            currency_mapping = db_ops.get_foreign_keys()['currencies']
             df['currency_id'] = df['reportedCurrency'].replace(currency_mapping)
             df.loc[:, ['period', 'share_id']] = 'A', share_id
             df = df[utils.pg_tables.get(statement).keys()]
@@ -141,18 +149,14 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
         }
     else:
         finviz_data = finviz.get_sic(ticker)
-
     shares_data, shares_info_data = extract_ticker_details_v3(ticker_data, finviz_data)
-
     # Check if ticker type is allowed
     if shares_data.get("share_type_id") is None:
         return
     elif shares_data.get("share_type_id") not in utils.allowed_share_type_ids:
         db_ops.insert_banned_ticker(ticker)
         return
-
     ticker_id = db_ops.insert_new_ticker_v2(shares_data, shares_info_data)
-
     # Starter plan required for 2+ years historical data
     date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * constant.YEARS)
     get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
@@ -160,8 +164,7 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
     cik = shares_info_data.get('cik')
     if cik is not None and ticker_id is not None:
         get_and_insert_trading_info(cik=cik, share_id=ticker_id, date=date(2019, 12, 30))
-        get_and_insert_fundamentals(cik=cik, share_id=ticker_id, currency_id=shares_data.get('currency_id'),
-                                    ticker=ticker, period='annual')
+        get_and_insert_fundamentals(cik=cik, share_id=ticker_id, ticker=ticker, period='annual')
 
 
 # Separates data for shares and share_info tables

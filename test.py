@@ -29,4 +29,4 @@ if __name__ == "__main__":
     #fingrep_service.get_and_insert_fundamentals(cik='0001997652', share_id=382, currency_id=1, ticker='TBN', period='A')
     #fingrep_service.get_and_insert_fundamentals(cik='0001576873', share_id=382, currency_id=1, ticker='ABAT', period='A')
     #fingrep_service.get_and_insert_fundamentals(cik='0000732026', share_id=382, currency_id=1, ticker='TRT', period='A')
-    #fingrep_service.get_and_insert_fundamentals(cik='0001512228', share_id=87, currency_id=1, ticker='NB', period='A')
+    fingrep_service.get_and_insert_fundamentals(cik='0001512228', share_id=87, currency_id=1, ticker='NB', period='A')

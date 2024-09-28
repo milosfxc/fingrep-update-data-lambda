@@ -171,3 +171,39 @@ def get_latest_fillings():
         if not ans:
             logger.error(f"get_latest_fillings: The method may not be working because it hasn't collected any fillings.")
         return ans
+
+
+def get_submissions(cik: str, retries: int = 3, delay: int = 5):
+    """
+    Fetch company submissions from SEC EDGAR API for a given CIK.
+
+    Parameters:
+    cik (str): The Central Index Key (CIK) of the company.
+    retries (int): Number of retries before giving up.
+    delay (int): Delay between retries in seconds.
+
+    Returns:
+    dict: JSON response containing company submissions if successful, None otherwise.
+    """
+    cik = cik.zfill(10)
+    url = f"https://data.sec.gov/submissions/CIK{cik}.json"
+    for attempt in range(retries):
+        try:
+            response = requests.get(url, headers=utils.headers)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            if attempt < retries - 1:
+                time.sleep(delay)
+            else:
+                logger.critical(f"Error getting company facts for CIK {cik}: {e}")
+    return None
+
+def get_ticker_by_cik(cik: str):
+    ans = get_submissions(cik)
+    if ans:
+        try:
+            return ans['tickers'][0]
+        except TypeError as e:
+            logger.warning(f"get_ticker_by_cik - for cik {cik}: {e}")
+            return None

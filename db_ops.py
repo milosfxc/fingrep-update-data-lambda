@@ -356,8 +356,8 @@ def update_rsi(data):
         if conn is not None:
             conn.close()
 
-def get_id_and_ticker_and_currency_id_by_cik(cik: str):
-    sql_select = """SELECT s.id, s.ticker, s.currency_id FROM shares s
+def get_id_and_ticker_by_cik(cik: str):
+    sql_select = """SELECT s.id, s.ticker FROM shares s
                      INNER JOIN shares_info i ON s.id = i.share_id 
                      WHERE i.cik = %s"""
     try:
@@ -369,12 +369,11 @@ def get_id_and_ticker_and_currency_id_by_cik(cik: str):
                     return {
                         'id': result[0],
                         'ticker': result[1],
-                        'currency_id': result[2]
                     }
                 else:
                     return None
     except psycopg2.DatabaseError as e:
-        logger.error(f"get_id_and_ticker_and_currency_id_by_cik: {e}")
+        logger.error(f"get_id_and_ticker_by_cik: {e}")
         return None
 
 def insert_latest_fillings(data):
