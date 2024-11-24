@@ -31,7 +31,7 @@ if __name__ == "__main__":
 
     for new_ticker in tickers_list:
         fingrep_service.get_new_ticker_data_and_insert(new_ticker, finviz_df)
-        if counter == 10:
+        if counter == 3:
             break
         counter += 1
 
@@ -73,3 +73,9 @@ if __name__ == "__main__":
                 if share_id and ticker:
                     fingrep_service.get_and_insert_fundamentals(cik=cik, share_id=share_id, ticker=ticker, period='A')
     db_ops.delete_fillings_older_than_four_days()
+
+    number = 4
+    if number not in(4, 6):
+        print('TRUE')
+    else:
+        print('FALSE')
