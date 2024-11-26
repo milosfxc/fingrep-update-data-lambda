@@ -39,13 +39,12 @@ if __name__ == "__main__":
     fingrep_service.update_rsi_existing_tickers()
 
     # Update market breadth
-    db_ops.update_market_breadth(utils.get_formatted_utc_date())
-
-    for i in range(1,50):
+    #db_ops.update_market_breadth(utils.get_formatted_utc_date())
+    for i in range(100,0, -1):
         date_str = datetime.utcnow() - timedelta(days=i)
         date_str = date_str.strftime("%Y-%m-%d")
         db_ops.update_market_breadth(date_str)
-
+        
     # Stock splits check
     tickers_split = fingrep_service.get_splits()
     if tickers_split:
@@ -73,9 +72,3 @@ if __name__ == "__main__":
                 if share_id and ticker:
                     fingrep_service.get_and_insert_fundamentals(cik=cik, share_id=share_id, ticker=ticker, period='A')
     db_ops.delete_fillings_older_than_four_days()
-
-    number = 4
-    if number not in(4, 6):
-        print('TRUE')
-    else:
-        print('FALSE')

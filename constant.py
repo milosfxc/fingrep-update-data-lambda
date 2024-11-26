@@ -1,2 +1,2 @@
-DAYS = 3
+DAYS = 1
 YEARS = 2

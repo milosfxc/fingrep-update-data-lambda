@@ -14,12 +14,10 @@ DECLARE
     _down25quarter market_breadth.down25quarter%type;
 BEGIN
 
-
 --CHECK IF THE STOCK MARKET IS OPEN
 IF (SELECT COUNT(*) FROM d_timeframe WHERE date = _date) < 1 THEN
     RETURN;
 END IF;
-
 
 --4% RATIO
 SELECT COUNT(*) INTO _four_up FROM d_timeframe WHERE date = _date AND (avg_volume >= 100000 OR avg_dollar_volume >= 250000) AND rel_change >= 4;
@@ -54,7 +52,6 @@ SELECT
          ELSE NULL
     END INTO _teen_day_ratio
 FROM last_9;
-
 
 --25% QUARTER
 WITH q_data AS (
@@ -119,9 +116,6 @@ WITH m_data AS (
         COUNT(*) FILTER (WHERE down_from_mth_high <= 0.5) INTO _up25month, _down25month, _up50month, _down50month
     FROM
         m_perf;
-
-
-
 
 INSERT INTO market_breadth (
     date,

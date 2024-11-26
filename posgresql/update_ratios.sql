@@ -66,82 +66,70 @@ SELECT common_shares_outstanding INTO _sh_out  FROM trade_info WHERE share_id = 
 SELECT eps INTO _eps FROM income_statement WHERE share_id = NEW.share_id AND date = NEW.date;
 
 --PE
-IF _eps IS NOT NULL AND _eps <> 0 AND _price IS NOT NULL THEN
+IF _price IS NOT NULL AND _eps <> 0 THEN
 	_pe := ROUND(_price / _eps, 2);
-ELSE
-	_pe := NULL;
 END IF;
 
 --REVENUE
 SELECT revenue INTO _revenue FROM income_statement WHERE share_id = NEW.share_id AND date = NEW.date;
 
 --SALES PER SHARE
-IF _revenue IS NOT NULL AND _sh_out IS NOT NULL AND _sh_out > 0 THEN
+IF _revenue IS NOT NULL AND _sh_out > 0 THEN
     _sales_per_sh := ROUND(_revenue::NUMERIC / _sh_out::NUMERIC, 2);
-ELSIF _revenue IS NOT NULL AND _wei_sh_out IS NOT NULL AND _wei_sh_out > 0 THEN
+ELSIF _revenue IS NOT NULL AND _wei_sh_out > 0 THEN
     _sales_per_sh := ROUND(_revenue::NUMERIC / _wei_sh_out::NUMERIC, 2);
 END IF;
 
 --PRICE TO SALES PER SHARE
-IF _sales_per_sh IS NOT NULL AND _sales_per_sh <> 0 AND _price IS NOT NULL THEN
+IF _price IS NOT NULL AND _sales_per_sh <> 0 THEN
     _ps := ROUND(_price/_sales_per_sh::NUMERIC, 2);
 END IF;
 
 --BOOK VALUE PER COMMON SHARE
-IF NEW.equity is NOT NULL and NEW.preferred_stock_equity IS NOT NULL AND _sh_out IS NOT NULL AND _sh_out > 0 THEN
+IF NEW.equity IS NOT NULL AND NEW.preferred_stock_equity IS NOT NULL AND _sh_out > 0 THEN
     _bvps := ROUND((NEW.equity::NUMERIC - NEW.preferred_stock_equity) / _sh_out, 2);
-ELSIF NEW.equity is NOT NULL and NEW.preferred_stock_equity IS NOT NULL AND _wei_sh_out IS NOT NULL AND _wei_sh_out > 0 THEN
+ELSIF NEW.equity IS NOT NULL AND NEW.preferred_stock_equity IS NOT NULL AND _wei_sh_out > 0 THEN
     _bvps := ROUND((NEW.equity::NUMERIC - NEW.preferred_stock_equity) / _wei_sh_out, 2);
-ELSE
-    _bvps := NULL;
 END IF;
 
 --PRICE TO BOOK
-IF _price IS NOT NULL AND _bvps IS NOT NULL AND _bvps <> 0 THEN
+IF _price IS NOT NULL AND _bvps <> 0 THEN
 	_pb := ROUND(_price::NUMERIC / _bvps, 2);
-ELSE
-	_pb := NULL;
 END IF;
 
 --OPERATING CASH FLOW
 SELECT operating_cash_flow INTO _ocf FROM cash_flow WHERE share_id = NEW.share_id AND date = NEW.date;
 
 --OPERATING CASH FLOW PER SHARE
-IF _ocf IS NOT NULL AND _wei_sh_out IS NOT NULL AND _wei_sh_out > 0 THEN
+IF _ocf IS NOT NULL AND _wei_sh_out > 0 THEN
 	_ocfps := ROUND(_ocf::NUMERIC / _wei_sh_out, 2);
-ELSIF _ocf IS NOT NULL AND _sh_out IS NOT NULL AND _sh_out > 0 THEN
+ELSIF _ocf IS NOT NULL AND _sh_out > 0 THEN
 	_ocfps := ROUND(_ocf::NUMERIC / _sh_out, 2);
-ELSE
-	_ocfps := NULL;
 END IF;
 
 --PCF
-IF _price IS NOT NULL AND _ocfps IS NOT NULL AND _ocfps <> 0 THEN
+IF _price IS NOT NULL AND _ocfps <> 0 THEN
 	_pcf := ROUND(_price::NUMERIC / _ocfps, 2);
-ELSE
-	_pcf := NULL;
 END IF;
 
 --MARKET CAP
-IF _sh_out IS NOT NULL AND _sh_out > 0 AND _price IS NOT NULL AND _price > 0 THEN
-    _m_cap := _sh_out * _price;
-ELSIF _wei_sh_out IS NOT NULL AND _wei_sh_out > 0 AND _price IS NOT NULL AND _price > 0 THEN
-    _m_cap := _wei_sh_out * _price;
+IF _price IS NOT NULL AND _sh_out > 0 AND THEN
+    _m_cap := _price * _sh_out;
+ELSIF _price IS NOT NULL AND _wei_sh_out > 0 THEN
+    _m_cap := _price * _wei_sh_out;
 END IF;
 
 --FREE CASH FLOW
 SELECT free_cash_flow INTO _fcf FROM cash_flow WHERE share_id = NEW.share_id AND date = NEW.date;
 
 --PRICE TO FREE CASH FLOW
-IF _m_cap IS NOT NULL AND _fcf IS NOT NULL THEN
+IF _m_cap IS NOT NULL AND _fcf <> 0 THEN
     _pfcf := ROUND(_m_cap::NUMERIC / _fcf, 2);
-ELSE
-    _pfcf := NULL;
 END IF;
 
 
 /*
-    YEAR OVER YEAR RATIOS
+    YOY RATIOS
 */
 
 
@@ -149,20 +137,16 @@ END IF;
 SELECT eps INTO _previous_eps FROM income_statement WHERE share_id = NEW.share_id AND date < NEW.date;
 
 --EPS YOY
-IF _previous_eps IS NOT NULL AND _previous_eps > 0 AND _eps IS NOT NULL THEN
+IF _eps IS NOT NULL AND _previous_eps > 0 THEN
 	_eps_yoy := ROUND(((_eps::NUMERIC / _previous_eps) - 1) * 100, 2);
-ELSE
-	_eps_yoy := NULL;
 END IF;
 
 --PREVIOUS YEAR REVENUE
 SELECT revenue INTO _prev_revenue FROM income_statement WHERE share_id = NEW.share_id AND date < NEW.date ORDER BY date DESC LIMIT 1;
 
 --REVENUE YOY
-IF _prev_revenue IS NOT NULL AND _prev_revenue > 0 AND _revenue IS NOT NULL THEN
+IF _revenue IS NOT NULL AND _prev_revenue > 0 THEN
 	_revenue_yoy := ROUND(((_revenue::NUMERIC / _prev_revenue) - 1) * 100, 2);
-ELSE
-	_revenue_yoy := NULL;
 END IF;
 
 --EBITDA AND PREVIOUS YEAR EBITDA
@@ -170,10 +154,8 @@ SELECT ebitda INTO _ebitda FROM income_statement WHERE share_id = NEW.share_id A
 SELECT ebitda INTO _prev_ebitda FROM income_statement WHERE share_id = NEW.share_id AND date < NEW.date ORDER BY date DESC LIMIT 1;
 
 --EBITDA YOY
-IF _prev_ebitda IS NOT NULL AND _prev_ebitda > 0 AND _ebitda IS NOT NULL THEN
+IF _ebitda IS NOT NULL AND _prev_ebitda > 0 THEN
 	_ebitda_yoy := ROUND(((_ebitda::NUMERIC / _prev_ebitda::NUMERIC) - 1) * 100, 2);
-ELSE
-	_ebitda_yoy := NULL;
 END IF;
 
 --NET INCOME AND PREVIOUS YEAR NET INCOME
@@ -181,10 +163,8 @@ SELECT net_income INTO _net_income FROM income_statement WHERE share_id = NEW.sh
 SELECT net_income INTO _prev_net_income FROM income_statement WHERE share_id = NEW.share_id AND date < NEW.date ORDER BY date DESC LIMIT 1;
 
 --NET INCOME YOY
-IF _prev_net_income IS NOT NULL AND _prev_net_income > 0 AND _net_income IS NOT NULL THEN
+IF _net_income IS NOT NULL AND _prev_net_income > 0 THEN
 	_net_income_yoy := ROUND(((_net_income::NUMERIC / _prev_net_income) - 1) * 100, 2);
-ELSE
-	_net_income_yoy := NULL;
 END IF;
 
 
@@ -194,40 +174,30 @@ END IF;
 
 
 --CASH PER COMMON SHARE
-IF NEW.cash_and_short_term_investments IS NOT NULL AND _sh_out IS NOT NULL AND _sh_out > 0 THEN
+IF NEW.cash_and_short_term_investments IS NOT NULL AND _sh_out > 0 THEN
     _cps := ROUND(NEW.cash_and_short_term_investments::NUMERIC / _sh_out, 2);
-ELSIF NEW.cash_and_short_term_investments IS NOT NULL AND _wei_sh_out IS NOT NULL AND _wei_sh_out > 0 THEN
+ELSIF NEW.cash_and_short_term_investments IS NOT NULL AND _wei_sh_out > 0 THEN
     _cps := ROUND(NEW.cash_and_short_term_investments::NUMERIC / _wei_sh_out, 2);
-ELSE
-    _cps := NULL;
 END IF;
 
 --QUICK RATIO
-IF NEW.cash_and_short_term_investments IS NOT NULL AND NEW.net_receivables IS NOT NULL AND NEW.current_liabilities IS NOT NULL AND NEW.current_liabilities <> 0 THEN
+IF NEW.cash_and_short_term_investments IS NOT NULL AND NEW.net_receivables IS NOT NULL AND NEW.current_liabilities <> 0 THEN
     _quick_ratio := ROUND((NEW.cash_and_short_term_investments::NUMERIC + NEW.net_receivables) / NEW.current_liabilities::NUMERIC, 2);
-ELSE
-    _quick_ratio := NULL;
 END IF;
 
 --CURRENT RATIO
-IF NEW.current_assets IS NOT NULL AND NEW.current_liabilities IS NOT NULL AND NEW.current_liabilities <> 0 THEN
+IF NEW.current_assets IS NOT NULL AND NEW.current_liabilities <> 0 THEN
     _current_ratio := ROUND(NEW.current_assets::NUMERIC / NEW.current_liabilities, 2);
-ELSE
-    _current_ratio := NULL;
 END IF;
 
 --DEBT TO EQUITY
-IF NEW.liabilities IS NOT NULL AND NEW.equity IS NOT NULL AND NEW.equity <> 0 THEN
+IF NEW.liabilities IS NOT NULL AND NEW.equity <> 0 THEN
     _debt_equity := ROUND(NEW.liabilities::NUMERIC / NEW.equity, 2);
-ELSE
-    _debt_equity := NULL;
 END IF;
 
 --LONG-TERM DEBT TO EQUITY
-IF NEW.non_current_liabilities IS NOT NULL AND NEW.equity IS NOT NULL AND NEW.equity <> 0 THEN
+IF NEW.non_current_liabilities IS NOT NULL AND NEW.equity <> 0 THEN
     _lt_debt_equity := ROUND(NEW.non_current_liabilities::NUMERIC / NEW.equity, 2);
-ELSE
-    _lt_debt_equity := NULL;
 END IF;
 
 
@@ -237,51 +207,39 @@ END IF;
 
 
 --ROA
-IF _net_income IS NOT NULL AND NEW.assets IS NOT NULL AND NEW.assets > 0 THEN
+IF _net_income IS NOT NULL AND NEW.assets > 0 THEN
     _roa := ROUND((_net_income::NUMERIC / NEW.assets) * 100, 2);
-ELSE
-    _roa := NULL;
 END IF;
 
 --ROE
-IF _net_income IS NOT NULL AND NEW.equity IS NOT NULL AND NEW.equity <> 0 THEN
+IF _net_income IS NOT NULL AND NEW.equity <> 0 THEN
     _roe := ROUND((_net_income::NUMERIC / NEW.equity) * 100, 2);
-ELSE
-    _roe := NULL;
 END IF;
 
 --GROSS PROFIT
 SELECT gross_profit INTO _gross_profit FROM income_statement WHERE share_id = NEW.share_id AND date = NEW.date;
 
 --GROSS MARGIN
-IF _gross_profit IS NOT NULL AND _revenue IS NOT NULL AND _revenue > 0 THEN
+IF _gross_profit IS NOT NULL AND _revenue > 0 THEN
     _gross_margin := ROUND(_gross_profit::NUMERIC / _revenue, 2);
-ELSE
-    _gross_margin := NULL;
 END IF;
 
 --EBIT
 SELECT ebit INTO _ebit FROM income_statement WHERE share_id = NEW.share_id AND date = NEW.date;
 
 --OPERATING MARGIN
-IF _ebit IS NOT NULL AND _revenue IS NOT NULL AND _revenue > 0 THEN
+IF _ebit IS NOT NULL AND _revenue > 0 THEN
     _operating_margin := ROUND(_ebit::NUMERIC / _revenue, 2);
-ELSE
-    _operating_margin := NULL;
 END IF;
 
 --EBITDA MARGIN
-IF _ebitda IS NOT NULL AND _revenue IS NOT NULL AND _revenue > 0 THEN
+IF _ebitda IS NOT NULL AND _revenue > 0 THEN
     _ebitda_margin := ROUND(_ebitda::NUMERIC / _revenue, 2);
-ELSE
-    _ebitda_margin := NULL;
 END IF;
 
 --NET PROFIT MARGIN
-IF _net_income IS NOT NULL AND _revenue IS NOT NULL AND _revenue > 0 THEN
+IF _net_income IS NOT NULL AND _revenue > 0 THEN
     _net_profit_margin := ROUND(_net_income::NUMERIC / _revenue, 2);
-ELSE
-    _net_profit_margin := NULL;
 END IF;
 
 
@@ -295,17 +253,13 @@ SELECT dividends_paid INTO _dividends_paid FROM cash_flow WHERE share_id = NEW.s
 
 
 --DIVIDEND YIELD
-IF _dividends_paid IS NOT NULL AND _dividends_paid < 0 AND  _m_cap IS NOT NULL AND _m_cap > 0 THEN
+IF _dividends_paid IS NOT NULL AND _dividends_paid < 0 AND _m_cap > 0 THEN
     _dividend_yield := ROUND((_dividends_paid::NUMERIC / _m_cap) * -100, 2);
-ELSE
-    _dividend_yield := NULL;
 END IF;
 
 --DIVIDEND PAYOUT RATIO
-IF _dividends_paid IS NOT NULL AND _dividends_paid < 0 AND _net_income IS NOT NULL AND _net_income <> 0 THEN
+IF _dividends_paid IS NOT NULL AND _dividends_paid < 0 AND _net_income <> 0 THEN
     _dividend_payout_ratio := ROUND(ABS(_dividends_paid::NUMERIC) / _net_income, 2);
-ELSE
-    _dividend_payout_ratio := NULL;
 END IF;
 
 
