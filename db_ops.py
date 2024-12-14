@@ -180,7 +180,7 @@ def get_foreign_keys():
 
 
 def delete_aggregate_bars(ticker_id):
-    delete_statement = "DEETE FROM d_timeframe WHERE share_id = %s"
+    delete_statement = "DELETE FROM d_timeframe WHERE share_id = %s"
     try:
         # Establish a connection and open a cursor using "with" statement
         with postgres_connection() as conn:

@@ -163,7 +163,7 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
     get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
     # Fundamental data and trade info
     cik = shares_info_data.get('cik')
-    if cik is not None and ticker_id is not None and shares_data.get('share_type_id') not in(6, 8):
+    if constant.fundamentals and cik is not None and ticker_id is not None and shares_data.get('share_type_id') not in(6, 8):
         get_and_insert_trading_info(cik=cik, share_id=ticker_id, date=date(2019, 12, 30))
         get_and_insert_fundamentals(cik=cik, share_id=ticker_id, ticker=ticker, period='annual')
 

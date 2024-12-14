@@ -31,8 +31,9 @@ if __name__ == "__main__":
 
     for new_ticker in tickers_list:
         fingrep_service.get_new_ticker_data_and_insert(new_ticker, finviz_df)
-        if counter == 3:
+        if counter == 100:
             break
+        print(counter)
         counter += 1
 
     # Update ATR and RSI for existing tickers

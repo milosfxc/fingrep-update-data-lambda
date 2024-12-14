@@ -1,2 +1,3 @@
 DAYS = 1
-YEARS = 2
+YEARS = 1
+fundamentals = False

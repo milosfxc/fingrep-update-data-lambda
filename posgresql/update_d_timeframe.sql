@@ -92,7 +92,7 @@ SELECT
 	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN ROUND((AVG(high - low)), 2) END AS _abs_adr,
 	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN ROUND(AVG(close), 4) END AS _sma20,
 	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN ROUND(AVG(volume)) END AS _avg_volume,
-	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(volume::NUMERIC * vwap)::BIGINT END AS _avg_dollar_volume,
+	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(volume::NUMERIC * vwap) END AS _avg_dollar_volume,
 	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN MIN(low) END AS _twenty_day_low,
 	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN MAX(high) END AS _twenty_day_high
 INTO
