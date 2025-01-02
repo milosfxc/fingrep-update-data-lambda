@@ -36,6 +36,7 @@ def get_and_insert_fundamentals(cik: str, share_id: int, ticker: str, period: st
                 break
         try:
             df = pd.DataFrame(response_json)
+            print(df)
             if date is not None:
                 date_str = date.strftime('%Y-%m-%d')
                 df = df.query('date > @date_str')
@@ -116,6 +117,7 @@ def get_and_insert_aggregated_bars(ticker, ticker_id, date_from, limit):
     df_aggregated_daily['volume'] = df_aggregated_daily['volume'].fillna(0)
     df_aggregated_daily['date'] = pd.to_datetime(df_aggregated_daily['date'], unit='ms').dt.date
     df_aggregated_daily['rsi'] = rsi_tv_new_tickers(df_aggregated_daily.copy())
+    df_aggregated_daily[utils.magnified_columns_new] = df_aggregated_daily[utils.magnified_columns_new] * 10000
 
     # Insert into database
     db_ops.upsert_dataframe_v2(df_aggregated_daily, 'd_timeframe', method_name)
@@ -129,6 +131,7 @@ def rename_and_insert_grouped_daily_bars(df):
     df.rename(
         columns={'v': 'volume', 'o': 'open', 'c': 'close', 'h': 'high', 'l': 'low', 'id': 'share_id', 'vw': 'vwap'},
         inplace=True)
+    df[utils.magnified_columns_existing] = df[utils.magnified_columns_existing] * 10000
     db_ops.upsert_dataframe_v2(df, 'd_timeframe', method_name)
 
 

@@ -31,7 +31,7 @@ if __name__ == "__main__":
 
     for new_ticker in tickers_list:
         fingrep_service.get_new_ticker_data_and_insert(new_ticker, finviz_df)
-        if counter == 100:
+        if counter == constant.LIMIT:
             break
         print(counter)
         counter += 1

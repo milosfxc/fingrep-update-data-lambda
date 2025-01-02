@@ -145,3 +145,7 @@ def check_row_number(results_count, results_length):
         print("Number of results: ", results_length)
     if results_count != results_length:
         print(f"resultCount length {results_count} doesn't match with the results length {results_length}")
+
+
+magnified_columns_existing = ['open', 'high', 'low', 'close', 'volume', 'vwap']
+magnified_columns_new = ['open', 'high', 'low', 'close', 'volume', 'vwap', 'rsi']
