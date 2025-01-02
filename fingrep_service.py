@@ -36,7 +36,6 @@ def get_and_insert_fundamentals(cik: str, share_id: int, ticker: str, period: st
                 break
         try:
             df = pd.DataFrame(response_json)
-            print(df)
             if date is not None:
                 date_str = date.strftime('%Y-%m-%d')
                 df = df.query('date > @date_str')
