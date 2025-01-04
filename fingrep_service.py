@@ -11,6 +11,7 @@ import constant
 import db_ops
 import edgar
 import finviz
+import forex
 import polygon
 import utils
 from db_ops import upsert_dataframe, get_foreign_keys, foreign_keys_cache
@@ -49,11 +50,16 @@ def get_and_insert_fundamentals(cik: str, share_id: int, ticker: str, period: st
                 logger.warning(f"{method_name} - CIK {cik} mismatch for ticker {ticker}")
                 break
 
-            currency_mapping = db_ops.get_foreign_keys()['currencies']
-            df['currency_id'] = df['reportedCurrency'].replace(currency_mapping)
-            df.loc[:, ['period', 'share_id']] = 'A', share_id
+            # Remove unnecessary columns
+            df.loc[:, ['period', 'share_id']] = 'A' if period == 'annual' else 'Q', share_id
             df = df[utils.pg_tables.get(statement).keys()]
             df = df.rename(columns=utils.pg_tables.get(statement))
+            # Currency conversion
+            df['usd_exc'] = df.apply(forex.get_usd_exchange_rate, axis=1)
+            monetary_columns = df.columns.difference(utils.non_monetary_columns)
+            df[monetary_columns] = df[monetary_columns].div(df['usd_exc'], axis=0).mul(10000).astype(int)
+            df.drop(columns=['usd_exc', 'reportedCurrency'], inplace=True)
+
             df.sort_values(by=['date'], inplace=True, ascending=True)
             upsert_dataframe(df, statement)
         except Exception as e:

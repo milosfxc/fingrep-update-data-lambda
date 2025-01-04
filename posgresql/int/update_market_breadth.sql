@@ -21,8 +21,8 @@ IF (SELECT COUNT(*) FROM d_timeframe WHERE date = _date) < 1 THEN
 END IF;
 
 --4% RATIO
-SELECT COUNT(*) INTO _four_up FROM d_timeframe WHERE date = _date AND (avg_volume >= 100000 OR avg_dollar_volume >= 250000) AND rel_change >= 4;
-SELECT COUNT(*) INTO _four_down FROM d_timeframe WHERE date = _date AND (avg_volume >= 100000 OR avg_dollar_volume >= 250000) AND rel_change <= -4;
+SELECT COUNT(*) INTO _four_up FROM d_timeframe WHERE date = _date AND (avg_volume >= 100000 * _magn OR avg_dollar_volume >= 250000 * _magn) AND rel_change >= 4 * _magn;
+SELECT COUNT(*) INTO _four_down FROM d_timeframe WHERE date = _date AND (avg_volume >= 100000 * _magn OR avg_dollar_volume >= 250000 * _magn) AND rel_change <= -4 * _magn;
 
 --5 DAY RATIO
 WITH last_4 AS (
@@ -34,7 +34,7 @@ WITH last_4 AS (
 )
 SELECT
     CASE WHEN COUNT(*) = 4
-         THEN (SUM(four_up) + _four_up) * _magn / NULLIF(SUM(four_down) + _four_down, 0)
+         THEN (SUM(four_up) + _four_up) * _magn / (SUM(four_down) + _four_down)
          ELSE NULL
     END INTO _five_day_ratio
 FROM last_4;
@@ -49,7 +49,7 @@ WITH last_9 AS (
 )
 SELECT
     CASE WHEN COUNT(*) = 9
-         THEN (SUM(four_up) + _four_up) * _magn / NULLIF(SUM(four_down) + _four_down, 0)
+         THEN (SUM(four_up) + _four_up) * _magn / (SUM(four_down) + _four_down)
          ELSE NULL
     END INTO _teen_day_ratio
 FROM last_9;
@@ -72,8 +72,8 @@ WITH q_data AS (
 	SELECT
 	    share_id,
 	    date,
-	    end_price * _magn / NULLIF(min_price, 0) AS up_from_qtr_low,
-		end_price * _magn / NULLIF(max_price, 0) AS down_from_qtr_high
+	    end_price * _magn / min_price AS up_from_qtr_low,
+		end_price * _magn / max_price AS down_from_qtr_high
 	FROM
 	    q_data
 	WHERE
@@ -103,8 +103,8 @@ WITH m_data AS (
 	SELECT
 	    share_id,
 	    date,
-	    end_price * _magn / NULLIF(min_price, 0) AS up_from_mth_low,
-		end_price * _magn / NULLIF(max_price, 0) AS down_from_mth_high
+	    end_price * _magn / min_price AS up_from_mth_low,
+		end_price * _magn / max_price AS down_from_mth_high
 	FROM
 	    m_data
 	WHERE

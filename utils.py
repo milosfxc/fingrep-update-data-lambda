@@ -1,4 +1,5 @@
 import re
+from collections import defaultdict
 from datetime import datetime, timedelta
 import constant
 
@@ -6,8 +7,8 @@ headers = {"User-Agent": "milosfxc@gmail.com"}
 
 pg_balance_sheet_columns = {'share_id': 'share_id',
                             'date': 'date',
-                            'currency_id': 'currency_id',
                             'period': 'period',
+                            'reportedCurrency': 'reportedCurrency',
                             'calendarYear': 'financial_year',
                             'totalAssets': 'assets',
                             'cashAndCashEquivalents': 'cash_and_cash_equivalents',
@@ -43,8 +44,8 @@ pg_balance_sheet_columns = {'share_id': 'share_id',
 
 pg_income_statement_columns = {'share_id': 'share_id',
                                'date': 'date',
-                               'currency_id': 'currency_id',
                                'period': 'period',
+                               'reportedCurrency': 'reportedCurrency',
                                'calendarYear': 'financial_year',
                                'acceptedDate': 'report_date',
                                'revenue': 'revenue',
@@ -68,8 +69,8 @@ pg_income_statement_columns = {'share_id': 'share_id',
 
 pg_cash_flow_columns = {'share_id': 'share_id',
                         'date': 'date',
-                        'currency_id': 'currency_id',
                         'period': 'period',
+                        'reportedCurrency': 'reportedCurrency',
                         'calendarYear': 'financial_year',
                         'freeCashFlow': 'free_cash_flow',
                         'operatingCashFlow': 'operating_cash_flow',
@@ -149,3 +150,9 @@ def check_row_number(results_count, results_length):
 
 magnified_columns_existing = ['open', 'high', 'low', 'close', 'volume', 'vwap']
 magnified_columns_new = ['open', 'high', 'low', 'close', 'volume', 'vwap', 'rsi']
+
+currency_values = defaultdict(dict)
+
+# Non-monetary fields are used for currency conversion into dollars
+non_monetary_columns = ['share_id', 'date', 'period', 'reportedCurrency', 'financial_year', 'report_date', 'weighted_avg_shares_outstanding', 'usd_exc']
+
