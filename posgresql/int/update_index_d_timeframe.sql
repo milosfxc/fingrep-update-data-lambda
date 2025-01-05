@@ -13,8 +13,8 @@ WITH last_2 AS (
 	ORDER BY date DESC LIMIT 2
 )
 
-SELECT ((close/ LAG(close, 1) OVER (ORDER BY date ASC)) - 1) * 100 AS _rel_change,
-((open/ LAG(close, 1) OVER (ORDER BY date ASC)) - 1) * 100 AS _rel_gap
+SELECT ((close * 10000 / LAG(close, 1) OVER (ORDER BY date ASC)) - 10000) * 100 AS _rel_change,
+((open * 10000 / LAG(close, 1) OVER (ORDER BY date ASC)) - 10000) * 100 AS _rel_gap
 INTO _rel_change, _rel_gap FROM last_2 ORDER BY date DESC LIMIT 1;
 
 --UPDATE
