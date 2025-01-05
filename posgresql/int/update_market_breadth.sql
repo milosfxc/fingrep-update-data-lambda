@@ -33,8 +33,8 @@ WITH last_4 AS (
     LIMIT 4
 )
 SELECT
-    CASE WHEN COUNT(*) = 4 AND (SUM(four_down) + _four_down) > 0
-         THEN (SUM(four_up) + _four_up) * _magn / (SUM(four_down) + _four_down)
+    CASE WHEN COUNT(*) = 4 AND (SUM(four_up) + _four_up) IS NOT NULL
+         THEN (SUM(four_up) + _four_up) * _magn / NULLIF(SUM(four_down) + _four_down, 0)
          ELSE NULL
     END INTO _five_day_ratio
 FROM last_4;
@@ -48,8 +48,8 @@ WITH last_9 AS (
     LIMIT 9
 )
 SELECT
-    CASE WHEN COUNT(*) = 9 AND (SUM(four_down) + _four_down) > 0
-         THEN (SUM(four_up) + _four_up) * _magn / (SUM(four_down) + _four_down)
+    CASE WHEN COUNT(*) = 9 AND (SUM(four_up) + _four_up) IS NOT NULL
+         THEN (SUM(four_up) + _four_up) * _magn / NULLIF(SUM(four_down) + _four_down, 0)
          ELSE NULL
     END INTO _teen_day_ratio
 FROM last_9;
