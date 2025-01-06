@@ -80,8 +80,8 @@ WITH q_data AS (
 	    min_price IS NOT NULL AND min_price > 0 AND date = _date
 	)
     SELECT
-        COUNT(*) FILTER (WHERE up_from_qtr_low >= 1.25),
-        COUNT(*) FILTER (WHERE down_from_qtr_high <= 0.75) INTO _up25quarter, _down25quarter
+        COUNT(*) FILTER (WHERE up_from_qtr_low >= 1.25 * _magn),
+        COUNT(*) FILTER (WHERE down_from_qtr_high <= 0.75 * _magn) INTO _up25quarter, _down25quarter
     FROM
         q_perf;
 
@@ -111,10 +111,10 @@ WITH m_data AS (
 	    min_price IS NOT NULL AND min_price > 0 AND date = _date
 	)
     SELECT
-        COUNT(*) FILTER (WHERE up_from_mth_low >= 1.25),
-        COUNT(*) FILTER (WHERE down_from_mth_high <= 0.75),
-        COUNT(*) FILTER (WHERE up_from_mth_low >= 1.5),
-        COUNT(*) FILTER (WHERE down_from_mth_high <= 0.5) INTO _up25month, _down25month, _up50month, _down50month
+        COUNT(*) FILTER (WHERE up_from_mth_low >= 1.25 * _magn),
+        COUNT(*) FILTER (WHERE down_from_mth_high <= 0.75 * _magn),
+        COUNT(*) FILTER (WHERE up_from_mth_low >= 1.5 * _magn),
+        COUNT(*) FILTER (WHERE down_from_mth_high <= 0.5 * _magn) INTO _up25month, _down25month, _up50month, _down50month
     FROM
         m_perf;
 
