@@ -9,10 +9,10 @@ pd.set_option('display.width', 400)
 
 # Foreign keys
 foreign_keys = db_ops.get_foreign_keys()
-
-# Index details
-ticker = yahoo_service.get_index_details(utils.indices_list, foreign_keys.get('currencies'))
-db_ops.upsert_dataframe(ticker, 'indices')
+# Insert index details
+if utils.INSERT_INDEX_DETAILS:
+        ticker = yahoo_service.get_index_details(utils.indices_list, foreign_keys.get('currencies'))
+        db_ops.upsert_dataframe(ticker, 'indices')
 
 # Foreign keys
 foreign_keys = db_ops.get_foreign_keys()

@@ -1,2 +1,3 @@
-indices_list = ['^SPX', '^IXIC', '^DJI', '^NYA', '^RUT', '^VIX', '^STOXX', '^DAX', '^FCHI', '^FTSE', '^N225']
+indices_list = ['^SPX', '^IXIC', '^VIX', '^DJI', '^NYA', '^RUT']
 DAYS_OFFSET = 120
+INSERT_INDEX_DETAILS = True
