@@ -1,15 +1,17 @@
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 
-import constant
+from sshtunnel import BaseSSHTunnelForwarderError
+
+import config
 import db_ops
 import edgar
 import fingrep_service
-import utils
+from ConnType import DBLocation
+from SSHTunnelManager import SSHTunnelManager
 from db_ops import get_existing_tickers, get_banned_tickers
 from polygon import logger
-
-if __name__ == "__main__":
+def get_stock_data():
     # Get existing tickers, banned tickers and new daily data
     existing_tickers = get_existing_tickers()
     banned_tickers = get_banned_tickers()
@@ -31,7 +33,7 @@ if __name__ == "__main__":
 
     for new_ticker in tickers_list:
         fingrep_service.get_new_ticker_data_and_insert(new_ticker, finviz_df)
-        if counter == constant.LIMIT:
+        if counter == config.LIMIT:
             break
         print(counter)
         counter += 1
@@ -40,12 +42,12 @@ if __name__ == "__main__":
     fingrep_service.update_rsi_existing_tickers()
 
     # Update market breadth
-    #db_ops.update_market_breadth(utils.get_formatted_utc_date())
-    for i in range(100,0, -1):
+    # db_ops.update_market_breadth(utils.get_formatted_utc_date())
+    for i in range(100, 0, -1):
         date_str = datetime.utcnow() - timedelta(days=i)
         date_str = date_str.strftime("%Y-%m-%d")
         db_ops.update_market_breadth(date_str)
-        
+
     # Stock splits check
     tickers_split = fingrep_service.get_splits()
     if tickers_split:
@@ -54,7 +56,7 @@ if __name__ == "__main__":
         for ticker in common_tickers:
             ticker_id = existing_tickers[ticker]
             if db_ops.delete_aggregate_bars(ticker_id):
-                date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * constant.YEARS)
+                date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * config.YEARS)
                 fingrep_service.get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
             else:
                 logger.error(f"Couldn't delete and reinsert ticker {ticker} for stock split.")
@@ -73,3 +75,18 @@ if __name__ == "__main__":
                 if share_id and ticker:
                     fingrep_service.get_and_insert_fundamentals(cik=cik, share_id=share_id, ticker=ticker, period='A')
     db_ops.delete_fillings_older_than_four_days()
+
+
+if __name__ == "__main__":
+    if config.db_location == DBLocation.REMOTE:
+        try:
+            with SSHTunnelManager():
+                get_stock_data()
+        except BaseSSHTunnelForwarderError as ssh_error:
+            logger.error(f"SSH tunnel error occurred: {ssh_error}")
+            raise
+    else:
+        get_stock_data()
+
+
+

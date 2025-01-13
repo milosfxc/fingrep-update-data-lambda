@@ -1,13 +1,9 @@
 from datetime import datetime,date, timezone, timedelta
 import inspect
 import time
-from xxsubtype import bench
-
 import pandas as pd
 import requests
-from wheel.bdist_wheel import safer_name
-
-import constant
+import config
 import db_ops
 import edgar
 import finviz
@@ -125,7 +121,7 @@ def get_and_insert_aggregated_bars(ticker, ticker_id, date_from, limit):
     df_aggregated_daily[utils.magnified_columns_new] = df_aggregated_daily[utils.magnified_columns_new] * 10000
 
     # Insert into database
-    db_ops.upsert_dataframe_v2(df_aggregated_daily, 'd_timeframe', method_name)
+    db_ops.upsert_dataframe_v2(df_aggregated_daily, 'd_timeframe')
 
 
 def rename_and_insert_grouped_daily_bars(df):
@@ -137,7 +133,7 @@ def rename_and_insert_grouped_daily_bars(df):
         columns={'v': 'volume', 'o': 'open', 'c': 'close', 'h': 'high', 'l': 'low', 'id': 'share_id', 'vw': 'vwap'},
         inplace=True)
     df[utils.magnified_columns_existing] = df[utils.magnified_columns_existing] * 10000
-    db_ops.upsert_dataframe_v2(df, 'd_timeframe', method_name)
+    db_ops.upsert_dataframe_v2(df, 'd_timeframe')
 
 
 def get_new_ticker_data_and_insert(ticker, finviz_df):
@@ -165,13 +161,13 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
     elif shares_data.get("share_type_id") not in utils.allowed_share_type_ids:
         db_ops.insert_banned_ticker(ticker)
         return
-    ticker_id = db_ops.insert_new_ticker_v2(shares_data, shares_info_data)
+    ticker_id = db_ops.insert_new_ticker(shares_data, shares_info_data)
     # Starter plan required for 2+ years historical data
-    date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * constant.YEARS)
+    date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * config.YEARS)
     get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
     # Fundamental data and trade info
     cik = shares_info_data.get('cik')
-    if constant.fundamentals and cik is not None and ticker_id is not None and shares_data.get('share_type_id') not in(6, 8):
+    if config.fundamentals and cik is not None and ticker_id is not None and shares_data.get('share_type_id') not in(6, 8):
         get_and_insert_trading_info(cik=cik, share_id=ticker_id, date=date(2019, 12, 30))
         get_and_insert_fundamentals(cik=cik, share_id=ticker_id, ticker=ticker, period='annual')
 
@@ -208,7 +204,7 @@ def update_rsi_existing_tickers():
     df_last_100.sort_values(by='date', ascending=True, inplace=True)
     df_last_100['rsi'] = df_last_100.groupby('share_id', as_index=False).apply(
         lambda group: rsi_tv_existing_tickers(group), include_groups=False).reset_index(level=0, drop=True)
-    utc_now = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=constant.DAYS)
+    utc_now = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=config.DAYS)
     df_last_100 = df_last_100.query("date == @utc_now")
     df_last_100 = df_last_100.drop(columns=['close', 'high', 'low'])
     df_last_100.dropna(subset=['rsi'], inplace=True)

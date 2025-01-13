@@ -1,7 +1,7 @@
 import re
 from collections import defaultdict
 from datetime import datetime, timedelta
-import constant
+import config
 
 headers = {"User-Agent": "milosfxc@gmail.com"}
 
