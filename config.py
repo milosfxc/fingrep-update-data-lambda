@@ -2,13 +2,13 @@ import os
 
 from ConnType import DBLocation
 # stock market data config
-DAYS = 5
+DAYS = 4
 YEARS = 1
 fundamentals = True
-LIMIT = 5
-db_location = DBLocation.LOCAL
+LIMIT = 0
+db_location = DBLocation.REMOTE
 # database config
-HOST=DBLocation.LOCAL
+HOST=DBLocation.REMOTE
 LOCAL_BIND_PORT=None
 remote_connection_pool = None
 BASTION_IP = os.getenv("FINGREP_BASTION_IP")

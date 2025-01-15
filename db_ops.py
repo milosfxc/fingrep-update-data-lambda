@@ -1,6 +1,10 @@
 import logging
+import time
+
 from psycopg2.extras import DictCursor, execute_values
 import pandas as pd
+from soupsieve.css_types import pickle_register
+
 from config import DB_NAME, DB_USER, LOCAL_DB_HOST, DB_PORT, DB_PASSWORD
 import config
 from ConnType import DBLocation
@@ -13,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 @contextmanager
 def get_db_connection():
-    if config.DBLocation == DBLocation.REMOTE:
+    if config.db_location == DBLocation.REMOTE:
         conn = postgresql_remote_connection()
     else:
         conn = postgres_local_connection()
@@ -113,10 +117,10 @@ def get_last_100():
         logger.error(f"get_last_100: {error}")
         raise
 
-global foreign_keys_cache
+foreign_keys_cache = None
 
 def get_foreign_keys():
-    foreign_keys_cache = None
+    global foreign_keys_cache
     try:
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=DictCursor) as cur:

@@ -17,7 +17,7 @@ def perform_database_operations():
 
 
 if __name__ == "__main__":
-    print(datetime.utcnow() - timedelta(days=5))
+    print(datetime.utcnow() - timedelta(days=config.DAYS))
     # try:
     #     if config.db_location == DBLocation.REMOTE:
     #         with SSHTunnelManager():

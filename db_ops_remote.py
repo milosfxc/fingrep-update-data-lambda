@@ -1,6 +1,8 @@
 import logging
 import os
+import time
 
+import config
 import db_ops
 from ConnType import DBLocation
 
@@ -61,7 +63,7 @@ def read_shares_table():
         print("Connected to the database.")
 
         # Execute SELECT query
-        query = "SELECT * FROM shares;"
+        query = "SELECT count(*) FROM shares;"
         cursor.execute(query)
 
         # Fetch and print all rows
@@ -80,8 +82,9 @@ def read_shares_table():
 
 # Run the function
 if __name__ == "__main__":
-    print("new way")
-    print(db_ops.get_foreign_keys(db_location=DBLocation.REMOTE))
-
+    start_time = time.time()  # Start time in seconds
+    # Perform your operation here
+    time.sleep(1)  # Simulate some delay
+    end_time = time.time()  # End time in seconds
 
 

@@ -121,7 +121,7 @@ def remove_stock_suffix(input_string):
     return re.sub(pattern, '', input_string).strip()
 
 def get_formatted_utc_date():
-    current_utc_date = datetime.utcnow() - timedelta(days=constant.DAYS)
+    current_utc_date = datetime.utcnow() - timedelta(days=config.DAYS)
     return current_utc_date.strftime("%Y-%m-%d")
 
 
