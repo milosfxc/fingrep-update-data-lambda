@@ -1,6 +1,6 @@
 import pandas as pd
 from datetime import datetime, timezone, timedelta
-
+from utils import get_formatted_utc_date
 from sshtunnel import BaseSSHTunnelForwarderError
 
 import config
@@ -18,10 +18,9 @@ def get_stock_data():
     df_grouped_daily = fingrep_service.get_grouped_daily_bars()
     # Data frame for existing tickers
     df_grouped_daily['id'] = df_grouped_daily['T'].map(existing_tickers)
-    existing_tickers_id = [int(id) for id in df_grouped_daily['id'].dropna().tolist()]
     df_grouped_daily_existing = df_grouped_daily.dropna(subset=['id'])
     # Importing data for existing tickers
-    df_grouped_daily_existing = fingrep_service.rename_and_insert_grouped_daily_bars(df_grouped_daily_existing.copy())
+    fingrep_service.rename_and_insert_grouped_daily_bars(df_grouped_daily_existing.copy())
 
     # Data frame for new tickers
     df_grouped_daily_new = df_grouped_daily[df_grouped_daily['id'].isna()]
@@ -42,11 +41,13 @@ def get_stock_data():
     fingrep_service.update_rsi_existing_tickers()
 
     # Update market breadth
-    # db_ops.update_market_breadth(utils.get_formatted_utc_date())
-    for i in range(100, 0, -1):
-        date_str = datetime.utcnow() - timedelta(days=i)
-        date_str = date_str.strftime("%Y-%m-%d")
-        db_ops.update_market_breadth(date_str)
+    if not config.mb_historical:
+        db_ops.update_market_breadth(get_formatted_utc_date())
+    else:
+        for i in range(100, 0, -1):
+            date_str = datetime.utcnow() - timedelta(days=i)
+            date_str = date_str.strftime("%Y-%m-%d")
+            db_ops.update_market_breadth(date_str)
 
     # Stock splits check
     tickers_split = fingrep_service.get_splits()

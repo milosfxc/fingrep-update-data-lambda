@@ -125,7 +125,6 @@ def get_and_insert_aggregated_bars(ticker, ticker_id, date_from, limit):
 
 
 def rename_and_insert_grouped_daily_bars(df):
-    method_name = inspect.currentframe().f_code.co_name
     df['date'] = pd.to_datetime(df['t'], unit='ms').dt.date
     df = df.drop(['T', 'n', 't'], axis=1)
     df['id'] = df['id'].astype(int)
