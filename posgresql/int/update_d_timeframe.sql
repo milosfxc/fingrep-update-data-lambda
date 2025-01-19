@@ -220,28 +220,28 @@ SELECT
 FROM shares_info;
 
 --WEEKLY CHANGE
-SELECT (NEW.close * _magn / close - 10000) * 100 INTO _rel_w_change FROM d_timeframe WHERE date <= (NEW.date - INTERVAL '1 week')
-AND share_id = NEW.share_id ORDER BY date DESC LIMIT 1;
+SELECT (NEW.close * _magn / open - 10000) * 100 INTO _rel_w_change FROM d_timeframe WHERE date > (NEW.date - INTERVAL '1 week')
+AND share_id = NEW.share_id ORDER BY date ASC LIMIT 1;
 
 --MONTHLY CHANGE
-SELECT (NEW.close * _magn / close - 10000) * 100 INTO _rel_m_change FROM d_timeframe WHERE date <= (NEW.date - INTERVAL '1 month')
-AND share_id = NEW.share_id ORDER BY date DESC LIMIT 1;
+SELECT (NEW.close * _magn / open - 10000) * 100 INTO _rel_m_change FROM d_timeframe WHERE date > (NEW.date - INTERVAL '1 month')
+AND share_id = NEW.share_id ORDER BY date ASC LIMIT 1;
 
 --QUARTERLY CHANGE
-SELECT (NEW.close * _magn / close - 10000) * 100 INTO _rel_q_change FROM d_timeframe WHERE date <= (NEW.date - INTERVAL '3 month')
-AND share_id = NEW.share_id ORDER BY date DESC LIMIT 1;
+SELECT (NEW.close * _magn / open - 10000) * 100 INTO _rel_q_change FROM d_timeframe WHERE date > (NEW.date - INTERVAL '3 month')
+AND share_id = NEW.share_id ORDER BY date ASC LIMIT 1;
 
 --6M CHANGE
-SELECT (NEW.close * _magn / close - 10000) * 100 INTO _rel_6m_change FROM d_timeframe WHERE date <= (NEW.date - INTERVAL '6 month')
-AND share_id = NEW.share_id ORDER BY date DESC LIMIT 1;
+SELECT (NEW.close * _magn / open - 10000) * 100 INTO _rel_6m_change FROM d_timeframe WHERE date > (NEW.date - INTERVAL '6 month')
+AND share_id = NEW.share_id ORDER BY date ASC LIMIT 1;
 
 --YTD CHANGE
-SELECT (NEW.close * _magn / close - 10000) * 100 INTO _rel_ytd_change FROM d_timeframe WHERE date <= (NEW.date - INTERVAL '1 year')
-AND share_id = NEW.share_id ORDER BY date DESC LIMIT 1;
+SELECT (NEW.close * _magn / open - 10000) * 100 INTO _rel_ytd_change FROM d_timeframe WHERE date > (NEW.date - INTERVAL '1 year')
+AND share_id = NEW.share_id ORDER BY date ASC LIMIT 1;
 
 --YEAR CHANGE
-SELECT (NEW.close * _magn / close - 10000) * 100 INTO _rel_y_change FROM d_timeframe WHERE date <= (DATE_TRUNC('year', NEW.date) - INTERVAL '1 day')
-AND share_id = NEW.share_id ORDER BY date DESC LIMIT 1;
+SELECT (NEW.close * _magn / close - 10000) * 100 INTO _rel_y_change FROM d_timeframe WHERE date >= DATE_TRUNC('year', NEW.date)
+AND share_id = NEW.share_id ORDER BY date ASC LIMIT 1;
 
 --ALL TIME HIGH/LOW
 SELECT

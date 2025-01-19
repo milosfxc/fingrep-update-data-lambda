@@ -112,9 +112,6 @@ def get_position(response, position_name, date: datetime.date):
     return df
 
 
-
-
-
 def request_latest_fillings(form: str = '10-K', retries: int = 3, delay: int = 5):
     """
     Fetch company facts from SEC EDGAR API for a given CIK.
