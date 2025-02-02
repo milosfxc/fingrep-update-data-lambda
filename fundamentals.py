@@ -7,7 +7,7 @@ def get_fundamentals(ticker: str):
     try:
         ticker = yf.Ticker(ticker)
         financials = dict()
-        financials['reportedCurrency'] = ticker.info['financialCurrency']
+        financials['currency'] = ticker.info['financialCurrency']
         financials['balance_sheet'] = ticker.balance_sheet
         financials['income_statement'] = ticker.income_stmt
         financials['cash_flow'] = ticker.cash_flow

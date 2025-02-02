@@ -56,4 +56,4 @@ if __name__ == "__main__":
     # fund = get_fundamentals('MSFT')
     # print(fund['income_statement_q'])
     from fingrep_service import get_and_insert_fundamentals
-    get_and_insert_fundamentals(1, 'MSFT')
+    get_and_insert_fundamentals(1, 'MSFT', '2023-06-30')

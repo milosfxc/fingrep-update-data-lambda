@@ -8,106 +8,106 @@ headers = {"User-Agent": "milosfxc@gmail.com"}
 pg_balance_sheet_columns = {'share_id': 'share_id',
                             'date': 'date',
                             'report_type': 'report_type',
-                            'reportedCurrency': 'reportedCurrency',
-                            'Total Assets': 'assets',
-                            # Current Assets
-                            'Cash And Cash Equivalents': 'cash_and_cash_equivalents',
-                            'Other Short Term Investments': 'short_term_investments',
-                            'Cash Cash Equivalents And Short Term Investments': 'cash_and_short_term_investments',
-                            'Receivables': 'net_receivables',
-                            'Inventory': 'inventory',
-                            'Other Current Assets': 'other_current_assets',# must be calculated
-                            'Current Assets': 'current_assets',
-                            # Non-Current Assets
-                            'Net PPE': 'property_plant_equipment_net',
-                            'Goodwill': 'goodwill',
-                            'Other Intangible Assets': 'intangible_assets',
-                            'Investments And Advances': 'long_term_investments',
-                            'Non Current Deferred Assets': 'non_current_deferred_assets',
-                            'Other Non Current Assets': 'other_non_current_assets',# must be calculated
-                            'Total Non Current Assets': 'non_current_assets',
-                            # Current Liabilities
-                            'Payables And Accrued Expenses': 'payables_and_expenses',
-                            'Accounts Payable': 'account_payables',
+                            'currency': 'currency',
+                            'total assets': 'assets',
+                            # Current assets
+                            'cash and cash equivalents': 'cash_and_cash_equivalents',
+                            'other short term investments': 'short_term_investments',
+                            'cash cash equivalents and short term investments': 'cash_and_short_term_investments',
+                            'receivables': 'net_receivables',
+                            'inventory': 'inventory',
+                            'other current assets': 'other_current_assets',# must be calculated
+                            'current assets': 'current_assets',
+                            # Non-current assets
+                            'net ppe': 'property_plant_equipment_net',
+                            'goodwill': 'goodwill',
+                            'other intangible assets': 'intangible_assets',
+                            'investments and advances': 'long_term_investments',
+                            'non current deferred assets': 'non_current_deferred_assets',
+                            'other non current assets': 'other_non_current_assets',# must be calculated
+                            'total non current assets': 'non_current_assets',
+                            # Current liabilities
+                            'payables and accrued expenses': 'payables_and_expenses',
+                            'accounts payable': 'account_payables',
                             'other_payables_and_expenses': 'other_payables_and_expenses',
-                            'Current Debt And Capital Lease Obligation': 'short_term_debt',#
-                            'Other Current Liabilities': 'other_current_liabilities',# must be calculated
-                            'Current Liabilities': 'current_liabilities',
-                            # Non-Current Liabilities
-                            'Long Term Debt And Capital Lease Obligation': 'long_term_debt',
-                            'Other Non Current Liabilities': 'other_non_current_liabilities',# must be calculated
-                            'Total Non Current Liabilities Net Minority Interest': 'non_current_liabilities',
-                            'Total Liabilities Net Minority Interest': 'liabilities',
+                            'current debt and capital lease obligation': 'short_term_debt',#
+                            'other current liabilities': 'other_current_liabilities',# must be calculated
+                            'current liabilities': 'current_liabilities',
+                            # Non-current liabilities
+                            'long term debt and capital lease obligation': 'long_term_debt',
+                            'other non current liabilities': 'other_non_current_liabilities',# must be calculated
+                            'total non current liabilities net minority interest': 'non_current_liabilities',
+                            'total liabilities net minority interest': 'liabilities',
                             # Equity
-                            'Stockholders\' Equity': 'stockholders_equity',
-                            'Capital Stock': 'capital_stock',
-                            'Additional Paid in Capital': 'share_premium',
-                            'Retained Earnings': 'retained_earnings',
-                            'Treasury Stock': 'treasury_shares',
-                            'Gains Losses Not Affecting Retained Earnings': 'accumulated_other_comprehensive_income_loss',#
-                            'Minority Interest': 'minority_interest',
-                            'Total Equity Gross Minority Interest': 'equity',
+                            'stockholders\' equity': 'stockholders_equity',
+                            'capital stock': 'capital_stock',
+                            'additional paid in capital': 'share_premium',
+                            'retained earnings': 'retained_earnings',
+                            'treasury stock': 'treasury_shares',
+                            'gains losses not affecting retained earnings': 'accumulated_other_comprehensive_income_loss',#
+                            'minority interest': 'minority_interest',
+                            'total equity gross minority interest': 'equity',
                             # Additional info
-                            'Total Debt': 'debt',#
-                            'Net Debt': 'net_debt',#
-                            'Ordinary Shares Number': 'shares_outstanding'
+                            'total debt': 'debt',#
+                            'net debt': 'net_debt',#
+                            'ordinary shares number': 'shares_outstanding'
                             }
 
 pg_income_statement_columns = {'share_id': 'share_id',
                                'date': 'date',
                                'report_type': 'report_type',
-                               'reportedCurrency': 'reportedCurrency',
-                               'Total Revenue': 'revenue',
-                               'Operating Revenue': 'operating_revenue',
-                               'Cost Of Revenue': 'cost_of_revenue',
-                               'Gross Profit': 'gross_profit',
-                               'Operating Expense': 'operating_expenses',
-                               'Selling General and Administrative': 'general_and_administrative_expenses',
-                               'Depreciation Amortization Depletion': 'deprecation_and_amortization',
-                               'Research & Development': 'research_and_development_expenses',
-                               'Other Operating Expenses': 'other_operating_expenses',
-                               'Operating Income': 'operating_income',
-                               'EBITDA': 'ebitda',
-                               'Reconciled Depreciation': 'reconciled_deprecation',
-                               'EBIT': 'ebit',
-                               'Net Non Operating Interest Income Expense': 'net_interest',
-                               'Pretax Income': 'ebt',
-                               'Tax Provision': 'income_tax',
-                               'Net Income Common Stockholders': 'net_income',
-                               'Basic EPS': 'eps',
-                               'Diluted EPS': 'diluted_eps'
+                               'currency': 'currency',
+                               'total revenue': 'revenue',
+                               'operating revenue': 'operating_revenue',
+                               'cost of revenue': 'cost_of_revenue',
+                               'gross profit': 'gross_profit',
+                               'operating expense': 'operating_expenses',
+                               'selling general and administrative': 'general_and_administrative_expenses',
+                               'depreciation amortization depletion': 'deprecation_and_amortization',
+                               'research & development': 'research_and_development_expenses',
+                               'other operating expenses': 'other_operating_expenses',
+                               'operating income': 'operating_income',
+                               'ebitda': 'ebitda',
+                               'reconciled depreciation': 'reconciled_deprecation',
+                               'ebit': 'ebit',
+                               'net non operating interest income expense': 'net_interest',
+                               'pretax income': 'ebt',
+                               'tax provision': 'income_tax',
+                               'net income common stockholders': 'net_income',
+                               'basic eps': 'eps',
+                               'diluted eps': 'diluted_eps'
                                }
 
 pg_cash_flow_columns = {'share_id': 'share_id',
                         'date': 'date',
                         'report_type': 'report_type',
-                        'reportedCurrency': 'reportedCurrency',
-                        # Operating CF
-                        'Operating Cash Flow': 'operating_cash_flow',
-                        'Net Income From Continuing Operations': 'operating_net_income',
-                        'Operating Gains Losses': 'operating_gains_losses',
-                        'Depreciation Amortization Depletion': 'operating_da',
-                        'Deferred Tax': 'deferred_income_tax',
-                        'Stock Based Compensation': 'share_based_compensation',
-                        'Change In working capital': 'change_working_capital',# add column other operating activities
-                        # Investing CF
-                        'Investing Cash Flow': 'investing_cash_flow',
-                        'Capital Expenditure Reported': 'capital_expenditure',
-                        'Net PPE Purchase And Sale': 'investments_PPE',
-                        'Net Business Purchase And Sale': 'acquisitions_net',
-                        'Net Investment Purchase And Sale': 'purchases_of_investments', # add column other investing activities
-                        # Financing CF
-                        'Financing Cash Flow': 'financing_cash_flow',
-                        'Net Issuance Payments of Debt': 'net_debt_issuance',
-                        'Net Common Stock Issuance': 'net_common_shares_issued',
-                        'Net Preferred Stock Issuance': 'net_preferred_shares_issued',
-                        'Cash Dividends Paid': 'dividends_paid', # add column other financing activities
+                        'currency': 'currency',
+                        # Operating cf
+                        'operating cash flow': 'operating_cash_flow',
+                        'net income from continuing operations': 'operating_net_income',
+                        'operating gains losses': 'operating_gains_losses',
+                        'depreciation amortization depletion': 'operating_da',
+                        'deferred tax': 'deferred_income_tax',
+                        'stock based compensation': 'share_based_compensation',
+                        'change in working capital': 'change_working_capital',# add column other operating activities
+                        # Investing cf
+                        'investing cash flow': 'investing_cash_flow',
+                        'capital expenditure reported': 'capital_expenditure',
+                        'net ppe purchase and sale': 'investments_ppe',
+                        'net business purchase and sale': 'acquisitions_net',
+                        'net investment purchase and sale': 'purchases_of_investments', # add column other investing activities
+                        # Financing cf
+                        'financing cash flow': 'financing_cash_flow',
+                        'net issuance payments of debt': 'net_debt_issuance',
+                        'net common stock issuance': 'net_common_shares_issued',
+                        'net preferred stock issuance': 'net_preferred_shares_issued',
+                        'cash dividends paid': 'dividends_paid', # add column other financing activities
                         # Additional
-                        'Free Cash Flow': 'free_cash_flow',
-                        'End Cash Position': 'end_cash_balance',
-                        'Beginning Cash Position': 'beginning_cash_balance',# add column change in cash
-                        'Issuance Of Debt': 'debt_issued',
-                        'Repayment Of Debt': 'debt_repayment'
+                        'free cash flow': 'free_cash_flow',
+                        'end cash position': 'end_cash_balance',
+                        'beginning cash position': 'beginning_cash_balance',# add column change in cash
+                        'issuance of debt': 'debt_issued',
+                        'repayment of debt': 'debt_repayment'
                         }
 
 pg_tables = {
@@ -157,18 +157,16 @@ def check_row_number(results_count, results_length):
     if results_count != results_length:
         print(f"resultCount length {results_count} doesn't match with the results length {results_length}")
 
-
+# Magnification
 magnified_columns_existing = ['open', 'high', 'low', 'close', 'volume', 'vwap']
 magnified_columns_new = ['open', 'high', 'low', 'close', 'volume', 'vwap', 'rsi']
 
-currency_values = defaultdict(dict)
-
 # Non-monetary fields are used for currency conversion into dollars
-non_monetary_columns = ['share_id', 'date', 'report_type', 'reportedCurrency', 'usd_exc']
+non_monetary_columns = ['share_id', 'date', 'report_type', 'currency', 'usd_exc']
 
 # Mandatory columns
 mandatory_columns = {
     "balance_sheet": ['assets', 'current_assets', 'non_current_assets', 'liabilities', 'equity'],
-    "income_statement": ['revenue', 'gross_profit', 'ebitda'],
-    'cash_flow': ['free_cash_flow', 'operating_cash_flow', 'investing_cash_flow', 'financing_cash_flow']
+    "income_statement": ['revenue','ebitda'],
+    'cash_flow': ['operating_cash_flow', 'investing_cash_flow', 'financing_cash_flow']
 }

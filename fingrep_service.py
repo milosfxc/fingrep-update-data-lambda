@@ -15,62 +15,84 @@ from db_ops import upsert_dataframe, get_foreign_keys, foreign_keys_cache
 from edgar import get_trading_info
 from fundamentals import get_fundamentals
 from ta_utils import rsi_tv_new_tickers, rsi_tv_existing_tickers
+from utils import mandatory_columns
+
 pd.set_option("future.no_silent_downcasting", True)
 from config import logger
 
 
 def fill_calc_columns(df: pd.DataFrame, table_name: str):
     if table_name == 'balance_sheet':
+        # Other non-current assets
+        equation = (df.get('current_assets', 0)
+                  - df.get('cash_and_short_term_investments',0)
+                  - df.get('net_receivables',0)
+                  - df.get('inventory',0))
+        cond = df.get('current_assets', 0) > equation
+        df.loc[cond, 'other_current_assets'] = equation
 
-        df['other_current_assets'] = (df['current_assets']
-                                      - df['cash_and_short_term_investments']
-                                      - df['net_receivables']
-                                      - df['inventory'])
+        # Other non-current assets
+        equation = (df.get('non_current_assets', 0)
+                  - df.get('property_plant_equipment_net',0)
+                  - df.get('goodwill',0)
+                  - df.get('intangible_assets',0)
+                  - df.get('long_term_investments',0)
+                  - df.get('non_current_deferred_assets',0))
+        cond = df.get('non_current_assets', 0) > equation
+        df.loc[cond, 'other_non_current_assets'] = equation
+        
+        # Calc other current liabilities
+        equation = (df.get('current_liabilities', 0)
+                   - df.get('payables_and_expenses',0)
+                   - df.get('short_term_debt', 0))
+        cond = df.get('current_liabilities', 0) > equation
+        df.loc[cond, 'other_current_liabilities'] = equation
 
-        df['other_non_current_assets'] = (df['non_current_assets']
-                                          - df['property_plant_equipment_net']
-                                          - df['goodwill']
-                                          - df['intangible_assets']
-                                          - df['long_term_investments']
-                                          - df['non_current_deferred_assets'])
-
-        df['other_current_liabilities'] = (df['current_liabilities']
-                                           - df['payables_and_expenses']
-                                           - df['short_term_debt'])
-
-        df['other_non_current_liabilities'] = (df['non_current_liabilities']
-                                               - df['long_term_debt'])
+        # Calc other non-current liabilities
+        equation = df.get('non_current_liabilities', 0) - df.get('long_term_debt', 0)
+        cond = df.get('non_current_liabilities', 0) > equation
+        df.loc[cond, 'other_non_current_liabilities'] = equation
 
         return df
     elif table_name == 'cash_flow':
-        df['other_operating_activities'] = (df['operating_cash_flow']
-                                            - df['operating_net_income']
-                                            - df['operating_gains_losses']
-                                            - df['operating_da']
-                                            - df['deferred_income_tax']
-                                            - df['share_based_compensation']
-                                            - df['change_working_capital'])
-
-        df['other_investing_activities'] = (df['investing_cash_flow']
-                                            - df['capital_expenditure']
-                                            - df['investments_PPE']
-                                            - df['acquisitions_net']
-                                            - df['purchases_of_investments'])
-
-        df['other_financing_activities'] = (df['financing_cash_flow']
-                                     - df['net_debt_issuance']
-                                     - df['net_common_shares_issued']
-                                     - df['net_preferred_shares_issued']
-                                     - df['dividends_paid'])
-
-        df['change_in_cash'] = df['end_cash_balance'] - df['beginning_cash_balance']
+        # Calc other operating activities
+        equation = (df.get('operating_cash_flow', 0)
+                    - df.get('operating_net_income', 0)
+                    - df.get('operating_gains_losses', 0)
+                    - df.get('operating_da', 0)
+                    - df.get('deferred_income_tax', 0)
+                    - df.get('share_based_compensation', 0)
+                    - df.get('change_working_capital', 0))
+        cond = df.get('operating_cash_flow', 0) > equation
+        df.loc[cond, 'other_operating_activities'] = equation
+        # Calc other investing activities
+        equation = (df.get('investing_cash_flow', 0)
+                    - df.get('capital_expenditure', 0)
+                    - df.get('investments_PPE', 0)
+                    - df.get('acquisitions_net', 0)
+                    - df.get('purchases_of_investments', 0))
+        cond = df.get('investing_cash_flow', 0) > equation
+        df.loc[cond, 'other_investing_activities'] = equation
+        # Calc other financing activities
+        equation = (df.get('financing_cash_flow',0)
+                     - df.get('net_debt_issuance',0)
+                     - df.get('net_common_shares_issued',0)
+                     - df.get('net_preferred_shares_issued',0)
+                     - df.get('dividends_paid',0))
+        cond = df.get('financing_cash_flow',0) > equation
+        df.loc[cond, 'other_financing_activities'] = equation
+        # Calc change in cash
+        if 'end_cash_balance' in df.columns and 'beginning_cash_balance' in df.columns:
+            cond = df['end_cash_balance'].notna() & df['beginning_cash_balance'].notna()
+            df.loc[cond, 'change_in_cash'] = df['end_cash_balance'] - df['beginning_cash_balance']
 
         return df
     else:
         return df
 
 
-def get_and_insert_fundamentals(share_id: int, ticker: str, period_ending: datetime = None):
+def get_and_insert_fundamentals(share_id: int, ticker: str, period_ending: str = None):
+    counter = 0
     fundamentals_dict = get_fundamentals(ticker=ticker)
     if fundamentals_dict is None:
         time.sleep(3)
@@ -82,20 +104,19 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, period_ending: datet
         for statement in ['income_statement', 'cash_flow', 'balance_sheet', 'income_statement_q', 'cash_flow_q', 'balance_sheet_q']:
 
             df = fundamentals_dict[statement]
-
-            if period_ending is not None:
-                date_str = date.strftime('%Y-%m-%d')
-                df = df('date = @date_str')
-            if statement == 'cash_flow':
-                print(df)
             # Transpose the DataFrame and reset the index to create a single Date column
             df = df.T.reset_index()
             df.rename(columns={"index": "date"}, inplace=True)
+            if period_ending:
+                df = df[df['date'].dt.date == pd.Timestamp(period_ending).date()]
+            if df.empty:
+                continue
             # Add period, share_id and currency columns
-            df.loc[:, ['report_type', 'share_id', 'reportedCurrency']] = 'Q' if statement.endswith('_q') else 'A', share_id, fundamentals_dict['reportedCurrency']
+            df.loc[:, ['report_type', 'share_id', 'currency']] = 'Q' if statement.endswith('_q') else 'A', share_id, fundamentals_dict['currency']
             # Table name
             table_name = statement.rstrip('_q')
             # Filter required columns
+            df.columns = df.columns.str.lower()
             pg_columns = utils.pg_tables.get(table_name).keys()
             required_columns = [col for col in pg_columns if col in df.columns]
             df = df[required_columns]
@@ -103,17 +124,26 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, period_ending: datet
             df = df.rename(columns=utils.pg_tables.get(statement.rstrip('_q')))
             # Date formation to prevent an error for forex.request_usd_currency_value
             df['date'] = df['date'].dt.strftime('%Y-%m-%d')
-            # Remove rows if any of the mandatory columns is NaN
+            # Stop insertion if any of the mandatory columns is missing
+            if any(col not in df.columns for col in mandatory_columns[table_name]):
+                continue
+            # Remove rows if any of the row's mandatory columns is NaN
             df.dropna(subset=utils.mandatory_columns[table_name], inplace=True)
+            if df.empty:
+                continue
             # Fill other columns for balance sheet and cash flow statements
             df = fill_calc_columns(df=df, table_name=table_name)
             # Currency conversion
             df['usd_exc'] = df.apply(forex.get_usd_exchange_rate, axis=1)
             monetary_columns = df.columns.difference(utils.non_monetary_columns)
             df[monetary_columns] = df[monetary_columns].div(df['usd_exc'], axis=0).mul(10000).round()
-            df.drop(columns=['usd_exc', 'reportedCurrency'], inplace=True)
+            df.drop(columns=['usd_exc', 'currency'], inplace=True)
+            # Important for ratios trigger function
             df.sort_values(by=['date'], inplace=True, ascending=True)
-            upsert_dataframe(df, table_name)
+            if upsert_dataframe(df, table_name): counter += 1
+        # Check if all statements were updated for a date
+
+
     except Exception as e:
         logger.error(f"get_and_insert_fundamentals - Error preparing for insert fundamentals for ticker {ticker}: {e}\n{traceback.format_exception(e)}")
 

@@ -31,7 +31,7 @@ def request_usd_currency_value(date: str, currency) -> float:
 
 
 def get_usd_exchange_rate(row) -> float:
-    reported_currency = row['reportedCurrency']
+    reported_currency = row['currency']
     if reported_currency == 'USD':
         return 1
     date = row['date']

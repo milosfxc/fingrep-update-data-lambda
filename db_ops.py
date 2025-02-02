@@ -1,5 +1,6 @@
 import logging
 import time
+import traceback
 
 from psycopg2.extras import DictCursor, execute_values
 import pandas as pd
@@ -170,7 +171,7 @@ def delete_aggregate_bars(ticker_id: str):
         return False
 
 
-def upsert_dataframe(df: pd.DataFrame, table_name: str):
+def upsert_dataframe(df: pd.DataFrame, table_name: str)-> bool:
     # Replace NaN with None
     df = df.astype(object).where(pd.notnull(df), None)
     # Create a list of column update expressions for ON CONFLICT
@@ -185,11 +186,15 @@ def upsert_dataframe(df: pd.DataFrame, table_name: str):
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                row_count = 0  # Track affected rows
                 for row in df.itertuples(index=False, name=None):
                     cur.execute(upsert_financials_query, row)
+                    row_count += cur.rowcount
                 conn.commit()
+                return row_count > 0
     except Exception as e:
         logging.error(f"upsert_dataframe: {e}")
+        return False
 
 
 def update_market_breadth(date: str):
