@@ -3,6 +3,7 @@ from datetime import datetime, timezone, timedelta, date
 
 
 import config
+import edgar
 import forex
 import utils
 import fundamentals
@@ -55,5 +56,8 @@ if __name__ == "__main__":
     from fundamentals import get_fundamentals
     # fund = get_fundamentals('MSFT')
     # print(fund['income_statement_q'])
-    from fingrep_service import get_and_insert_fundamentals
-    get_and_insert_fundamentals(1, 'MSFT', '2023-06-30')
+    # from fingrep_service import get_and_insert_fundamentals
+    # get_and_insert_fundamentals(1, 'MSFT', '2023-06-30')
+    #fillings = edgar.get_latest_fillings()
+    #print(fillings)
+    print(edgar.get_submissions(cik='0001898766'))

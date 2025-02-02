@@ -88,6 +88,13 @@ def fill_calc_columns(df: pd.DataFrame, table_name: str):
 
         return df
     else:
+        # Calc other operating expenses
+        equation = (df.get('operating_expenses',0)
+                     - df.get('general_and_administrative_expenses',0)
+                     - df.get('depreciation_amortization_depletion',0)
+                     - df.get('research_and_development_expenses',0))
+        cond = df.get('operating_expenses',0) > equation
+        df.loc[cond, 'other_operating_expenses'] = equation
         return df
 
 
