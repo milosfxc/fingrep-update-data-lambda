@@ -2,12 +2,12 @@ import os
 
 from ConnType import DBLocation
 # stock market data config
-DAYS = 0
+DAYS = 2
 YEARS = 1
 mb_historical = True # false updates market breadth for the current day, true updates for the last 100 days
 fundamentals = True
-LIMIT = 0
-db_location = DBLocation.REMOTE
+LIMIT = 5
+db_location = DBLocation.LOCAL
 # database config
 HOST=DBLocation.REMOTE
 LOCAL_BIND_PORT=None
@@ -22,3 +22,16 @@ DB_NAME = os.getenv("FINGREP_DB")
 DB_USER = os.getenv("FINGREP_DB_USER")
 DB_PASSWORD = os.getenv("FINGREP_DB_PASS")
 DB_PORT = 5432
+# logger
+import logging
+
+logger = logging.getLogger('fingrep')
+logger.setLevel(logging.INFO)
+logger.propagate = False
+
+# Add handlers, formatters, etc.
+handler = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+

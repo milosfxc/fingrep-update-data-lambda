@@ -1,4 +1,6 @@
 import logging
+import utils
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 from retry import retry
@@ -11,7 +13,7 @@ if not CURRENCY_BEACON_API_KEY:
 
 @retry(exceptions=requests.RequestException, tries=3, delay=2, backoff=2)
 def request_usd_currency_value(date: str, currency) -> float:
-
+    # Params
     params = {
         "api_key": CURRENCY_BEACON_API_KEY,  # Authentication
         "base": "USD",  # Base currency

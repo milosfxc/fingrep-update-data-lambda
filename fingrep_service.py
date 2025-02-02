@@ -1,3 +1,4 @@
+import traceback
 from datetime import datetime,date, timezone, timedelta
 import inspect
 import time
@@ -12,54 +13,109 @@ import polygon
 import utils
 from db_ops import upsert_dataframe, get_foreign_keys, foreign_keys_cache
 from edgar import get_trading_info
-import logging
-from fmp import get_fundamentals_v2
+from fundamentals import get_fundamentals
 from ta_utils import rsi_tv_new_tickers, rsi_tv_existing_tickers
 pd.set_option("future.no_silent_downcasting", True)
-logger = logging.getLogger(__name__)
+from config import logger
 
 
-def get_and_insert_fundamentals(cik: str, share_id: int, ticker: str, period: str,
-                                date: datetime = None):
-    method_name = inspect.currentframe().f_code.co_name
-    for statement in ['income_statement', 'cash_flow', 'balance_sheet']:
-        response_json = get_fundamentals_v2(statement=statement, ticker=ticker, period='annual')
-        if response_json is None or 'Error Message' in response_json:
-            time.sleep(3)
-            response_json = get_fundamentals_v2(statement=statement, ticker=ticker, period=period)
-            if response_json is None or 'Error Message' in response_json:
-                logger.error(f"{get_and_insert_fundamentals.__name__}: No data returned for {statement} "
-                             f"and ticker {ticker}. The response: {response_json}.")
-                break
-        try:
-            df = pd.DataFrame(response_json)
-            if date is not None:
+def fill_calc_columns(df: pd.DataFrame, table_name: str):
+    if table_name == 'balance_sheet':
+
+        df['other_current_assets'] = (df['current_assets']
+                                      - df['cash_and_short_term_investments']
+                                      - df['net_receivables']
+                                      - df['inventory'])
+
+        df['other_non_current_assets'] = (df['non_current_assets']
+                                          - df['property_plant_equipment_net']
+                                          - df['goodwill']
+                                          - df['intangible_assets']
+                                          - df['long_term_investments']
+                                          - df['non_current_deferred_assets'])
+
+        df['other_current_liabilities'] = (df['current_liabilities']
+                                           - df['payables_and_expenses']
+                                           - df['short_term_debt'])
+
+        df['other_non_current_liabilities'] = (df['non_current_liabilities']
+                                               - df['long_term_debt'])
+
+        return df
+    elif table_name == 'cash_flow':
+        df['other_operating_activities'] = (df['operating_cash_flow']
+                                            - df['operating_net_income']
+                                            - df['operating_gains_losses']
+                                            - df['operating_da']
+                                            - df['deferred_income_tax']
+                                            - df['share_based_compensation']
+                                            - df['change_working_capital'])
+
+        df['other_investing_activities'] = (df['investing_cash_flow']
+                                            - df['capital_expenditure']
+                                            - df['investments_PPE']
+                                            - df['acquisitions_net']
+                                            - df['purchases_of_investments'])
+
+        df['other_financing_activities'] = (df['financing_cash_flow']
+                                     - df['net_debt_issuance']
+                                     - df['net_common_shares_issued']
+                                     - df['net_preferred_shares_issued']
+                                     - df['dividends_paid'])
+
+        df['change_in_cash'] = df['end_cash_balance'] - df['beginning_cash_balance']
+
+        return df
+    else:
+        return df
+
+
+def get_and_insert_fundamentals(share_id: int, ticker: str, period_ending: datetime = None):
+    fundamentals_dict = get_fundamentals(ticker=ticker)
+    if fundamentals_dict is None:
+        time.sleep(3)
+        fundamentals_dict = get_fundamentals(ticker=ticker)
+        if fundamentals_dict is None:
+            logger.error(f"get_and_insert_fundamentals: Skipping fundamentals insertion for {ticker}")
+            return
+    try:
+        for statement in ['income_statement', 'cash_flow', 'balance_sheet', 'income_statement_q', 'cash_flow_q', 'balance_sheet_q']:
+
+            df = fundamentals_dict[statement]
+
+            if period_ending is not None:
                 date_str = date.strftime('%Y-%m-%d')
-                df = df.query('date > @date_str')
-
-            if 'cik' not in df.columns or df.iloc[0]['cik'] == '0000000000':
-                edgar_ticker = edgar.get_ticker_by_cik(cik)
-                if edgar_ticker and edgar_ticker != ticker:
-                    logger.warning(f"{method_name} - CIK {cik} mismatch for ticker {ticker}")
-                    break
-            elif df.iloc[0]['cik'] != cik.zfill(10):
-                logger.warning(f"{method_name} - CIK {cik} mismatch for ticker {ticker}")
-                break
-
-            # Remove unnecessary columns
-            df.loc[:, ['period', 'share_id']] = 'A' if period == 'annual' else 'Q', share_id
-            df = df[utils.pg_tables.get(statement).keys()]
-            df = df.rename(columns=utils.pg_tables.get(statement))
+                df = df('date = @date_str')
+            if statement == 'cash_flow':
+                print(df)
+            # Transpose the DataFrame and reset the index to create a single Date column
+            df = df.T.reset_index()
+            df.rename(columns={"index": "date"}, inplace=True)
+            # Add period, share_id and currency columns
+            df.loc[:, ['report_type', 'share_id', 'reportedCurrency']] = 'Q' if statement.endswith('_q') else 'A', share_id, fundamentals_dict['reportedCurrency']
+            # Table name
+            table_name = statement.rstrip('_q')
+            # Filter required columns
+            pg_columns = utils.pg_tables.get(table_name).keys()
+            required_columns = [col for col in pg_columns if col in df.columns]
+            df = df[required_columns]
+            # Rename columns with db names
+            df = df.rename(columns=utils.pg_tables.get(statement.rstrip('_q')))
+            # Date formation to prevent an error for forex.request_usd_currency_value
+            df['date'] = df['date'].dt.strftime('%Y-%m-%d')
+            # Remove rows if any of the mandatory columns is NaN
+            df.dropna(subset=utils.mandatory_columns[table_name], inplace=True)
+            # Fill other columns for balance sheet and cash flow statements
+            df = fill_calc_columns(df=df, table_name=table_name)
             # Currency conversion
             df['usd_exc'] = df.apply(forex.get_usd_exchange_rate, axis=1)
             monetary_columns = df.columns.difference(utils.non_monetary_columns)
-            df[monetary_columns] = df[monetary_columns].div(df['usd_exc'], axis=0).mul(10000).astype(int)
+            df[monetary_columns] = df[monetary_columns].div(df['usd_exc'], axis=0).mul(10000).round()
             df.drop(columns=['usd_exc', 'reportedCurrency'], inplace=True)
-
             df.sort_values(by=['date'], inplace=True, ascending=True)
-            upsert_dataframe(df, statement)
-        except Exception as e:
-            logger.error(f"{method_name} - Error preparing for insert fundamentals for ticker {ticker}: {e}")
+            upsert_dataframe(df, table_name)
+    except Exception as e:
+        logger.error(f"get_and_insert_fundamentals - Error preparing for insert fundamentals for ticker {ticker}: {e}\n{traceback.format_exception(e)}")
 
 
 def get_and_insert_trading_info(cik: str, share_id: int, date: datetime.date):
@@ -102,7 +158,6 @@ def get_grouped_daily_bars():
 
 
 def get_and_insert_aggregated_bars(ticker, ticker_id, date_from, limit):
-    method_name = inspect.currentframe().f_code.co_name
 
     data = polygon.request_aggregate_daily_bars(ticker, date_from, limit)
     df_aggregated_daily = pd.DataFrame(data['results'])
@@ -168,7 +223,7 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
     cik = shares_info_data.get('cik')
     if config.fundamentals and cik is not None and ticker_id is not None and shares_data.get('share_type_id') not in(6, 8):
         get_and_insert_trading_info(cik=cik, share_id=ticker_id, date=date(2019, 12, 30))
-        get_and_insert_fundamentals(cik=cik, share_id=ticker_id, ticker=ticker, period='annual')
+        get_and_insert_fundamentals(share_id=ticker_id, ticker=ticker)
 
 
 # Separates data for shares and share_info tables
