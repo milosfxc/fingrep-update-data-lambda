@@ -6,7 +6,6 @@ import pandas as pd
 import requests
 import config
 import db_ops
-import edgar
 import finviz
 import forex
 import polygon
@@ -16,7 +15,9 @@ from edgar import get_trading_info
 from fundamentals import get_fundamentals
 from ta_utils import rsi_tv_new_tickers, rsi_tv_existing_tickers
 from utils import mandatory_columns
-
+pd.set_option('display.max_rows', None)  # Show all rows
+pd.set_option('display.max_columns', None)  # Show all columns
+pd.set_option('display.width', None)  # To allow the console to use the full width
 pd.set_option("future.no_silent_downcasting", True)
 from config import logger
 
@@ -95,6 +96,7 @@ def fill_calc_columns(df: pd.DataFrame, table_name: str):
                      - df.get('research_and_development_expenses',0))
         cond = df.get('operating_expenses',0) > equation
         df.loc[cond, 'other_operating_expenses'] = equation
+
         return df
 
 

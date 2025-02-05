@@ -10,6 +10,9 @@ from ConnType import DBLocation
 from SSHTunnelManager import SSHTunnelManager
 from db_ops import get_existing_tickers, get_banned_tickers
 from config import logger
+from utils import get_formatted_utc_date
+
+
 def get_stock_data():
     # Get existing tickers, banned tickers and new daily data
     existing_tickers = get_existing_tickers()
@@ -41,13 +44,13 @@ def get_stock_data():
     fingrep_service.update_rsi_existing_tickers()
 
     # Update market breadth
-    # if not config.mb_historical:
-    #     db_ops.update_market_breadth(get_formatted_utc_date())
-    # else:
-    #     for i in range(100, 0, -1):
-    #         date_str = datetime.utcnow() - timedelta(days=i)
-    #         date_str = date_str.strftime("%Y-%m-%d")
-    #         db_ops.update_market_breadth(date_str)
+    if not config.mb_historical:
+        db_ops.update_market_breadth(get_formatted_utc_date())
+    else:
+        for i in range(100, 0, -1):
+            date_str = datetime.utcnow() - timedelta(days=i)
+            date_str = date_str.strftime("%Y-%m-%d")
+            db_ops.update_market_breadth(date_str)
 
     # Stock splits check
     tickers_split = fingrep_service.get_splits()

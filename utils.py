@@ -39,7 +39,7 @@ pg_balance_sheet_columns = {'share_id': 'share_id',
                             'total non current liabilities net minority interest': 'non_current_liabilities',
                             'total liabilities net minority interest': 'liabilities',
                             # Equity
-                            'stockholders\' equity': 'stockholders_equity',
+                            'stockholders equity': 'stockholders_equity',
                             'capital stock': 'capital_stock',
                             'additional paid in capital': 'share_premium',
                             'retained earnings': 'retained_earnings',
