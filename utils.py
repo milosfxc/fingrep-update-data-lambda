@@ -39,7 +39,7 @@ pg_balance_sheet_columns = {'share_id': 'share_id',
                             'total non current liabilities net minority interest': 'non_current_liabilities',
                             'total liabilities net minority interest': 'liabilities',
                             # Equity
-                            'stockholders equity': 'stockholders_equity',
+                            'stockholders equity': 'shareholders_equity',
                             'capital stock': 'capital_stock',
                             'additional paid in capital': 'share_premium',
                             'retained earnings': 'retained_earnings',
@@ -50,7 +50,8 @@ pg_balance_sheet_columns = {'share_id': 'share_id',
                             # Additional info
                             'total debt': 'debt',#
                             'net debt': 'net_debt',#
-                            'ordinary shares number': 'shares_outstanding'
+                            'ordinary shares number': 'shares_outstanding',
+                            'common stock equity': 'common_stock_equity'
                             }
 
 pg_income_statement_columns = {'share_id': 'share_id',
@@ -75,7 +76,8 @@ pg_income_statement_columns = {'share_id': 'share_id',
                                'tax provision': 'income_tax',
                                'net income common stockholders': 'net_income',
                                'basic eps': 'eps',
-                               'diluted eps': 'diluted_eps'
+                               'diluted eps': 'diluted_eps',
+                               'Basic Average Shares': 'avg_shares_outstanding'
                                }
 
 pg_cash_flow_columns = {'share_id': 'share_id',
