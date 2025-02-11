@@ -118,6 +118,7 @@ pg_tables = {
     'cash_flow': pg_cash_flow_columns,
 }
 
+
 edgar_company_facts_positions_path = {
     'EntityCommonStockSharesOutstanding': ['facts', 'dei', 'EntityCommonStockSharesOutstanding', 'units', 'shares'],
     'CommonStockSharesOutstanding': ['facts', 'us-gaap', 'CommonStockSharesOutstanding', 'units', 'shares'],

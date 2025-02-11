@@ -6,6 +6,7 @@ from psycopg2.extras import DictCursor, execute_values
 import pandas as pd
 from soupsieve.css_types import pickle_register
 
+import utils
 from config import DB_NAME, DB_USER, LOCAL_DB_HOST, DB_PORT, DB_PASSWORD
 import config
 from ConnType import DBLocation
@@ -177,10 +178,12 @@ def upsert_dataframe(df: pd.DataFrame, table_name: str)-> bool:
     # Create a list of column update expressions for ON CONFLICT
     update_columns = ', '.join([f"{col} = EXCLUDED.{col}" for col in df.columns if col not in ['share_id', 'date']])
     # Create the SQL query for upserting
-    upsert_financials_query = f"""
+    composite_key = "(share_id, date, report_type)" if table_name in {"balance_sheet", "income_statement", "cash_flow"} else "(share_id, date)"
+
+    upsert_query = f"""
         INSERT INTO {table_name} ({', '.join(df.columns)}) 
         VALUES ({', '.join(['%s'] * len(df.columns))})
-        ON CONFLICT (share_id, date) DO UPDATE SET
+        ON CONFLICT {composite_key} DO UPDATE SET
         {update_columns};
     """
     try:
@@ -188,7 +191,7 @@ def upsert_dataframe(df: pd.DataFrame, table_name: str)-> bool:
             with conn.cursor() as cur:
                 row_count = 0  # Track affected rows
                 for row in df.itertuples(index=False, name=None):
-                    cur.execute(upsert_financials_query, row)
+                    cur.execute(upsert_query, row)
                     row_count += cur.rowcount
                 conn.commit()
                 return row_count > 0

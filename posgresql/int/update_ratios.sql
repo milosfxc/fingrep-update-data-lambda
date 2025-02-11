@@ -289,7 +289,10 @@ INSERT INTO ratios (
     ebitda_margin,
     net_profit_margin,
     dividend_yield,
-    dividend_payout_ratio
+    dividend_payout_ratio,
+    filling_date,
+    report_type,
+    report_period
 )
 VALUES (
     NEW.share_id,
@@ -317,7 +320,10 @@ VALUES (
     _ebitda_margin,
     _net_profit_margin,
     _dividend_yield,
-    _dividend_payout_ratio
+    _dividend_payout_ratio,
+    NEW.filling_date,
+    NEW.report_type,
+    NEW.report_period
 )
 ON CONFLICT (share_id, date) DO UPDATE SET
     pe = EXCLUDED.pe,
