@@ -292,7 +292,7 @@ INSERT INTO ratios (
     dividend_payout_ratio,
     filling_date,
     report_type,
-    report_period
+    report_period_id
 )
 VALUES (
     NEW.share_id,
@@ -323,7 +323,7 @@ VALUES (
     _dividend_payout_ratio,
     NEW.filling_date,
     NEW.report_type,
-    NEW.report_period
+    NEW.report_period_id
 )
 ON CONFLICT (share_id, date) DO UPDATE SET
     pe = EXCLUDED.pe,
@@ -349,7 +349,10 @@ ON CONFLICT (share_id, date) DO UPDATE SET
     ebitda_margin = EXCLUDED.ebitda_margin,
     net_profit_margin = EXCLUDED.net_profit_margin,
     dividend_yield = EXCLUDED.dividend_yield,
-    dividend_payout_ratio = EXCLUDED.dividend_payout_ratio;
+    dividend_payout_ratio = EXCLUDED.dividend_payout_ratio,
+    filling_date = EXCLUDED.filling_date,
+    report_type = EXCLUDED.report_type,
+    report_period_id = EXCLUDED.report_period_id;
 
 INSERT INTO trade_info (
     share_id,

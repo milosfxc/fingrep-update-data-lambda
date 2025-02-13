@@ -55,4 +55,7 @@ pd.set_option('display.width', None)  # To allow the console to use the full wid
 
 if __name__ == "__main__":
 
-    fingrep_service.get_and_insert_fundamentals(1, 'INV')
+    #fingrep_service.get_and_insert_fundamentals(3, 'INV')
+    utils.report_periods['2023']
+
+

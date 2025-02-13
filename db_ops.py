@@ -23,7 +23,6 @@ def get_db_connection():
         conn = postgresql_remote_connection()
     else:
         conn = postgres_local_connection()
-
     try:
         yield conn  # Yield the connection to the caller
     finally:
@@ -174,12 +173,12 @@ def delete_aggregate_bars(ticker_id: str):
 
 def upsert_dataframe(df: pd.DataFrame, table_name: str)-> bool:
     # Replace NaN with None
-    df = df.astype(object).where(pd.notnull(df), None)
+    df = df.astype(object).where(pd.notnull(df), None).replace(0, None)
     # Create a list of column update expressions for ON CONFLICT
     update_columns = ', '.join([f"{col} = EXCLUDED.{col}" for col in df.columns if col not in ['share_id', 'date']])
-    # Create the SQL query for upserting
+    # Composite key is different for trade_info and fundamentals(bs,is,cf,ra)
     composite_key = "(share_id, date, report_type)" if table_name in {"balance_sheet", "income_statement", "cash_flow"} else "(share_id, date)"
-
+    # Create the SQL query for upserting
     upsert_query = f"""
         INSERT INTO {table_name} ({', '.join(df.columns)}) 
         VALUES ({', '.join(['%s'] * len(df.columns))})
@@ -333,4 +332,3 @@ def delete_fillings_older_than_four_days():
                 conn.commit()
     except psycopg2.DatabaseError as e:
         logger.error(f"delete_old_fillings: {e}")
-

@@ -151,7 +151,7 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, period_ending: str =
             df[monetary_columns] = df[monetary_columns].div(df['usd_exc'], axis=0).mul(10000).round()
             df.drop(columns=['usd_exc', 'currency'], inplace=True)
             # Calc report period
-            df['report_period'] = df.apply(calc_report_period, axis=1)
+            df['report_period_id'] = df.apply(calc_report_period_id, axis=1)
             # Important for ratios trigger function
             df.sort_values(by=['date'], inplace=True, ascending=True)
             if upsert_dataframe(df, table_name): counter += 1
@@ -322,16 +322,16 @@ def get_splits():
     except requests.RequestException as e:
         logger.error(f"get_splits - RequestException {e}")
 
-def calc_report_period(row):
-    date = pd.to_datetime(row['date'])
+def calc_report_period_id(row):
+    row_date = pd.to_datetime(row['date'])
     report_type = row['report_type']
-    year = date.year
-
+    year = row_date.year
+    report_period = None
     if report_type == 'a':  # Annual
 
         year_start = pd.Timestamp(f"{year}-01-01")
-        is_curr = (date - year_start).days / 365 > 0.5
-        report_period = year if is_curr else str(year - 1)
+        is_curr = (row_date - year_start).days / 365 > 0.5
+        report_period = f"{year}" if is_curr else f"{year - 1}"
 
     elif report_type == 'q':  # Quarterly
 
@@ -344,20 +344,21 @@ def calc_report_period(row):
         q4_start = pd.Timestamp(f"{year}-10-01")
         q4_end = pd.Timestamp(f"{year}-12-31")
 
-        if q1_start <= date <= q1_end:
-            is_curr = (date - q1_start).days / (q1_end - q1_start).days > 0.5
+        if q1_start <= row_date <= q1_end:
+            is_curr = (row_date - q1_start).days / (q1_end - q1_start).days > 0.5
             report_period = f"{year}q1" if is_curr else f"{year - 1}q4"
-        elif q2_start <= date <= q2_end:
-            is_curr = (date - q2_start).days / (q2_end - q2_start).days > 0.5
+        elif q2_start <= row_date <= q2_end:
+            is_curr = (row_date - q2_start).days / (q2_end - q2_start).days > 0.5
             report_period = f"{year}q2" if is_curr else f"{year}q1"
-        elif q3_start <= date <= q3_end:
-            is_curr = (date - q3_start).days / (q3_end - q3_start).days > 0.5
+        elif q3_start <= row_date <= q3_end:
+            is_curr = (row_date - q3_start).days / (q3_end - q3_start).days > 0.5
             report_period = f"{year}q3" if is_curr else f"{year}q2"
-        elif q4_start <= date <= q4_end:
-            is_curr = (date - q4_start).days / (q4_end - q4_start).days > 0.5
+        elif q4_start <= row_date <= q4_end:
+            is_curr = (row_date - q4_start).days / (q4_end - q4_start).days > 0.5
             report_period = f"{year}q4" if is_curr else f"{year}q3"
+    report_period_id = utils.report_periods[report_period]
 
-    return pd.Series([report_period])
+    return pd.Series([report_period_id])
 
 
 
