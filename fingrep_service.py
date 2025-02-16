@@ -8,6 +8,7 @@ from cffi.cffi_opcode import PRIM_FLOAT
 
 import config
 import db_ops
+import edgar
 import finviz
 import forex
 import polygon
@@ -102,7 +103,7 @@ def fill_calc_columns(df: pd.DataFrame, table_name: str):
         return df
 
 
-def get_and_insert_fundamentals(share_id: int, ticker: str, period_ending: str = None):
+def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_ending: str = None, filling_date: str = None)->bool:
     counter = 0
     fundamentals_dict = get_fundamentals(ticker=ticker)
     if fundamentals_dict is None:
@@ -111,9 +112,20 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, period_ending: str =
         if fundamentals_dict is None:
             logger.error(f"get_and_insert_fundamentals: Skipping fundamentals insertion for {ticker}")
             return
+    # Get date_filed_form_tuples
+    edgar_resp = edgar.get_company_facts(cik)
+    df_edgar = edgar.get_position(edgar_resp, 'Assets', date(2019, 12, 31))
+    date_filed_tuple = None
+    if df_edgar is not None and not df_edgar.empty:
+        # Convert all values to datetime.date
+        date_filed_tuple = [
+            (end.date(), pd.to_datetime(filed).date(), form)
+            for end, filed, form in zip(df_edgar['end'], df_edgar['filed'])
+        ]
     try:
         for statement in ['income_statement', 'cash_flow', 'balance_sheet', 'income_statement_q', 'cash_flow_q', 'balance_sheet_q']:
-
+            if statement not in fundamentals_dict:
+                continue
             df = fundamentals_dict[statement]
             # Transpose the DataFrame and reset the index to create a single Date column
             df = df.T.reset_index()
@@ -142,7 +154,6 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, period_ending: str =
             df.dropna(subset=utils.mandatory_columns[table_name], inplace=True)
             if df.empty:
                 continue
-
             # Fill other columns for balance sheet and cash flow statements
             df = fill_calc_columns(df=df, table_name=table_name)
             # Currency conversion
@@ -151,15 +162,22 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, period_ending: str =
             df[monetary_columns] = df[monetary_columns].div(df['usd_exc'], axis=0).mul(10000).round()
             df.drop(columns=['usd_exc', 'currency'], inplace=True)
             # Calc report period
-            df['report_period_id'] = df.apply(calc_report_period_id, axis=1)
+            df[['report_period_id', 'filing_date']] = df.apply(lambda row: calc_report_period_id_and_filing_date(row, date_filed_tuple), axis=1)
+            # Remove rows that aren't equal to the filing date
+            if filling_date:
+                df = df[df['date'].dt.date == pd.Timestamp(filling_date).date()]
+            if df.empty:
+                continue
             # Important for ratios trigger function
             df.sort_values(by=['date'], inplace=True, ascending=True)
             if upsert_dataframe(df, table_name): counter += 1
-        # Check if all statements were updated for a date
-
+        # Check if all annual and quarterly are inserted
+        return counter == 6
 
     except Exception as e:
         logger.error(f"get_and_insert_fundamentals - Error preparing for insert fundamentals for ticker {ticker}: {e}\n{traceback.format_exception(e)}")
+    finally:
+        return False
 
 
 def get_and_insert_trading_info(cik: str, share_id: int, date: datetime.date):
@@ -267,7 +285,7 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
     cik = shares_info_data.get('cik')
     if config.fundamentals and cik is not None and ticker_id is not None and shares_data.get('share_type_id') not in(6, 8):
         get_and_insert_trading_info(cik=cik, share_id=ticker_id, date=date(2019, 12, 30))
-        get_and_insert_fundamentals(share_id=ticker_id, ticker=ticker)
+        get_and_insert_fundamentals(share_id=ticker_id, ticker=ticker, cik=cik)
 
 
 # Separates data for shares and share_info tables
@@ -322,13 +340,13 @@ def get_splits():
     except requests.RequestException as e:
         logger.error(f"get_splits - RequestException {e}")
 
-def calc_report_period_id(row):
+def calc_report_period_id_and_filing_date(row, dates_tuple):
+    # Report period calculation
     row_date = pd.to_datetime(row['date'])
     report_type = row['report_type']
     year = row_date.year
     report_period = None
     if report_type == 'a':  # Annual
-
         year_start = pd.Timestamp(f"{year}-01-01")
         is_curr = (row_date - year_start).days / 365 > 0.5
         report_period = f"{year}" if is_curr else f"{year - 1}"
@@ -356,10 +374,26 @@ def calc_report_period_id(row):
         elif q4_start <= row_date <= q4_end:
             is_curr = (row_date - q4_start).days / (q4_end - q4_start).days > 0.5
             report_period = f"{year}q4" if is_curr else f"{year}q3"
+    # Get report period id
     report_period_id = utils.report_periods[report_period]
+    # Find filing date by nearest or matching period ending date
+    filing_date = find_nearest(row_date.date(), dates_tuple)
 
-    return pd.Series([report_period_id])
+    return pd.Series([report_period_id, filing_date])
 
 
+def find_nearest(period_ending: date, dates_tuple):
+    if not dates_tuple:
+        return None
+    min_index = None
+    min_diff = float('inf')
+    for i in range(0, len(dates_tuple)):
+        dt = dates_tuple[i][0]
+        diff = abs((period_ending - dt).days)
+        if diff == 0:
+            return dates_tuple[i][1]
+        elif min_diff > diff:
+            min_index = i
+            min_diff = diff
 
-
+    return dates_tuple[min_index][1] if min_diff < 40 else None

@@ -101,9 +101,9 @@ def get_position(response, position_name, date: datetime.date):
     pd.DataFrame: DataFrame with the extracted position data if successful, None otherwise.
     """
     for position in utils.edgar_company_facts_positions_path[position_name]:
-        try:
+        if response and position in response:
             response = response[position]
-        except KeyError:
+        else:
             return None
     df = pd.DataFrame(response)
     df['end'] = pd.to_datetime(df['end'])

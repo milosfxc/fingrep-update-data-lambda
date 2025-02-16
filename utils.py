@@ -8,6 +8,8 @@ headers = {"User-Agent": "milosfxc@gmail.com"}
 pg_balance_sheet_columns = {'share_id': 'share_id',
                             'date': 'date',
                             'report_type': 'report_type',
+                            'filing_date': 'filing_date',
+                            'report_period_id': 'report_period_id',
                             'currency': 'currency',
                             'total assets': 'assets',
                             # Current assets
@@ -57,6 +59,8 @@ pg_balance_sheet_columns = {'share_id': 'share_id',
 pg_income_statement_columns = {'share_id': 'share_id',
                                'date': 'date',
                                'report_type': 'report_type',
+                               'filing_date': 'filing_date',
+                               'report_period_id': 'report_period_id',
                                'currency': 'currency',
                                'total revenue': 'revenue',
                                'operating revenue': 'operating_revenue',
@@ -83,6 +87,8 @@ pg_income_statement_columns = {'share_id': 'share_id',
 pg_cash_flow_columns = {'share_id': 'share_id',
                         'date': 'date',
                         'report_type': 'report_type',
+                        'filing_date': 'filing_date',
+                        'report_period_id': 'report_period_id',
                         'currency': 'currency',
                         # Operating cf
                         'operating cash flow': 'operating_cash_flow',
@@ -122,6 +128,8 @@ pg_tables = {
 edgar_company_facts_positions_path = {
     'EntityCommonStockSharesOutstanding': ['facts', 'dei', 'EntityCommonStockSharesOutstanding', 'units', 'shares'],
     'CommonStockSharesOutstanding': ['facts', 'us-gaap', 'CommonStockSharesOutstanding', 'units', 'shares'],
+    'Assets': ['facts', 'us-gaap', 'Assets', 'units', 'USD'],
+
 }
 
 allowed_share_type_ids = [1, 6, 10, 14, 17, 18, 19, 21, 24]

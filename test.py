@@ -53,9 +53,39 @@ pd.set_option('display.width', None)  # To allow the console to use the full wid
 #         df.sort_values(by=['date'], inplace=True, ascending=True)
 
 
+
+
 if __name__ == "__main__":
 
-    #fingrep_service.get_and_insert_fundamentals(3, 'INV')
-    utils.report_periods['2023']
+    #fingrep_service.get_and_insert_fundamentals(20, 'DNN','0001063259')
+    test = {"a": 1, "b": 2}
+    print(len(test.keys()))
+    # resp = edgar.get_company_facts('0000027419')
+    # assets = edgar.get_position(resp, 'Assets', date(2018, 12, 31))
+    # print(assets)
+    # Sample DataFrame 1 (df1) - Original dataframe
+    # import pandas as pd
+    #
+    # # Sample DataFrame
+    # df = pd.DataFrame({
+    #     'date': pd.to_datetime(['2019-01-30', '2019-02-05', '2019-05-01', '2019-05-06']),
+    #     'other_data': [100, 200, 300, 400],
+    #     'filed': pd.to_datetime(['2019-05-31', '2019-05-31', '2019-05-31', '2019-05-31'])
+    # })
+    #
+    # # Sort by 'date'
+    # df_sorted = df.sort_values(by='date')
+    #
+    # # Convert to list of tuples
+    # date_filed_list = [(d.strftime('%Y-%m-%d'), f.strftime('%Y-%m-%d')) for d, f in
+    #                    df_sorted[['date', 'filed']].itertuples(index=False, name=None)]
+    # print(date_filed_list)
+
+
+
+
+
+
+
 
 

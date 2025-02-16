@@ -2,10 +2,11 @@ import os
 
 from ConnType import DBLocation
 # stock market data config
-DAYS = 0
-YEARS = 5
+DAYS = 2
+YEARS = 1
 mb_historical = True # false updates market breadth for the current day, true updates for the last 100 days
 fundamentals = True
+fundamentals_period_ending = '2019-12-31'
 LIMIT = 5
 db_location = DBLocation.LOCAL
 # database config

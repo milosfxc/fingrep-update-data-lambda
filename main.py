@@ -77,7 +77,7 @@ def get_stock_data():
                 share_id = result.get('share_id')
                 ticker = result.get('ticker')
                 if share_id and ticker:
-                    fingrep_service.get_and_insert_fundamentals(cik=cik, share_id=share_id, ticker=ticker, period='A')
+                    fingrep_service.get_and_insert_fundamentals(share_id=share_id, ticker=ticker, cik=cik)
     db_ops.delete_fillings_older_than_four_days()
 
 
