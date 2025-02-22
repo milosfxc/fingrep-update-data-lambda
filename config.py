@@ -1,5 +1,4 @@
 import os
-
 from ConnType import DBLocation
 # stock market data config
 DAYS = 2
@@ -9,6 +8,7 @@ fundamentals = True
 fundamentals_period_ending = '2019-12-31'
 LIMIT = 5
 db_location = DBLocation.LOCAL
+
 # database config
 HOST=DBLocation.REMOTE
 LOCAL_BIND_PORT=None
@@ -23,16 +23,23 @@ DB_NAME = os.getenv("FINGREP_DB")
 DB_USER = os.getenv("FINGREP_DB_USER")
 DB_PASSWORD = os.getenv("FINGREP_DB_PASS")
 DB_PORT = 5432
+
 # logger
 import logging
-
 logger = logging.getLogger('fingrep')
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.CRITICAL)
 logger.propagate = False
-
 # Add handlers, formatters, etc.
 handler = logging.StreamHandler()
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-
+# Suppress edgar.httpclient logger
+edgar_logger = logging.getLogger("edgar.httpclient")
+edgar_logger.setLevel(logging.WARNING)  # Suppress INFO logs
+# Suppress httpx logger
+httpx_logger = logging.getLogger("httpx")
+httpx_logger.setLevel(logging.WARNING)  # Suppress INFO logs
+# Prevent propagation to the root logger
+edgar_logger.propagate = False
+httpx_logger.propagate = False

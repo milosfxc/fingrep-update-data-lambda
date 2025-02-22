@@ -5,6 +5,8 @@ from sshtunnel import BaseSSHTunnelForwarderError
 import config
 import db_ops
 import edgar
+
+import edgar_service
 import fingrep_service
 from ConnType import DBLocation
 from SSHTunnelManager import SSHTunnelManager
@@ -66,19 +68,8 @@ def get_stock_data():
                 logger.error(f"Couldn't delete and reinsert ticker {ticker} for stock split.")
 
     # Update fundamentals
-    data = edgar.get_latest_fillings()
-    if data:
-        db_ops.insert_latest_fillings(data)
-    ciks = db_ops.get_fillings_older_than_four_days()
-    if ciks:
-        for cik in ciks:
-            result = db_ops.get_id_and_ticker_by_cik(cik)
-            if result:
-                share_id = result.get('share_id')
-                ticker = result.get('ticker')
-                if share_id and ticker:
-                    fingrep_service.get_and_insert_fundamentals(share_id=share_id, ticker=ticker, cik=cik)
-    db_ops.delete_fillings_older_than_four_days()
+    fingrep_service.update_fundamentals()
+
 
 
 if __name__ == "__main__":

@@ -1,4 +1,7 @@
 import logging
+
+import pandas as pd
+
 import utils
 
 logger = logging.getLogger(__name__)
@@ -29,12 +32,11 @@ def request_usd_currency_value(date: str, currency) -> float:
         logger.error(f"request_usd_currency_value - Failed to parse API response: {str(e)}")
         raise
 
-
-def get_usd_exchange_rate(row) -> float:
+def get_usd_exchange_rate(row: pd.Series, date_column:str) -> float:
     reported_currency = row['currency']
     if reported_currency == 'USD':
         return 1
-    date = row['date']
+    date = row[date_column]
     return request_usd_currency_value(date, reported_currency)
 
 

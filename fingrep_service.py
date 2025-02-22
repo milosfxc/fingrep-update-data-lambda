@@ -1,21 +1,20 @@
+import calendar
 import traceback
 from datetime import datetime,date, timezone, timedelta
 import inspect
 import time
 import pandas as pd
 import requests
-from cffi.cffi_opcode import PRIM_FLOAT
-
 import config
 import db_ops
-import edgar
+import edgar_service
 import finviz
 import forex
 import polygon
 import utils
 from db_ops import upsert_dataframe, get_foreign_keys, foreign_keys_cache
-from edgar import get_trading_info
-from fundamentals import get_fundamentals
+from edgar_service import get_trading_info
+from fundamentals import request_fundamentals
 from ta_utils import rsi_tv_new_tickers, rsi_tv_existing_tickers
 from utils import mandatory_columns
 pd.set_option('display.max_rows', None)  # Show all rows
@@ -103,18 +102,18 @@ def fill_calc_columns(df: pd.DataFrame, table_name: str):
         return df
 
 
-def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_ending: str = None, filling_date: str = None)->bool:
+def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_ending: str = None, period_ending_range_search:bool = False, filling_date: str = None)->bool:
     counter = 0
-    fundamentals_dict = get_fundamentals(ticker=ticker)
+    fundamentals_dict = request_fundamentals(ticker=ticker)
     if fundamentals_dict is None:
         time.sleep(3)
-        fundamentals_dict = get_fundamentals(ticker=ticker)
+        fundamentals_dict = request_fundamentals(ticker=ticker)
         if fundamentals_dict is None:
             logger.error(f"get_and_insert_fundamentals: Skipping fundamentals insertion for {ticker}")
-            return
+            return False
     # Get date_filed_form_tuples
-    edgar_resp = edgar.get_company_facts(cik)
-    df_edgar = edgar.get_position(edgar_resp, 'Assets', date(2019, 12, 31))
+    edgar_resp = edgar_service.get_company_facts(cik)
+    df_edgar = edgar_service.get_position(edgar_resp, 'Assets', date(2019, 12, 31))
     date_filed_tuple = None
     if df_edgar is not None and not df_edgar.empty:
         # Convert all values to datetime.date
@@ -130,7 +129,13 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
             # Transpose the DataFrame and reset the index to create a single Date column
             df = df.T.reset_index()
             df.rename(columns={"index": "date"}, inplace=True)
-            if period_ending:
+            # Period end search by date-range or date
+            if period_ending and period_ending_range_search:
+                period_ending = datetime.strptime(period_ending, "%Y-%m-%d")
+                prev_month_ending_date = (period_ending.replace(day=1) - timedelta(days=1)).date()
+                curr_month_ending_date = (period_ending.replace(day=calendar.monthrange(period_ending.year, period_ending.month)[1])).date()
+                df = df[(df['date'].dt.date >= prev_month_ending_date) & (df['date'].dt.date <= curr_month_ending_date)]
+            elif period_ending and not period_ending_range_search:
                 df = df[df['date'].dt.date == pd.Timestamp(period_ending).date()]
             if df.empty:
                 continue
@@ -157,7 +162,7 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
             # Fill other columns for balance sheet and cash flow statements
             df = fill_calc_columns(df=df, table_name=table_name)
             # Currency conversion
-            df['usd_exc'] = df.apply(forex.get_usd_exchange_rate, axis=1)
+            df['usd_exc'] = df.apply(lambda row: forex.get_usd_exchange_rate(row, date_column='date'), axis=1)
             monetary_columns = df.columns.difference(utils.non_monetary_columns)
             df[monetary_columns] = df[monetary_columns].div(df['usd_exc'], axis=0).mul(10000).round()
             df.drop(columns=['usd_exc', 'currency'], inplace=True)
@@ -284,7 +289,7 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
     # Fundamental data and trade info
     cik = shares_info_data.get('cik')
     if config.fundamentals and cik is not None and ticker_id is not None and shares_data.get('share_type_id') not in(6, 8):
-        get_and_insert_trading_info(cik=cik, share_id=ticker_id, date=date(2019, 12, 30))
+        get_and_insert_trading_info(cik=cik, share_id=ticker_id, date=date(2019, 12, 31))
         get_and_insert_fundamentals(share_id=ticker_id, ticker=ticker, cik=cik)
 
 
@@ -397,3 +402,4 @@ def find_nearest(period_ending: date, dates_tuple):
             min_diff = diff
 
     return dates_tuple[min_index][1] if min_diff < 40 else None
+

@@ -172,7 +172,7 @@ def delete_aggregate_bars(ticker_id: str):
 
 
 def upsert_dataframe(df: pd.DataFrame, table_name: str)-> bool:
-    # Replace NaN with None
+    # Replace NaN with None and False with None
     df = df.astype(object).where(pd.notnull(df), None).replace(0, None)
     # Create a list of column update expressions for ON CONFLICT
     update_columns = ', '.join([f"{col} = EXCLUDED.{col}" for col in df.columns if col not in ['share_id', 'date']])
@@ -292,26 +292,50 @@ def get_id_and_ticker_by_cik(cik: str):
         logger.error(f"get_id_and_ticker_by_cik: {e}")
         return None
 
+# Latest fillings
+def get_latest_filings_by_max_filing_date():
+    sql_select = """SELECT * FROM latest_filings WHERE filing_date = (SELECT MAX(filing_date) FROM latest_filings)"""
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+                cur.execute(sql_select)
+                result = cur.fetchall()
+                return [dict(row) for row in result] if result else None
+    except psycopg2.DatabaseError as e:
+        logger.error(f"get_latest_filings_by_max_filing_date: {e}")
+        return None
 
-def insert_latest_fillings(data):
-    sql_insert = """INSERT INTO latest_fillings (cik, accepted) 
-                 VALUES(%s, %s) ON CONFLICT (cik) DO UPDATE SET accepted = EXCLUDED.accepted"""
+def get_latest_filings_for_full_insert():
+    sql_select = """SELECT * FROM latest_filings lf INNER JOIN shares_info si ON lf.cik = si.cik 
+    INNER JOIN shares sh ON sh.id = si.share_id WHERE lf.filing_date < filing_date - 'INTERVAL'
+    """
+
+
+def upsert_latest_filings(df: pd.DataFrame)-> bool:
+    # Create the SQL query for upsert
+    upsert_query = f"""
+        INSERT INTO latest_filings ({', '.join(df.columns)}) 
+        VALUES %s
+        ON CONFLICT (accession_number) DO NOTHING;
+    """
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                for cik, accepted in data:
-                    try:
-                        cur.execute(sql_insert, (cik, accepted))
-                    except psycopg2.DatabaseError as e:
-                        logger.error(f"insert_latest_fillings for cik {cik}: {e}")
+                # Convert DataFrame to a list of tuples
+                data_tuples = [tuple(row) for row in df.to_numpy()]
+                # Use execute_values for bulk insert
+                execute_values(cur, upsert_query, data_tuples)
                 conn.commit()
-    except psycopg2.DatabaseError as e:
-        logger.error(f"insert_latest_fillings: {e}")
+                return True
+    except Exception as e:
+        logging.critical('upsert_latest_filings failed', exc_info=True)
+        return False
 
 
 def get_fillings_older_than_four_days():
-    sql_select = """SELECT cik FROM latest_fillings
-                     WHERE accepted < NOW() - INTERVAL '4 DAYS'"""
+    sql_select = """SELECT sh.id, lf.* FROM latest_filings lf INNER JOIN shares_info si ON lf.cik = si.cik 
+    INNER JOIN shares sh ON sh.id = si.share_id WHERE fully_inserted = FALSE AND lf.filing_date < NOW() - INTERVAL '4 DAYS'
+    """
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
@@ -323,8 +347,8 @@ def get_fillings_older_than_four_days():
         return None
 
 
-def delete_fillings_older_than_four_days():
-    sql_delete = """DELETE FROM latest_fillings WHERE accepted < NOW() - INTERVAL '4 DAYS'"""
+def delete_fillings_older_than_month():
+    sql_delete = """DELETE FROM latest_filings WHERE filing_date < NOW() - INTERVAL '0 MONTH'"""
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
