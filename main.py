@@ -1,12 +1,8 @@
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 from sshtunnel import BaseSSHTunnelForwarderError
-
 import config
 import db_ops
-import edgar
-
-import edgar_service
 import fingrep_service
 from ConnType import DBLocation
 from SSHTunnelManager import SSHTunnelManager

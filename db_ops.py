@@ -305,11 +305,6 @@ def get_latest_filings_by_max_filing_date():
         logger.error(f"get_latest_filings_by_max_filing_date: {e}")
         return None
 
-def get_latest_filings_for_full_insert():
-    sql_select = """SELECT * FROM latest_filings lf INNER JOIN shares_info si ON lf.cik = si.cik 
-    INNER JOIN shares sh ON sh.id = si.share_id WHERE lf.filing_date < filing_date - 'INTERVAL'
-    """
-
 
 def upsert_latest_filings(df: pd.DataFrame)-> bool:
     # Create the SQL query for upsert
@@ -332,8 +327,8 @@ def upsert_latest_filings(df: pd.DataFrame)-> bool:
         return False
 
 
-def get_fillings_older_than_four_days():
-    sql_select = """SELECT sh.id, lf.* FROM latest_filings lf INNER JOIN shares_info si ON lf.cik = si.cik 
+def get_filings_older_than_four_days():
+    sql_select = """SELECT sh.id, sh.ticker, lf.* FROM latest_filings lf INNER JOIN shares_info si ON lf.cik = si.cik 
     INNER JOIN shares sh ON sh.id = si.share_id WHERE fully_inserted = FALSE AND lf.filing_date < NOW() - INTERVAL '4 DAYS'
     """
     try:
@@ -343,7 +338,7 @@ def get_fillings_older_than_four_days():
                 result = cur.fetchall()
                 return {row[0] for row in result} if result else set()
     except psycopg2.DatabaseError as e:
-        logger.error(f"get_fillings_older_than_four_days: {e}")
+        logger.error(f"get_filings_older_than_four_days: {e}")
         return None
 
 

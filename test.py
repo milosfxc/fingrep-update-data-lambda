@@ -1,5 +1,6 @@
 import datetime
 
+import yfinance
 from edgar import get_filings, set_identity, get_by_accession_number
 from datetime import timedelta
 
@@ -11,6 +12,8 @@ import pandas as pd
 import edgar_service
 import fingrep_service
 import utils
+from fundamentals import request_fundamentals
+
 # Set pandas to display all rows and columns
 pd.set_option('display.max_rows', None)  # Show all rows
 pd.set_option('display.max_columns', None)  # Show all columns
@@ -121,27 +124,4 @@ def calc_revenue(revenues):
     return total_revenue # returns total revenue if none of the revenues is aggregate
 
 if __name__ == "__main__":
-    from datetime import datetime, timedelta
-    import calendar
-
-
-    def get_bounds(date_str):
-        given_date = datetime.strptime(date_str, "%Y-%m-%d")
-
-        # Lower bound: Last date of the previous month
-        first_day_of_current_month = given_date.replace(day=1)
-        last_day_of_previous_month = first_day_of_current_month - timedelta(days=1)
-
-        # Upper bound: Last date of the current month
-        last_day_of_current_month = calendar.monthrange(given_date.year, given_date.month)[1]
-        upper_bound = given_date.replace(day=last_day_of_current_month)
-
-        return last_day_of_previous_month.date(), upper_bound.date()
-
-
-    # Example usage
-    date_str = "2024-02-04"
-    lower, upper = get_bounds(date_str)
-    print("Lower bound:", lower)
-    print("Upper bound:", upper)
-
+   fingrep_service.get_and_insert_fundamentals(share_id=242,ticker='AAPL',cik='320193')

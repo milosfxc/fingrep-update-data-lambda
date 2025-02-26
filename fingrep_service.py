@@ -10,11 +10,12 @@ import db_ops
 import edgar_service
 import finviz
 import forex
+import fundamentals
 import polygon
 import utils
 from db_ops import upsert_dataframe, get_foreign_keys, foreign_keys_cache
 from edgar_service import get_trading_info
-from fundamentals import request_fundamentals
+from fundamentals import request_fundamentals, get_period_ending_by_accession_number
 from ta_utils import rsi_tv_new_tickers, rsi_tv_existing_tickers
 from utils import mandatory_columns
 pd.set_option('display.max_rows', None)  # Show all rows
@@ -102,7 +103,7 @@ def fill_calc_columns(df: pd.DataFrame, table_name: str):
         return df
 
 
-def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_ending: str = None, period_ending_range_search:bool = False, filling_date: str = None)->bool:
+def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_ending: str = None, period_ending_range_search:bool = False, filing_date: str = None)->bool:
     counter = 0
     fundamentals_dict = request_fundamentals(ticker=ticker)
     if fundamentals_dict is None:
@@ -115,11 +116,10 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
     edgar_resp = edgar_service.get_company_facts(cik)
     df_edgar = edgar_service.get_position(edgar_resp, 'Assets', date(2019, 12, 31))
     date_filed_tuple = None
-    if df_edgar is not None and not df_edgar.empty:
-        # Convert all values to datetime.date
+    if df_edgar is not None and not df_edgar.empty and {'end', 'filed', 'form'}.issubset(df_edgar.columns):
         date_filed_tuple = [
             (end.date(), pd.to_datetime(filed).date(), form)
-            for end, filed, form in zip(df_edgar['end'], df_edgar['filed'])
+            for end, filed, form in zip(df_edgar['end'], df_edgar['filed'], df_edgar['form'])
         ]
     try:
         for statement in ['income_statement', 'cash_flow', 'balance_sheet', 'income_statement_q', 'cash_flow_q', 'balance_sheet_q']:
@@ -149,7 +149,7 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
             required_columns = [col for col in pg_columns if col in df.columns]
             df = df[required_columns]
             # Rename columns with db names
-            df = df.rename(columns=utils.pg_tables.get(statement.rstrip('_q')))
+            df = df.rename(columns=utils.pg_tables.get(table_name))
             # Date formation to prevent an error for forex.request_usd_currency_value
             df['date'] = df['date'].dt.strftime('%Y-%m-%d')
             # Stop insertion if any of the mandatory columns is missing
@@ -167,10 +167,10 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
             df[monetary_columns] = df[monetary_columns].div(df['usd_exc'], axis=0).mul(10000).round()
             df.drop(columns=['usd_exc', 'currency'], inplace=True)
             # Calc report period
-            df[['report_period_id', 'filing_date']] = df.apply(lambda row: calc_report_period_id_and_filing_date(row, date_filed_tuple), axis=1)
+            df[['report_period_id', 'filing_date']] = df.apply(lambda row: calc_report_period_id_and_filing_date(row, date_filed_tuple, filing_date), axis=1)
             # Remove rows that aren't equal to the filing date
-            if filling_date:
-                df = df[df['date'].dt.date == pd.Timestamp(filling_date).date()]
+            if filing_date:
+                df = df[df['filing_date'].dt.date == pd.Timestamp(filing_date).date()]
             if df.empty:
                 continue
             # Important for ratios trigger function
@@ -345,7 +345,7 @@ def get_splits():
     except requests.RequestException as e:
         logger.error(f"get_splits - RequestException {e}")
 
-def calc_report_period_id_and_filing_date(row, dates_tuple):
+def calc_report_period_id_and_filing_date(row, dates_tuple, filing_date):
     # Report period calculation
     row_date = pd.to_datetime(row['date'])
     report_type = row['report_type']
@@ -382,7 +382,7 @@ def calc_report_period_id_and_filing_date(row, dates_tuple):
     # Get report period id
     report_period_id = utils.report_periods[report_period]
     # Find filing date by nearest or matching period ending date
-    filing_date = find_nearest(row_date.date(), dates_tuple)
+    filing_date = filing_date if filing_date else find_nearest(row_date.date(), dates_tuple)
 
     return pd.Series([report_period_id, filing_date])
 
@@ -403,3 +403,21 @@ def find_nearest(period_ending: date, dates_tuple):
 
     return dates_tuple[min_index][1] if min_diff < 40 else None
 
+# Update fundamentals for existing shares
+def update_fundamentals():
+    # Update latest filings
+    df_latest_filings = edgar_service.get_latest_filings()
+    # Update latest filings
+    if df_latest_filings is not None and not df_latest_filings.empty:
+        db_ops.upsert_latest_filings(df_latest_filings)
+    else:
+        logger.warning('update_fundamentals: no latest filings to update')
+    # Delete filings older than a month
+    db_ops.delete_fillings_older_than_month()
+    # Update fundamentals
+    df_full_insert = pd.DataFrame(db_ops.get_filings_older_than_four_days())
+    if df_full_insert is not None and not df_full_insert.empty:
+        df_full_insert['period_ending'] = df_full_insert.apply(lambda row: get_period_ending_by_accession_number(accession_number=row['accession_number']),axis=1)
+        df_full_insert['fully_inserted'] = df_full_insert.apply(lambda row: get_and_insert_fundamentals(share_id=row['id'],ticker=row['ticker'],cik=row['cik'],period_ending=row['period_ending'],period_ending_range_search=True,filing_date=row['filing_date']),axis=1)
+        df_full_insert['full_insert_attempt_date'] = date.today().strftime('%Y-%m-%d')
+        print(df_full_insert[df_full_insert['fully_inserted'] == True])

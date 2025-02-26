@@ -1,12 +1,12 @@
 import os
 from ConnType import DBLocation
 # stock market data config
-DAYS = 2
-YEARS = 1
+DAYS = 0
+YEARS = 5
 mb_historical = True # false updates market breadth for the current day, true updates for the last 100 days
 fundamentals = True
 fundamentals_period_ending = '2019-12-31'
-LIMIT = 5
+LIMIT = 200
 db_location = DBLocation.LOCAL
 
 # database config
@@ -27,7 +27,7 @@ DB_PORT = 5432
 # logger
 import logging
 logger = logging.getLogger('fingrep')
-logger.setLevel(logging.CRITICAL)
+logger.setLevel(logging.ERROR)
 logger.propagate = False
 # Add handlers, formatters, etc.
 handler = logging.StreamHandler()
