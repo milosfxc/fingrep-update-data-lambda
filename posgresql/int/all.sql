@@ -741,7 +741,7 @@ END IF;
 SELECT operating_cash_flow INTO _ocf FROM cash_flow WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type;
 
 --OPERATING CASH FLOW PER SHARE
-_ocfps := _ocf * _magn / _avg_sh_out;
+_ocfps := _ocf * _magn::numeric / _avg_sh_out;
 
 --PCF
 IF _price > 0 AND _ocfps <> 0 THEN
@@ -752,7 +752,7 @@ END IF;
 SELECT free_cash_flow INTO _fcf FROM cash_flow WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type;
 
 --FREE CASH FLOW PER SHARE
-_fcfps := _fcf * _magn / _avg_sh_out;
+_fcfps := _fcf * _magn::numeric / _avg_sh_out;
 
 --PRICE TO FREE CASH FLOW PER SHARE
 IF _price > 0 AND _fcfps <> 0 THEN
@@ -765,7 +765,7 @@ END IF;
 
 --MARKET CAP
 IF _price > 0 THEN
-    _m_cap := _price * _sh_out;
+    _m_cap := _price::numeric * _sh_out;
 END IF;
 
 --PREVIOUS YEAR EPS
@@ -790,7 +790,7 @@ SELECT ebitda INTO _prev_ebitda FROM income_statement WHERE share_id = NEW.share
 
 --EBITDA YOY
 IF _ebitda > 0 AND _prev_ebitda > 0 THEN
-	_ebitda_yoy := ((_ebitda * _magn / _prev_ebitda) - 10000) * 100;
+	_ebitda_yoy := ((_ebitda::numeric * _magn / _prev_ebitda) - 10000) * 100;
 END IF;
 
 --NET INCOME AND PREVIOUS YEAR NET INCOME
@@ -799,7 +799,7 @@ SELECT net_income INTO _prev_net_income FROM income_statement WHERE share_id = N
 
 --NET INCOME YOY
 IF _net_income > 0 AND _prev_net_income > 0 THEN
-	_net_income_yoy := ((_net_income * _magn / _prev_net_income) - 10000) * 100;
+	_net_income_yoy := ((_net_income::numeric * _magn / _prev_net_income) - 10000) * 100;
 END IF;
 
 
@@ -813,7 +813,7 @@ _cps := NEW.cash_and_short_term_investments * _magn / _avg_sh_out;
 
 --QUICK RATIO
 IF NEW.cash_and_short_term_investments IS NOT NULL AND NEW.net_receivables IS NOT NULL AND NEW.current_liabilities <> 0 THEN
-    _quick_ratio := (NEW.cash_and_short_term_investments + NEW.net_receivables) * _magn / NEW.current_liabilities;
+    _quick_ratio := (NEW.cash_and_short_term_investments + NEW.net_receivables)::numeric * _magn / NEW.current_liabilities;
 END IF;
 
 --CURRENT RATIO
@@ -828,7 +828,7 @@ END IF;
 
 --LONG-TERM DEBT TO EQUITY
 IF NEW.non_current_liabilities IS NOT NULL AND NEW.equity <> 0 THEN
-    _lt_debt_equity := NEW.non_current_liabilities * _magn / NEW.equity;
+    _lt_debt_equity := NEW.non_current_liabilities::numeric * _magn / NEW.equity;
 END IF;
 
 /*
@@ -837,12 +837,12 @@ END IF;
 
 --ROA
 IF _net_income IS NOT NULL AND NEW.assets > 0 THEN
-    _roa := ((_net_income * _magn / NEW.assets) - 10000) * 100;
+    _roa := ((_net_income::numeric * _magn / NEW.assets) - 10000) * 100;
 END IF;
 
 --ROE
 IF _net_income IS NOT NULL AND NEW.equity <> 0 THEN
-    _roe := ((_net_income * _magn / NEW.equity) - 10000) * 100;
+    _roe := ((_net_income::numeric * _magn / NEW.equity) - 10000) * 100;
 END IF;
 
 --GROSS PROFIT
@@ -850,7 +850,7 @@ SELECT gross_profit INTO _gross_profit FROM income_statement WHERE share_id = NE
 
 --GROSS MARGIN
 IF _gross_profit IS NOT NULL AND _revenue > 0 THEN
-    _gross_margin := ((_gross_profit * _magn / _revenue) - 10000) * 100;
+    _gross_margin := ((_gross_profit::numeric * _magn / _revenue) - 10000) * 100;
 END IF;
 
 --EBIT
@@ -858,17 +858,17 @@ SELECT ebit INTO _ebit FROM income_statement WHERE share_id = NEW.share_id AND d
 
 --OPERATING MARGIN
 IF _ebit IS NOT NULL AND _revenue > 0 THEN
-    _operating_margin := ((_ebit * _magn / _revenue) - 10000) * 100;
+    _operating_margin := ((_ebit::numeric * _magn / _revenue) - 10000) * 100;
 END IF;
 
 --EBITDA MARGIN
 IF _ebitda IS NOT NULL AND _revenue > 0 THEN
-    _ebitda_margin := ((_ebitda * _magn / _revenue) - 10000) * 100;
+    _ebitda_margin := ((_ebitda::numeric * _magn / _revenue) - 10000) * 100;
 END IF;
 
 --NET PROFIT MARGIN
 IF _net_income IS NOT NULL AND _revenue > 0 THEN
-    _net_profit_margin := ((_net_income * _magn / _revenue) - 10000) * 100;
+    _net_profit_margin := ((_net_income::numeric * _magn / _revenue) - 10000) * 100;
 END IF;
 
 

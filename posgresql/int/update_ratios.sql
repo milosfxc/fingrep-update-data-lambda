@@ -138,8 +138,8 @@ IF _price > 0 THEN
     _m_cap := _price::numeric * _sh_out;
 END IF;
 
---PREVIOUS YEAR EPS
-SELECT eps INTO _previous_eps FROM income_statement WHERE share_id = NEW.share_id AND date < NEW.date AND report_type = NEW.report_type;
+--PREVIOUS PERIOD EPS
+SELECT eps INTO _previous_eps FROM income_statement WHERE share_id = NEW.share_id AND date < NEW.date AND report_type = NEW.report_type ORDER BY date DESC LIMIT 1;
 
 --EPS YOY
 IF _eps > 0 AND _previous_eps > 0 THEN
@@ -224,7 +224,7 @@ IF _gross_profit IS NOT NULL AND _revenue > 0 THEN
 END IF;
 
 --EBIT
-SELECT ebit INTO _ebit FROM income_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type;
+SELECT ebit INTO _ebit FROM income_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type AND report_type = NEW.report_type;
 
 --OPERATING MARGIN
 IF _ebit IS NOT NULL AND _revenue > 0 THEN
@@ -248,7 +248,7 @@ END IF;
 
 
 --DIVIDENDS PAID
-SELECT dividends_paid INTO _dividends_paid FROM cash_flow WHERE share_id = NEW.share_id AND date = NEW.date;
+SELECT dividends_paid INTO _dividends_paid FROM cash_flow WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type;
 
 
 --DIVIDEND YIELD

@@ -124,4 +124,4 @@ def calc_revenue(revenues):
     return total_revenue # returns total revenue if none of the revenues is aggregate
 
 if __name__ == "__main__":
-   fingrep_service.get_and_insert_fundamentals(share_id=242,ticker='AAPL',cik='320193')
+   fingrep_service.get_and_insert_fundamentals(share_id=136,ticker='DHAI',cik='1883788')
