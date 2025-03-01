@@ -22,7 +22,7 @@ def get_indices_ohlcv(tickers: list, date: datetime.date, indices_mapping: dict)
     frames = []
     for ticker in tickers:
         df_temp = request_ohlc_data(ticker=ticker, date=date)
-        df_temp.drop(columns=['Adj Close'], inplace=True)
+        df_temp.columns = df_temp.columns.droplevel(level='Ticker')
         df_temp.reset_index(inplace=True)
         df_temp.rename(columns={"Date": "date", "Open": "open", "High": "high", "Low": "low", "Close": "close",
                                 "Volume": "volume"}, inplace=True)

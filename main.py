@@ -1,4 +1,6 @@
 import datetime
+from datetime import timedelta
+
 import pandas as pd
 from sshtunnel import BaseSSHTunnelForwarderError
 
@@ -22,11 +24,15 @@ def update_indices():
         # Foreign keys
         foreign_keys = db_ops.get_foreign_keys()
         indices_mapping = foreign_keys.get('indices')
-
         # OHLCV data
         date = datetime.date.today() - datetime.timedelta(days=config.DAYS_OFFSET)
         ohlcv_data = yahoo_service.get_indices_ohlcv(config.indices_list, date=date, indices_mapping=indices_mapping)
-        db_ops.upsert_dataframe_composite_id(ohlcv_data, 'indices_d_timeframe')
+        # Removes all rows that aren't current date
+        if config.INSERT_CURRENT_DAY:
+                ohlcv_data = ohlcv_data[ohlcv_data['date'] == date.today().strftime('%Y-%m-%d')]
+        # Insert if not empty
+        if not ohlcv_data.empty:
+                db_ops.upsert_dataframe_composite_id(ohlcv_data, 'indices_d_timeframe')
 
 if __name__ == '__main__':
         if config.db_location == DBLocation.REMOTE:

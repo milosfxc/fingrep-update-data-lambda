@@ -50,7 +50,6 @@ def get_foreign_keys():
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=DictCursor) as cur:
                 ans = {'indices': {}, 'currencies': {}}
-
                 # Currencies
                 cur.execute('SELECT symbol, id FROM currencies;')
                 for record in cur:
@@ -59,7 +58,6 @@ def get_foreign_keys():
                 cur.execute('SELECT ticker, id FROM indices;')
                 for record in cur:
                     ans['indices'][record['ticker']] = record['id']
-
                 return ans
     except (Exception, psycopg2.DatabaseError) as error:
         logger.exception(f"get_foreign_keys: {error}")

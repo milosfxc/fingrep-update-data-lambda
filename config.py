@@ -3,8 +3,9 @@ import os
 
 indices_list = ['^SPX', '^IXIC', '^VIX', '^DJI', '^NYA', '^RUT']
 DAYS_OFFSET = 120
-INSERT_INDEX_DETAILS = False
-db_location = DBLocation.REMOTE
+INSERT_INDEX_DETAILS = True
+INSERT_CURRENT_DAY = True
+db_location = DBLocation.LOCAL
 # database config
 HOST=DBLocation.REMOTE
 LOCAL_BIND_PORT=None
