@@ -62,7 +62,7 @@ SELECT CASE WHEN close > 0 THEN close ELSE NULL END  INTO _price FROM d_timefram
 SELECT avg_shares_outstanding INTO _avg_sh_out FROM income_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type;
 
 --SHARES OUTSTANDING
-SELECT common_shares_outstanding INTO _sh_out  FROM trade_info WHERE share_id = NEW.share_id AND date = NEW.date;
+SELECT common_shares_outstanding INTO _sh_out FROM trade_info WHERE share_id = NEW.share_id AND date = NEW.date;
 
 --SHARES OUTSTANDING ON DATE
 IF NEW.shares_outstanding > 0 THEN
@@ -207,12 +207,12 @@ END IF;
 
 --ROA
 IF _net_income IS NOT NULL AND NEW.assets > 0 THEN
-    _roa := ((_net_income::numeric * _magn / NEW.assets) - 10000) * 100;
+    _roa := (_net_income::numeric * _magn / NEW.assets) * 100;
 END IF;
 
 --ROE
 IF _net_income IS NOT NULL AND NEW.equity <> 0 THEN
-    _roe := ((_net_income::numeric * _magn / NEW.equity) - 10000) * 100;
+    _roe := (_net_income::numeric * _magn / NEW.equity) * 100;
 END IF;
 
 --GROSS PROFIT
@@ -220,7 +220,7 @@ SELECT gross_profit INTO _gross_profit FROM income_statement WHERE share_id = NE
 
 --GROSS MARGIN
 IF _gross_profit IS NOT NULL AND _revenue > 0 THEN
-    _gross_margin := ((_gross_profit::numeric * _magn / _revenue) - 10000) * 100;
+    _gross_margin := (_gross_profit::numeric * _magn / _revenue) * 100;
 END IF;
 
 --EBIT
@@ -228,17 +228,17 @@ SELECT ebit INTO _ebit FROM income_statement WHERE share_id = NEW.share_id AND d
 
 --OPERATING MARGIN
 IF _ebit IS NOT NULL AND _revenue > 0 THEN
-    _operating_margin := ((_ebit::numeric * _magn / _revenue) - 10000) * 100;
+    _operating_margin := (_ebit::numeric * _magn / _revenue) * 100;
 END IF;
 
 --EBITDA MARGIN
 IF _ebitda IS NOT NULL AND _revenue > 0 THEN
-    _ebitda_margin := ((_ebitda::numeric * _magn / _revenue) - 10000) * 100;
+    _ebitda_margin := (_ebitda::numeric * _magn / _revenue) * 100;
 END IF;
 
 --NET PROFIT MARGIN
 IF _net_income IS NOT NULL AND _revenue > 0 THEN
-    _net_profit_margin := ((_net_income::numeric * _magn / _revenue) - 10000) * 100;
+    _net_profit_margin := (_net_income::numeric * _magn / _revenue) * 100;
 END IF;
 
 
@@ -253,12 +253,12 @@ SELECT dividends_paid INTO _dividends_paid FROM cash_flow WHERE share_id = NEW.s
 
 --DIVIDEND YIELD
 IF _dividends_paid IS NOT NULL AND _dividends_paid < 0 AND _m_cap > 0 THEN
-    _dividend_yield := ((ABS(_dividends_paid) * _magn / _m_cap) - 10000) * 100;
+    _dividend_yield := (ABS(_dividends_paid) * _magn / _m_cap) * 100;
 END IF;
 
 --DIVIDEND PAYOUT RATIO
 IF _dividends_paid IS NOT NULL AND _dividends_paid < 0 AND _net_income <> 0 THEN
-    _dividend_payout_ratio := ((ABS(_dividends_paid) * _magn / _net_income) - 10000) * 100;
+    _dividend_payout_ratio := (ABS(_dividends_paid) * _magn / _net_income) * 100;
 END IF;
 
 
