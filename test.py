@@ -1,7 +1,7 @@
 import datetime
 
 import yfinance
-from edgar import get_filings, set_identity, get_by_accession_number
+from edgar import get_filings, set_identity, get_by_accession_number, Company
 from datetime import timedelta
 
 from fmpsdk import income_statement
@@ -124,4 +124,8 @@ def calc_revenue(revenues):
     return total_revenue # returns total revenue if none of the revenues is aggregate
 
 if __name__ == "__main__":
-   fingrep_service.get_and_insert_fundamentals(share_id=136,ticker='DHAI',cik='1883788')
+    # fingrep_service.get_and_insert_fundamentals(share_id=136,ticker='DHAI',cik='1883788')
+    tenk = Company("ACR").get_filings(form="10-K").latest(1).obj()
+
+    financials = tenk.financials
+    print(financials.get_income_statement().get_dataframe())

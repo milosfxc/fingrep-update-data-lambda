@@ -81,7 +81,12 @@ pg_income_statement_columns = {'share_id': 'share_id',
                                'net income common stockholders': 'net_income',
                                'basic eps': 'eps',
                                'diluted eps': 'diluted_eps',
-                               'Basic Average Shares': 'avg_shares_outstanding'
+                               'Basic Average Shares': 'avg_shares_outstanding',
+                               # Bank
+                               'Interest Income': 'interest_income',
+                               'Interest Expense': 'interest_expense',
+                               'Credit Losses Provision': 'credit_losses_provision',
+                               'Non Interest Expense': 'non_interest_expense'
                                }
 
 pg_cash_flow_columns = {'share_id': 'share_id',
@@ -178,7 +183,7 @@ non_monetary_columns = ['share_id', 'date', 'report_type', 'currency', 'usd_exc'
 # Mandatory columns
 mandatory_columns = {
     "balance_sheet": ['assets', 'current_assets', 'non_current_assets', 'liabilities', 'equity'],
-    "income_statement": ['revenue','ebitda'],
+    "income_statement": ['revenue'],
     'cash_flow': ['operating_cash_flow', 'investing_cash_flow', 'financing_cash_flow']
 }
 
