@@ -152,6 +152,7 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
             df = df.rename(columns=utils.pg_tables.get(table_name))
             # Date formation to prevent an error for forex.request_usd_currency_value
             df['date'] = df['date'].dt.strftime('%Y-%m-%d')
+            dolt_df = db_ops.get_dolt_statement(ticker, table_name, False)
             # Stop insertion if any of the mandatory columns is missing
             if any(col not in df.columns for col in mandatory_columns[table_name]):
                 continue

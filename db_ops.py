@@ -2,6 +2,7 @@ import logging
 import subprocess
 
 import mysql
+from pandas.core.interchange.dataframe_protocol import DataFrame
 from psycopg2.extras import DictCursor, execute_values
 import pandas as pd
 import mysql.connector
@@ -365,70 +366,50 @@ def get_dolt_db_connection():
 def dolt_local_connection():
     return mysql.connector.connect(database='earnings', user='root', host='localhost', port=3306, password='')
 
-def get_dolt_balance_sheet(ticker: str, latest: bool = False, period: str = 'Year'):
-    sql = f"""
-    SELECT bsa.date, bsa.total_assets AS assets, bsa.total_current_assets AS current_assets, 
-    bsa.cash_and_equivalents AS cash_and_cash_Equivalents, bsa.receivables + bsa.notes_receivable AS net_receivables, 
-    bsl.total_liabilities AS liabilities, bsl.total_current_liabilities AS current_liabilities, 
-    bsl.total_liabilities - bsl.total_current_liabilities AS non_current_liabilities, bse.total_equity AS equity,
-    bse.shares_outstanding AS sh_out, ROUND(bse.book_value_per_share * bse.shares_outstanding,0) AS common_stock_equity
-    FROM balance_sheet_assets AS bsa 
-    INNER JOIN balance_sheet_equity AS bse 
-        ON bsa.date = bse.date 
-        AND bsa.act_symbol = bse.act_symbol 
-        AND bsa.period = bse.period 
-    INNER JOIN balance_sheet_liabilities AS bsl 
-        ON bsa.date = bsl.date 
-        AND bsa.act_symbol = bsl.act_symbol 
-        AND bsa.period = bsl.period
-    WHERE bsa.act_symbol = '{ticker}'
-    AND bsa.period = '{period}'
-    AND bsa.date >= '2020-12-31'
-    """
-    if latest:
+def get_dolt_statement(ticker: str, table_name: str, latest: bool = False, period: str = 'Year'):
+    if table_name == 'balance_sheet':
+        sql = f"""
+        SELECT bsa.date, bsa.total_assets AS assets, bsa.total_current_assets AS current_assets, 
+        bsa.cash_and_equivalents AS cash_and_cash_Equivalents, bsa.receivables + bsa.notes_receivable AS net_receivables, 
+        bsl.total_liabilities AS liabilities, bsl.total_current_liabilities AS current_liabilities, 
+        bsl.total_liabilities - bsl.total_current_liabilities AS non_current_liabilities, bse.total_equity AS equity,
+        bse.shares_outstanding AS sh_out, ROUND(bse.book_value_per_share * bse.shares_outstanding,0) AS common_stock_equity
+        FROM balance_sheet_assets AS bsa 
+        INNER JOIN balance_sheet_equity AS bse 
+            ON bsa.date = bse.date 
+            AND bsa.act_symbol = bse.act_symbol 
+            AND bsa.period = bse.period 
+        INNER JOIN balance_sheet_liabilities AS bsl 
+            ON bsa.date = bsl.date 
+            AND bsa.act_symbol = bsl.act_symbol 
+            AND bsa.period = bsl.period
+        WHERE bsa.act_symbol = '{ticker}'
+        AND bsa.period = '{period}'
+        AND bsa.date >= '2020-12-31'
+        """
         sql = sql + f" AND bsa.DATE = (SELECT MAX(DATE) FROM balance_sheet_assets WHERE act_symbol = '{ticker}' AND period = '{period}')"
-    try:
-        with get_dolt_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(sql)
-                rows = cur.fetchall()
-                columns = [desc[0] for desc in cur.description]
-                return pd.DataFrame(rows, columns=columns) if rows else pd.DataFrame(columns=columns)
-    except mysql.connector.Error as e:
-        logger.critical('Error fetching from dolt balance_sheet.', exc_info=True)
-
-def get_dolt_income_statement(ticker: str, latest: bool = False, period: str = 'Year'):
-    sql = f"""
-    SELECT isst.date, isst.sales AS revenue, isst.gross_profit, isst.interest_expense + isst.pretax_income + isst.depreciation_and_amortization as ebitda, 
-    isst.interest_expense + isst.pretax_income AS ebit, isst.net_income, isst.average_shares AS avg_shares_outstanding, isst.diluted_eps_before_non_recurring_items AS normalized_eps,
-    ROUND(isst.net_income / isst.average_shares, 2) AS basic_eps, isst.diluted_net_eps AS diluted_eps
-    FROM income_statement AS isst
-    WHERE isst.act_symbol = '{ticker}'
-    AND isst.period = '{period}'
-    AND isst.date >= '2020-12-31'
-    """
-    if latest:
+    elif table_name == 'income_statement':
+        sql = f"""
+        SELECT isst.date, isst.sales AS revenue, isst.gross_profit, isst.interest_expense + isst.pretax_income + isst.depreciation_and_amortization as ebitda, 
+        isst.interest_expense + isst.pretax_income AS ebit, isst.net_income, isst.average_shares AS avg_shares_outstanding, isst.diluted_eps_before_non_recurring_items AS normalized_eps,
+        ROUND(isst.net_income / isst.average_shares, 2) AS basic_eps, isst.diluted_net_eps AS diluted_eps
+        FROM income_statement AS isst
+        WHERE isst.act_symbol = '{ticker}'
+        AND isst.period = '{period}'
+        AND isst.date >= '2020-12-31'
+        """
         sql = sql + f"AND isst.date = (SELECT MAX(date) FROM income_statement WHERE act_symbol = '{ticker}' AND period = '{period}')"
-    try:
-        with get_dolt_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(sql)
-                rows = cur.fetchall()
-                columns = [desc[0] for desc in cur.description]
-                return pd.DataFrame(rows, columns=columns) if rows else pd.DataFrame(columns=columns)
-    except mysql.connector.Error as e:
-        logger.critical('Error fetching from dolt income_statement', exc_info=True)
-
-def get_dolt_cash_flow(ticker: str, latest: bool = False, period: str = 'Year'):
-    sql = f"""
-    SELECT cf.date, cf.net_cash_from_operating_activities AS operating_cash_flow
-    FROM cash_flow_statement AS cf 
-    WHERE cf.act_symbol = '{ticker}'
-    AND cf.period = '{period}'
-    AND cf.date >= '2020-12-31'
-    """
-    if latest:
+    elif table_name == 'cash_flow':
+        sql = f"""
+        SELECT cf.date, cf.net_cash_from_operating_activities AS operating_cash_flow
+        FROM cash_flow_statement AS cf 
+        WHERE cf.act_symbol = '{ticker}'
+        AND cf.period = '{period}'
+        AND cf.date >= '2020-12-31'
+        """
         sql = sql + f"AND cf.date = (SELECT MAX(date) FROM cash_flow_statement WHERE act_symbol = '{ticker}' AND period = '{period}')"
+    else:
+        return pd.DataFrame()
     try:
         with get_dolt_db_connection() as conn:
             with conn.cursor() as cur:
@@ -437,5 +418,4 @@ def get_dolt_cash_flow(ticker: str, latest: bool = False, period: str = 'Year'):
                 columns = [desc[0] for desc in cur.description]
                 return pd.DataFrame(rows, columns=columns) if rows else pd.DataFrame(columns=columns)
     except mysql.connector.Error as e:
-        logger.critical('Error fetching from dolt income_statement', exc_info=True)
-
+        logger.critical(f"Error fetching from dolt {table_name}", exc_info=True)
