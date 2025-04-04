@@ -385,7 +385,7 @@ def get_dolt_statement(ticker: str, table_name: str, latest: bool = False, perio
             AND bsa.period = bsl.period
         WHERE bsa.act_symbol = '{ticker}'
         AND bsa.period = '{period}'
-        AND bsa.date >= '2015-12-31'
+        AND bsa.date >= '2020-12-31'
         """
         sql = sql + f" AND bsa.DATE = (SELECT MAX(DATE) FROM balance_sheet_assets WHERE act_symbol = '{ticker}' AND period = '{period}')"
     elif table_name == 'income_statement':
