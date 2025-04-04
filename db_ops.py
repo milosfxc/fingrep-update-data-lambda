@@ -369,11 +369,11 @@ def dolt_local_connection():
 def get_dolt_statement(ticker: str, table_name: str, latest: bool = False, period: str = 'Year'):
     if table_name == 'balance_sheet':
         sql = f"""
-        SELECT bsa.date, bsa.total_assets AS assets, bsa.total_current_assets AS current_assets, 
-        bsa.cash_and_equivalents AS cash_and_cash_Equivalents, bsa.receivables + bsa.notes_receivable AS net_receivables, 
+        SELECT bsa.date, CASE WHEN bsa.period = 'Year' THEN 'a' ELSE 'q' END AS report_type, bsa.total_assets AS assets, bsa.total_current_assets AS current_assets, 
+        bsa.cash_and_equivalents AS cash_and_cash_equivalents, bsa.receivables + bsa.notes_receivable AS net_receivables, 
         bsl.total_liabilities AS liabilities, bsl.total_current_liabilities AS current_liabilities, 
         bsl.total_liabilities - bsl.total_current_liabilities AS non_current_liabilities, bse.total_equity AS equity,
-        bse.shares_outstanding AS sh_out, ROUND(bse.book_value_per_share * bse.shares_outstanding,0) AS common_stock_equity
+        bse.shares_outstanding, ROUND(bse.book_value_per_share * bse.shares_outstanding,0) AS common_stock_equity
         FROM balance_sheet_assets AS bsa 
         INNER JOIN balance_sheet_equity AS bse 
             ON bsa.date = bse.date 
@@ -385,14 +385,14 @@ def get_dolt_statement(ticker: str, table_name: str, latest: bool = False, perio
             AND bsa.period = bsl.period
         WHERE bsa.act_symbol = '{ticker}'
         AND bsa.period = '{period}'
-        AND bsa.date >= '2020-12-31'
+        AND bsa.date >= '2015-12-31'
         """
         sql = sql + f" AND bsa.DATE = (SELECT MAX(DATE) FROM balance_sheet_assets WHERE act_symbol = '{ticker}' AND period = '{period}')"
     elif table_name == 'income_statement':
         sql = f"""
-        SELECT isst.date, isst.sales AS revenue, isst.gross_profit, isst.interest_expense + isst.pretax_income + isst.depreciation_and_amortization as ebitda, 
+        SELECT isst.date, CASE WHEN isst.period = 'Year' THEN 'a' ELSE 'q' END AS report_type, isst.sales AS revenue, isst.gross_profit, isst.interest_expense + isst.pretax_income + isst.depreciation_and_amortization as ebitda, 
         isst.interest_expense + isst.pretax_income AS ebit, isst.net_income, isst.average_shares AS avg_shares_outstanding, isst.diluted_eps_before_non_recurring_items AS normalized_eps,
-        ROUND(isst.net_income / isst.average_shares, 2) AS basic_eps, isst.diluted_net_eps AS diluted_eps
+        ROUND(isst.net_income / isst.average_shares, 2) AS eps, isst.diluted_net_eps AS diluted_eps
         FROM income_statement AS isst
         WHERE isst.act_symbol = '{ticker}'
         AND isst.period = '{period}'
@@ -401,7 +401,7 @@ def get_dolt_statement(ticker: str, table_name: str, latest: bool = False, perio
         sql = sql + f"AND isst.date = (SELECT MAX(date) FROM income_statement WHERE act_symbol = '{ticker}' AND period = '{period}')"
     elif table_name == 'cash_flow':
         sql = f"""
-        SELECT cf.date, cf.net_cash_from_operating_activities AS operating_cash_flow
+        SELECT cf.date, CASE WHEN cf.period = 'Year' THEN 'a' ELSE 'q' END AS report_type, cf.net_cash_from_operating_activities AS operating_cash_flow
         FROM cash_flow_statement AS cf 
         WHERE cf.act_symbol = '{ticker}'
         AND cf.period = '{period}'

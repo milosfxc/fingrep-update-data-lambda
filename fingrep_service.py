@@ -150,9 +150,26 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
             df = df[required_columns]
             # Rename columns with db names
             df = df.rename(columns=utils.pg_tables.get(table_name))
-            # Date formation to prevent an error for forex.request_usd_currency_value
+            # Query dolt data
+            dolt_df = db_ops.get_dolt_statement(ticker, table_name, False, 'Quarter' if statement.endswith('_q') else 'Year')
+            dolt_df['date'] = pd.to_datetime(dolt_df['date'])
+            # Set index to combine dataframes properly
+            dolt_df.set_index(keys=['date','report_type'], inplace=True)
+            df.set_index(keys=['date', 'report_type'], inplace=True)
+            # Combine dolt data with dataframe
+            df = df.combine_first(dolt_df)
+            # Add missing columns from dolt dataframe
+            missing_cols = dolt_df.columns.difference(df.columns)
+            df = pd.concat([df, dolt_df[missing_cols]], axis=1)
+
+            # Step 3: Add missing rows and columns from df2
+            df = (
+                pd.concat([df, dolt_df])
+                .groupby(level=[0, 1])  # Group by composite index (date, period)
+                .first()  # Keep first occurrence (df takes priority)
+                .reset_index() # Date formation to prevent an error for forex.request_usd_currency_value
+            )
             df['date'] = df['date'].dt.strftime('%Y-%m-%d')
-            dolt_df = db_ops.get_dolt_statement(ticker, table_name, False)
             # Stop insertion if any of the mandatory columns is missing
             if any(col not in df.columns for col in mandatory_columns[table_name]):
                 continue
@@ -421,4 +438,4 @@ def update_fundamentals():
         df_full_insert['period_ending'] = df_full_insert.apply(lambda row: get_period_ending_by_accession_number(accession_number=row['accession_number']),axis=1)
         df_full_insert['fully_inserted'] = df_full_insert.apply(lambda row: get_and_insert_fundamentals(share_id=row['id'],ticker=row['ticker'],cik=row['cik'],period_ending=row['period_ending'],period_ending_range_search=True,filing_date=row['filing_date']),axis=1)
         df_full_insert['full_insert_attempt_date'] = date.today().strftime('%Y-%m-%d')
-        print(df_full_insert[df_full_insert['fully_inserted'] == True])
+        #print(df_full_insert[df_full_insert['fully_inserted'] == True])
