@@ -159,17 +159,23 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
             # Combine dolt data with dataframe
             df = df.combine_first(dolt_df)
             # Add missing columns from dolt dataframe
-            missing_cols = dolt_df.columns.difference(df.columns)
-            df = pd.concat([df, dolt_df[missing_cols]], axis=1)
-
-            # Step 3: Add missing rows and columns from df2
+            # missing_cols = dolt_df.columns.difference(df.columns)
+            # df = pd.concat([df, dolt_df[missing_cols]], axis=1)
+            # Add missing rows and columns from df2
             df = (
                 pd.concat([df, dolt_df])
                 .groupby(level=[0, 1])  # Group by composite index (date, period)
                 .first()  # Keep first occurrence (df takes priority)
                 .reset_index() # Date formation to prevent an error for forex.request_usd_currency_value
             )
+            # Find the oldest row with non-null currency
+            oldest_non_null = df[df['currency'].notna()].sort_values('date', ascending=True).iloc[0]
+            # Apply this currency and share_id values to all rows where currency is None
+            df['currency'] = df['currency'].fillna(oldest_non_null['currency'])
+            df['share_id'] = df['share_id'].fillna(oldest_non_null['share_id'])
+            # Date must be str for the get_usd_exchange_rate function
             df['date'] = df['date'].dt.strftime('%Y-%m-%d')
+            print(df)
             # Stop insertion if any of the mandatory columns is missing
             if any(col not in df.columns for col in mandatory_columns[table_name]):
                 continue

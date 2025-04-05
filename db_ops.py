@@ -387,7 +387,8 @@ def get_dolt_statement(ticker: str, table_name: str, latest: bool = False, perio
         AND bsa.period = '{period}'
         AND bsa.date >= '2020-12-31'
         """
-        sql = sql + f" AND bsa.DATE = (SELECT MAX(DATE) FROM balance_sheet_assets WHERE act_symbol = '{ticker}' AND period = '{period}')"
+        if latest:
+            sql = sql + f" AND bsa.DATE = (SELECT MAX(DATE) FROM balance_sheet_assets WHERE act_symbol = '{ticker}' AND period = '{period}')"
     elif table_name == 'income_statement':
         sql = f"""
         SELECT isst.date, CASE WHEN isst.period = 'Year' THEN 'a' ELSE 'q' END AS report_type, isst.sales AS revenue, isst.gross_profit, isst.interest_expense + isst.pretax_income + isst.depreciation_and_amortization as ebitda, 
@@ -398,7 +399,8 @@ def get_dolt_statement(ticker: str, table_name: str, latest: bool = False, perio
         AND isst.period = '{period}'
         AND isst.date >= '2020-12-31'
         """
-        sql = sql + f"AND isst.date = (SELECT MAX(date) FROM income_statement WHERE act_symbol = '{ticker}' AND period = '{period}')"
+        if latest:
+            sql = sql + f"AND isst.date = (SELECT MAX(date) FROM income_statement WHERE act_symbol = '{ticker}' AND period = '{period}')"
     elif table_name == 'cash_flow':
         sql = f"""
         SELECT cf.date, CASE WHEN cf.period = 'Year' THEN 'a' ELSE 'q' END AS report_type, cf.net_cash_from_operating_activities AS operating_cash_flow
@@ -407,7 +409,8 @@ def get_dolt_statement(ticker: str, table_name: str, latest: bool = False, perio
         AND cf.period = '{period}'
         AND cf.date >= '2020-12-31'
         """
-        sql = sql + f"AND cf.date = (SELECT MAX(date) FROM cash_flow_statement WHERE act_symbol = '{ticker}' AND period = '{period}')"
+        if latest:
+            sql = sql + f"AND cf.date = (SELECT MAX(date) FROM cash_flow_statement WHERE act_symbol = '{ticker}' AND period = '{period}')"
     else:
         return pd.DataFrame()
     try:
