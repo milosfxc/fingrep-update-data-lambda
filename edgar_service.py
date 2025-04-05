@@ -7,6 +7,8 @@ from edgar import get_filings, set_identity, get_by_accession_number
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+from pandas.core.algorithms import duplicated
+
 pd.set_option('future.no_silent_downcasting', True)
 import db_ops
 import utils
@@ -18,7 +20,7 @@ set_identity('milosfxc@gmail.com')
 
 def get_latest_filings():
     # Get max date from latest filings
-    current_date = datetime.date.today()
+    current_date = datetime.date.today() - timedelta(days=1)
     latest_filings = db_ops.get_latest_filings_by_max_filing_date()
     df_db = None
     if latest_filings:
@@ -40,13 +42,19 @@ def get_latest_filings():
         df_edgar['report_type_id'] = df_edgar['form'].replace(utils.form_report_type_id)
         # Drop unnecessary columns
         df_edgar.drop(columns=['company', 'form'], inplace=True)
-        df_edgar['partially_inserted'] = False
-        df_edgar['fully_inserted'] = False
+        df_edgar[['partially_inserted', 'fully_inserted']] = False
+        # Check for duplicated accession number
+        duplicates = df_edgar['accession_number'].value_counts()[lambda x: x > 1].index.tolist()
+        if len(duplicates) > 0:
+            logger.warning(f"get_latest_filings: df_edgar has duplicated accession numbers: {duplicates} \n Fundamentals must be manually inserted.")
+        df_edgar.drop_duplicates(subset=['accession_number'], keep=False, inplace=True)
         # Remove already partially inserted and inserted rows
         if df_db is not None and not df_db.empty:
             partially_inserted_filings = df_db[df_db['partially_inserted'] == True]['accession_number'].tolist()
             fully_inserted_filings = df_db[df_db['fully_inserted'] == True]['accession_number'].tolist()
             df_edgar = df_edgar[~df_edgar['accession_number'].isin(fully_inserted_filings + partially_inserted_filings)]
+            return df_edgar
+        else:
             return df_edgar
     return None
 

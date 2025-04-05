@@ -27,7 +27,7 @@ DB_PORT = 5432
 # logger
 import logging
 logger = logging.getLogger('fingrep')
-logger.setLevel(logging.ERROR)
+logger.setLevel(logging.DEBUG)
 logger.propagate = False
 # Add handlers, formatters, etc.
 handler = logging.StreamHandler()

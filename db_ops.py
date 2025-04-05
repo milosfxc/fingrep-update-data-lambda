@@ -325,7 +325,7 @@ def upsert_latest_filings(df: pd.DataFrame)-> bool:
                 conn.commit()
                 return True
     except Exception as e:
-        logging.critical('upsert_latest_filings failed', exc_info=True)
+        logging.critical(f"upsert_latest_filings failed: {e}", exc_info=True)
         return False
 
 
@@ -345,7 +345,7 @@ def get_filings_older_than_four_days():
 
 
 def delete_fillings_older_than_month():
-    sql_delete = """DELETE FROM latest_filings WHERE filing_date < NOW() - INTERVAL '0 MONTH'"""
+    sql_delete = """DELETE FROM latest_filings WHERE filing_date < NOW() - INTERVAL '1 MONTH'"""
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
