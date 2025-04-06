@@ -42,7 +42,7 @@ def update_latest_filings():
                 df_edgar = pd.concat([df_edgar, filings.to_pandas()], ignore_index=True) if df_edgar is not None else filings.to_pandas()
     if df_edgar is not None and not df_edgar.empty:
         # Replace values in form column, 10-A = 1, 10-Q = 2
-        df_edgar['report_type_id'] = df_edgar['form'].replace(utils.form_report_type_id)
+        df_edgar['report_type_id'] = df_edgar['form'].replace(utils.form_report_type)
         # Drop unnecessary columns
         #df_edgar.drop(columns=['company', 'form'], inplace=True)
         df_edgar['partially_inserted'] = False
@@ -125,7 +125,7 @@ def calc_revenue(revenues):
 
 if __name__ == "__main__":
     # fingrep_service.get_and_insert_fundamentals(share_id=136,ticker='DHAI',cik='1883788')
-    tenk = Company("ACR").get_filings(form="10-K").latest(1).obj()
+    tenk = Company("NWTG").get_filings(form="10-K").latest(1).obj()
 
     financials = tenk.financials
     print(financials.get_income_statement().get_dataframe())

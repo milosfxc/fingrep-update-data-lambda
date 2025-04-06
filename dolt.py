@@ -13,3 +13,4 @@ if __name__ == '__main__':
     # print(db_ops.get_dolt_statement('ADC','income_statement', False))
     #fingrep_service.get_and_insert_fundamentals(1, 'ATNF', '1690080')
     fingrep_service.update_fundamentals()
+    #print(db_ops.get_ids_by_by_cik(['1690080', '1650648']))

@@ -429,10 +429,21 @@ def find_nearest(period_ending: date, dates_tuple):
 
 # Update fundamentals for existing shares
 def update_fundamentals():
-    # Update latest filings
+    # Update latest financials
     df_latest_filings = edgar_service.get_latest_filings()
-    # Update latest filings
     if df_latest_filings is not None and not df_latest_filings.empty:
+        # Partially insert key financials
+        df_partial_insert = df_latest_filings[['accession_number', 'cik', 'report_type', 'filing_date']] # todo don't forget to remove this
+        df_partial_insert.loc[:,['revenue', 'eps', 'net_income', 'date', 'report_period_id', 'partially_inserted']] = df_partial_insert.apply(edgar_service.update_income_positions, axis=1)
+        df_partial_insert = df_partial_insert[df_partial_insert['partially_inserted'] == True]
+        df_cik = db_ops.get_ids_by_by_cik(df_partial_insert['cik'].values.tolist())
+        if df_cik:
+            df_cik = pd.DataFrame(df_cik)
+            df_partial_insert = pd.merge(df_partial_insert, df_cik, how='inner', on = 'cik')
+            df_partial_insert.drop(columns=['accession_number','cik'], inplace=True)
+            db_ops.upsert_dataframe(df_partial_insert,'income_statement')
+        # Upsert latest filings
+        df_latest_filings.drop(columns='report_type', inplace=True)
         db_ops.upsert_latest_filings(df_latest_filings)
     else:
         logger.warning('update_fundamentals: no latest filings to update')

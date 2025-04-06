@@ -294,6 +294,23 @@ def get_id_and_ticker_by_cik(cik: str):
         logger.error(f"get_id_and_ticker_by_cik: {e}")
         return None
 
+def get_ids_by_by_cik(cik_list: list):
+    sql_select = """SELECT i.share_id, i.cik FROM shares_info i
+                    WHERE i.cik = ANY(%s::integer[])"""
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql_select, (cik_list,))
+                results = cur.fetchall()
+                if results:
+                    return [{'share_id': row[0], 'cik': row[1]} for row in results]
+                else:
+                    return None
+    except psycopg2.DatabaseError as e:
+        logger.error(f"get_multiple_ids_by_cik: {e}")
+        return None
+
+
 # Latest fillings
 def get_latest_filings_by_max_filing_date():
     sql_select = """SELECT * FROM latest_filings WHERE filing_date = (SELECT MAX(filing_date) FROM latest_filings)"""
