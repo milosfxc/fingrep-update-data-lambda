@@ -9,6 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 from pandas.core.algorithms import duplicated
 
+import config
 import fundamentals
 
 pd.set_option('future.no_silent_downcasting', True)
@@ -22,7 +23,7 @@ set_identity('milosfxc@gmail.com')
 
 def get_latest_filings():
     # Get max date from latest filings
-    current_date = datetime.date.today() - timedelta(days=2)
+    current_date = datetime.date.today() - timedelta(days=config.DAYS)
     latest_filings = db_ops.get_latest_filings_by_max_filing_date()
     df_db = None
     if latest_filings:
@@ -63,37 +64,24 @@ def get_latest_filings():
 
 def update_income_positions(row):
     accession_number = row['accession_number']
-    cols = ['revenue', 'eps', 'net_income', 'date', 'report_period_id', 'partially_inserted']
+    cols = ['revenue', 'eps', 'net_income', 'avg_shares_outstanding', 'date', 'report_period_id', 'partially_inserted']
     filing = get_by_accession_number(accession_number=accession_number)
     if filing is None or not hasattr(filing, 'period_of_report'):
         logger.info(f"Couldn't get filing or period_or_report for the filing accession number: {accession_number}")
-        return pd.Series(data=[None, None, None, None, None, False],index=cols)
+        return pd.Series(data=[None, None, None, None, None, None, False],index=cols)
     # Period ending
     period_ending = filing.period_of_report
     if period_ending is None:
         logger.info(f"period_or_report is None for the filing accession number: {accession_number}")
-        return pd.Series(data=[None, None, None, None, None, False],index=cols)
+        return pd.Series(data=[None, None, None, None, None, None, False],index=cols)
     # Retrieve the income statement
     try:
-        if not hasattr(filing, 'obj'):
-            logger.info(f"filing has no attribute obj() for the filing accession number: {accession_number}")
-            return pd.Series(data=[None, None, None, None, None, False], index=cols)
-        filing_obj = filing.obj()
-        if filing_obj is None or not hasattr(filing_obj, 'financials'):
-            logger.info(f"filing.obj() has no attribute financials for the filing accession number: {accession_number}")
-            return pd.Series(data=[None, None, None, None, None, False], index=cols)
-        if not hasattr(filing_obj.financials, 'get_income_statement'):
-            logger.info(f"filing_obj.financials has no attribute get_income_statement() for the filing accession number: {accession_number}")
-            return pd.Series(data=[None, None, None, None, None, False], index=cols)
-        inc_stmt = filing_obj.financials.get_income_statement()
-
-        df_filing = inc_stmt.get_dataframe() if inc_stmt else None
-        if df_filing is None or df_filing.empty:
-            logger.info(f"df_filing is None or df_filing.empy for accession number {accession_number}")
-            return pd.Series(data=[None, None, None, None, None, False], index=cols)
+        df_filing = filing.obj().financials.get_income_statement().get_dataframe()
     except Exception as e:
-        logger.critical(f"Unexpected error processing filing {accession_number}: {str(e)}", exc_info=True)
-        return pd.Series(data=[None, None, None, None, None, False],index=cols)
+        logger.info(f"Unexpected error processing filing {accession_number}: {str(e)}", exc_info=True)
+        return pd.Series(data=[None, None, None, None, None, None, False],index=cols)
+    if df_filing.empty:
+        return pd.Series(data=[None, None, None, None, None, None, False],index=cols)
     # Convert string to numeric
     df_filing.iloc[:, 0] = pd.to_numeric(df_filing.iloc[:, 0], errors='coerce')
     # Dataframe that contains revenue word in concept column rows
@@ -105,7 +93,7 @@ def update_income_positions(row):
     # Ensure df_max is not empty before accessing values
     if df_max.empty:
         logger.info(f"df_max is empty, no matching max value found for accession number: {accession_number}")
-        return pd.Series(data=[None, None, None, None, None, False],index=cols)
+        return pd.Series(data=[None, None, None, None, None, None, False],index=cols)
     # Extract concept with max value safely
     max_val_concept = df_max['concept'].values[0]
     # Filter rows with the same concept as max_val_concept
@@ -119,10 +107,12 @@ def update_income_positions(row):
     # Calc net income
     df_net_income = df_filing[df_filing['concept'] == 'us-gaap_NetIncomeLoss']
     net_income = df_net_income.iloc[0, 0] * 10000 if not df_net_income.empty else None
+    # Calc average shares outstanding
+    average_shares = df_filing[df_filing['concept'] == 'us-gaap_WeightedAverageNumberOfSharesOutstanding']
     # Calc report_period_id
     report_period_id = fundamentals.calc_report_period_id(period_ending, row['report_type'])
     # Returns revenue, eps, net income, period ending and is_insertable
-    return pd.Series(data=[revenue, eps, net_income, period_ending, report_period_id, True],index=cols)
+    return pd.Series(data=[revenue, eps, net_income, average_shares, period_ending, report_period_id, True],index=cols)
 
 
 def calc_revenue(revenues):

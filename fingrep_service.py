@@ -3,8 +3,13 @@ import traceback
 from datetime import datetime,date, timezone, timedelta
 import inspect
 import time
+from unittest.mock import inplace
+
+import numpy as np
 import pandas as pd
 import requests
+from fastcore.imports import df_equal
+
 import config
 import db_ops
 import edgar_service
@@ -158,9 +163,6 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
             df.set_index(keys=['date', 'report_type'], inplace=True)
             # Combine dolt data with dataframe
             df = df.combine_first(dolt_df)
-            # Add missing columns from dolt dataframe
-            # missing_cols = dolt_df.columns.difference(df.columns)
-            # df = pd.concat([df, dolt_df[missing_cols]], axis=1)
             # Add missing rows and columns from df2
             df = (
                 pd.concat([df, dolt_df])
@@ -175,7 +177,6 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
             df['share_id'] = df['share_id'].fillna(oldest_non_null['share_id'])
             # Date must be str for the get_usd_exchange_rate function
             df['date'] = df['date'].dt.strftime('%Y-%m-%d')
-            print(df)
             # Stop insertion if any of the mandatory columns is missing
             if any(col not in df.columns for col in mandatory_columns[table_name]):
                 continue
@@ -201,7 +202,7 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
             df.sort_values(by=['date'], inplace=True, ascending=True)
             if upsert_dataframe(df, table_name): counter += 1
         # Check if all annual and quarterly are inserted
-        return counter == 6
+        return counter >= 3
 
     except Exception as e:
         logger.error(f"get_and_insert_fundamentals - Error preparing for insert fundamentals for ticker {ticker}: {e}\n{traceback.format_exception(e)}")
@@ -433,26 +434,28 @@ def update_fundamentals():
     df_latest_filings = edgar_service.get_latest_filings()
     if df_latest_filings is not None and not df_latest_filings.empty:
         # Partially insert key financials
-        df_partial_insert = df_latest_filings[['accession_number', 'cik', 'report_type', 'filing_date']] # todo don't forget to remove this
-        df_partial_insert.loc[:,['revenue', 'eps', 'net_income', 'date', 'report_period_id', 'partially_inserted']] = df_partial_insert.apply(edgar_service.update_income_positions, axis=1)
-        df_partial_insert = df_partial_insert[df_partial_insert['partially_inserted'] == True]
-        df_cik = db_ops.get_ids_by_by_cik(df_partial_insert['cik'].values.tolist())
+        df_latest_filings = df_latest_filings.head(5)
+        df_latest_filings.loc[:,['revenue', 'eps', 'net_income', 'avg_shares_outstanding', 'date', 'report_period_id', 'partially_inserted']] = df_latest_filings.apply(edgar_service.update_income_positions, axis=1)
+        df_partial_insert = df_latest_filings[df_latest_filings['partially_inserted'] == True]
+        df_cik = db_ops.get_ids_by_cik(df_partial_insert['cik'].values.tolist())
         if df_cik:
             df_cik = pd.DataFrame(df_cik)
             df_partial_insert = pd.merge(df_partial_insert, df_cik, how='inner', on = 'cik')
-            df_partial_insert.drop(columns=['accession_number','cik'], inplace=True)
-            db_ops.upsert_dataframe(df_partial_insert,'income_statement')
+            #df_partial_insert.drop(columns=['accession_number','cik'], inplace=True)
+            is_inserted = db_ops.upsert_dataframe(df_partial_insert[df_partial_insert.columns.difference(['cik', 'accession_number', 'fully_inserted'])],'income_statement')
+            if is_inserted:
+                df_latest_filings['partially_inserted'] = df_latest_filings['cik'].map(df_partial_insert.set_index('cik')['partially_inserted'])
         # Upsert latest filings
-        df_latest_filings.drop(columns='report_type', inplace=True)
-        db_ops.upsert_latest_filings(df_latest_filings)
+        df_latest_filings.drop(columns=['revenue', 'eps', 'net_income', 'report_type', 'date', 'report_period_id'], inplace=True)
+        db_ops.upsert_dataframe_v3(df_latest_filings)
     else:
         logger.warning('update_fundamentals: no latest filings to update')
     # Delete filings older than a month
     db_ops.delete_fillings_older_than_month()
     # Update fundamentals
-    df_full_insert = pd.DataFrame(db_ops.get_filings_older_than_four_days())
-    if df_full_insert is not None and not df_full_insert.empty:
+    df_full_insert = db_ops.get_filings_older_than_four_days_and_before_last_sunday()
+    if not df_full_insert.empty:
         df_full_insert['period_ending'] = df_full_insert.apply(lambda row: get_period_ending_by_accession_number(accession_number=row['accession_number']),axis=1)
-        df_full_insert['fully_inserted'] = df_full_insert.apply(lambda row: get_and_insert_fundamentals(share_id=row['id'],ticker=row['ticker'],cik=row['cik'],period_ending=row['period_ending'],period_ending_range_search=True,filing_date=row['filing_date']),axis=1)
+        df_full_insert['fully_inserted'] = df_full_insert.apply(lambda row: get_and_insert_fundamentals(share_id=row['id'],ticker=row['ticker'],cik=row['cik'],filing_date=row['filing_date']),axis=1)
         df_full_insert['full_insert_attempt_date'] = date.today().strftime('%Y-%m-%d')
         #print(df_full_insert[df_full_insert['fully_inserted'] == True])

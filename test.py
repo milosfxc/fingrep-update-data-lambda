@@ -125,7 +125,8 @@ def calc_revenue(revenues):
 
 if __name__ == "__main__":
     # fingrep_service.get_and_insert_fundamentals(share_id=136,ticker='DHAI',cik='1883788')
-    tenk = Company("NWTG").get_filings(form="10-K").latest(1).obj()
-
-    financials = tenk.financials
-    print(financials.get_income_statement().get_dataframe())
+    # tenk = Company("NWTG").get_filings(form="10-K").latest(1)
+    # financials = tenk.financials
+    # print(financials.get_income_statement().get_dataframe())
+    filing = get_by_accession_number('0001104659-24-119521').attachments[2].download()#.financials.get_income_statement().get_dataframe()
+    print(filing)

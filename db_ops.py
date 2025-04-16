@@ -294,7 +294,7 @@ def get_id_and_ticker_by_cik(cik: str):
         logger.error(f"get_id_and_ticker_by_cik: {e}")
         return None
 
-def get_ids_by_by_cik(cik_list: list):
+def get_ids_by_cik(cik_list: list):
     sql_select = """SELECT i.share_id, i.cik FROM shares_info i
                     WHERE i.cik = ANY(%s::integer[])"""
     try:
@@ -345,17 +345,49 @@ def upsert_latest_filings(df: pd.DataFrame)-> bool:
         logging.critical(f"upsert_latest_filings failed: {e}", exc_info=True)
         return False
 
+from psycopg2.extras import execute_values
 
-def get_filings_older_than_four_days():
-    sql_select = """SELECT sh.id, sh.ticker, lf.* FROM latest_filings lf INNER JOIN shares_info si ON lf.cik = si.cik 
+def upsert_dataframe_v3(df: pd.DataFrame):
+    # Replace NaN with None
+    df = df.astype(object).where(pd.notnull(df), None)
+
+    # Prepare the query
+    upsert_query = f"""
+        INSERT INTO latest_filings ({', '.join(df.columns)}) 
+        VALUES %s
+        ON CONFLICT (accession_number) DO UPDATE 
+        SET partially_inserted = EXCLUDED.partially_inserted;
+    """
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                # Convert to list of tuples
+                data = list(df.itertuples(index=False, name=None))
+                execute_values(cur, upsert_query, data)
+                conn.commit()
+                return True
+    except psycopg2.DatabaseError as e:
+        logger.error(f"upsert_dataframe_v3: {e}")
+        return False
+
+
+
+def get_filings_older_than_four_days_and_before_last_sunday():
+    sql_select = """SELECT sh.id, sh.ticker, lf.cik, lf.accession_number, lf.filing_date FROM latest_filings lf INNER JOIN shares_info si ON lf.cik = si.cik 
     INNER JOIN shares sh ON sh.id = si.share_id WHERE fully_inserted = FALSE AND lf.filing_date < NOW() - INTERVAL '4 DAYS'
+    AND lf.filing_date < (DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '1 day')::DATE
     """
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(sql_select)
-                result = cur.fetchall()
-                return {row[0] for row in result} if result else set()
+                columns = [desc[0] for desc in cur.description]  # Get column names
+                results = cur.fetchall()
+
+                if results:
+                    return pd.DataFrame(results, columns=columns)
+                return pd.DataFrame()
     except psycopg2.DatabaseError as e:
         logger.error(f"get_filings_older_than_four_days: {e}")
         return None
