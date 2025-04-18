@@ -11,7 +11,7 @@ from pandas.core.algorithms import duplicated
 
 import config
 import fundamentals
-
+import sys
 pd.set_option('future.no_silent_downcasting', True)
 import db_ops
 import utils
@@ -108,7 +108,8 @@ def update_income_positions(row):
     df_net_income = df_filing[df_filing['concept'] == 'us-gaap_NetIncomeLoss']
     net_income = df_net_income.iloc[0, 0] * 10000 if not df_net_income.empty else None
     # Calc average shares outstanding
-    average_shares = df_filing[df_filing['concept'] == 'us-gaap_WeightedAverageNumberOfSharesOutstanding']
+    df_average_shares = df_filing[df_filing['concept'] == 'us-gaap_WeightedAverageNumberOfSharesOutstanding']
+    average_shares = df_average_shares.iloc[0, 0] * 10000 if not df_average_shares.empty else None
     # Calc report_period_id
     report_period_id = fundamentals.calc_report_period_id(period_ending, row['report_type'])
     # Returns revenue, eps, net income, period ending and is_insertable
@@ -186,7 +187,7 @@ def get_company_facts(cik: str, retries: int = 3, delay: int = 5):
     Returns:
     dict: JSON response containing company facts if successful, None otherwise.
     """
-    cik = cik.zfill(10)
+    cik = str(cik).zfill(10)
     url = f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
     for attempt in range(retries):
         try:

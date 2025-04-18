@@ -325,40 +325,28 @@ def get_latest_filings_by_max_filing_date():
         return None
 
 
-def upsert_latest_filings(df: pd.DataFrame)-> bool:
-    # Create the SQL query for upsert
-    upsert_query = f"""
-        INSERT INTO latest_filings ({', '.join(df.columns)}) 
-        VALUES %s
-        ON CONFLICT (accession_number) DO NOTHING;
-    """
-    try:
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                # Convert DataFrame to a list of tuples
-                data_tuples = [tuple(row) for row in df.to_numpy()]
-                # Use execute_values for bulk insert
-                execute_values(cur, upsert_query, data_tuples)
-                conn.commit()
-                return True
-    except Exception as e:
-        logging.critical(f"upsert_latest_filings failed: {e}", exc_info=True)
-        return False
 
-from psycopg2.extras import execute_values
 
-def upsert_dataframe_v3(df: pd.DataFrame):
+def upsert_latest_filings(df: pd.DataFrame, upsert_fully_inserted_and_attempt_date: bool=False):
     # Replace NaN with None
     df = df.astype(object).where(pd.notnull(df), None)
 
     # Prepare the query
-    upsert_query = f"""
-        INSERT INTO latest_filings ({', '.join(df.columns)}) 
-        VALUES %s
-        ON CONFLICT (accession_number) DO UPDATE 
-        SET partially_inserted = EXCLUDED.partially_inserted;
-    """
-
+    if not upsert_fully_inserted_and_attempt_date:
+        upsert_query = f"""
+            INSERT INTO latest_filings ({', '.join(df.columns)}) 
+            VALUES %s
+            ON CONFLICT (accession_number) DO UPDATE 
+            SET partially_inserted = EXCLUDED.partially_inserted;
+        """
+    else:
+        upsert_query = f"""
+            INSERT INTO latest_filings ({', '.join(df.columns)}) 
+            VALUES %s
+            ON CONFLICT (accession_number) DO UPDATE 
+            SET fully_inserted = EXCLUDED.fully_inserted, 
+            full_insert_attempt_date = EXCLUDED.full_insert_attempt_date;
+        """
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
@@ -368,7 +356,7 @@ def upsert_dataframe_v3(df: pd.DataFrame):
                 conn.commit()
                 return True
     except psycopg2.DatabaseError as e:
-        logger.error(f"upsert_dataframe_v3: {e}")
+        logger.error(f"upsert_latest_filings: {e}")
         return False
 
 

@@ -2,10 +2,8 @@ import datetime
 
 import edgar
 import pandas as pd
-from dateutil.tz import datetime_exists
-from edgar import get_filings, Company
 
-import db_ops
+
 import fingrep_service
 from fundamentals import get_period_ending_by_accession_number
 
@@ -17,7 +15,7 @@ if __name__ == '__main__':
     #print(db_ops.get_dolt_statement('ADC','income_statement', False))
     #print(fingrep_service.get_and_insert_fundamentals(799, 'NWTG', '1934245', latest=True))
     #print(db_ops.get_id_and_cik())
-    #fingrep_service.update_fundamentals()
+    fingrep_service.update_fundamentals()
     #print(db_ops.get_ids_by_by_cik(['1690080', '1650648']))
     #df_full_insert = db_ops.get_filings_older_than_four_days_and_before_last_sunday()
     # if not df_full_insert.empty:
@@ -29,9 +27,9 @@ if __name__ == '__main__':
     #print(db_ops.get_dolt_statement(ticker='NWTG',table_name='income_statement',latest=False))
     #filings = get_filings(form=['10-K', '10-Q'], filing_date='2025-04-04', amendments=False)
     #print(filings.to_pandas())
-    x = edgar.get_by_accession_number('0001289877-21-000008 ').obj().financials.get_balance_sheet()
-    print(x.get_dataframe())
-    c = Company('SFL').latest('20-F').obj().financials.get_balance_sheet().get_dataframe()
-    print(c)
+    # x = edgar.get_by_accession_number('0001289877-21-000008 ').obj().financials.get_balance_sheet()
+    # print(x.get_dataframe())
+    # c = Company('SFL').latest('20-F').obj().financials.get_balance_sheet().get_dataframe()
+    # print(c)
 
     #print(get_filings(filing_date='2024-05-28',form='6-K'))
