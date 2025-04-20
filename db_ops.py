@@ -361,11 +361,15 @@ def upsert_latest_filings(df: pd.DataFrame, upsert_fully_inserted_and_attempt_da
 
 
 
-def get_filings_older_than_four_days_and_before_last_sunday():
+def get_filings_for_full_insert():
     sql_select = """SELECT sh.id, sh.ticker, lf.cik, lf.accession_number, lf.filing_date FROM latest_filings lf INNER JOIN shares_info si ON lf.cik = si.cik 
-    INNER JOIN shares sh ON sh.id = si.share_id WHERE fully_inserted = FALSE AND lf.filing_date < NOW() - INTERVAL '4 DAYS'
+    INNER JOIN shares sh ON sh.id = si.share_id 
+    WHERE fully_inserted = FALSE 
+    AND lf.filing_date < NOW() - INTERVAL '4 DAYS'
     AND lf.filing_date < (DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '1 day')::DATE
+    AND ((lf.full_insert_attempt_date BETWEEN NOW() - INTERVAL '30 DAYS' AND NOW() - INTERVAL '7 DAYS') OR lf.full_insert_attempt_date IS NULL)
     """
+
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
@@ -382,7 +386,7 @@ def get_filings_older_than_four_days_and_before_last_sunday():
 
 
 def delete_fillings_older_than_month():
-    sql_delete = """DELETE FROM latest_filings WHERE filing_date < NOW() - INTERVAL '1 MONTH'"""
+    sql_delete = """DELETE FROM latest_filings WHERE filing_date < NOW() - INTERVAL '1 MONTH' AND fully_inserted = TRUE"""
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:

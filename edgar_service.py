@@ -1,17 +1,19 @@
-import logging
 import re
 import time
 import datetime
 from datetime import timedelta
+#from distutils.command.install import value
+
+import edgar._filings
 from edgar import get_filings, set_identity, get_by_accession_number
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-from pandas.core.algorithms import duplicated
+from edgar.core import edgar_data_dir
 
 import config
+import forex
 import fundamentals
-import sys
 pd.set_option('future.no_silent_downcasting', True)
 import db_ops
 import utils
@@ -368,3 +370,26 @@ def get_ticker_by_cik(cik: str):
 #         if (total_revenue - revenues[i]) == revenues[i]: # checks if revenue[i] is aggregate position
 #             return revenues[i]
 #     return total_revenue # returns total revenue if none of the revenues is aggregate
+
+
+def get_filing_currency(value: str, filing: 'edgar._filings.Filing') -> str | None:
+    """
+    Retrieves the currency for a specific value from an SEC filing's XBRL data,
+    returning it in uppercase (e.g., 'USD' instead of 'usd').
+
+    Args:
+        value: The numeric value to search for in the facts (e.g., '89177000')
+        filing: The SEC Filing object containing financial data
+
+    Returns:
+        The currency string in uppercase (e.g., 'USD') if found, otherwise None
+    """
+    try:
+        facts = filing.obj().financials.xbrl_data.instance.query_facts(value=value)
+        if not facts.empty and 'units' in facts.columns:
+            currency = facts['units'].iat[0]
+            return str(currency).upper() if currency else None
+        return None
+    except Exception as e:
+        logger.info(f"Failed to extract currency: {str(e)}", exc_info=True)
+        return None

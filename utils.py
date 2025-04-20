@@ -10,7 +10,7 @@ pg_balance_sheet_columns = {'share_id': 'share_id',
                             'report_type': 'report_type',
                             'filing_date': 'filing_date',
                             'report_period_id': 'report_period_id',
-                            'currency': 'currency',
+                            'currency_id': 'currency_id',
                             'total assets': 'assets',
                             # Current assets
                             'cash and cash equivalents': 'cash_and_cash_equivalents',
@@ -61,7 +61,7 @@ pg_income_statement_columns = {'share_id': 'share_id',
                                'report_type': 'report_type',
                                'filing_date': 'filing_date',
                                'report_period_id': 'report_period_id',
-                               'currency': 'currency',
+                               'currency_id': 'currency_id',
                                'total revenue': 'revenue',
                                'operating revenue': 'operating_revenue',
                                'cost of revenue': 'cost_of_revenue',
@@ -94,7 +94,7 @@ pg_cash_flow_columns = {'share_id': 'share_id',
                         'report_type': 'report_type',
                         'filing_date': 'filing_date',
                         'report_period_id': 'report_period_id',
-                        'currency': 'currency',
+                        'currency_id': 'currency_id',
                         # Operating cf
                         'operating cash flow': 'operating_cash_flow',
                         'net income from continuing operations': 'operating_net_income',
@@ -177,8 +177,8 @@ def check_row_number(results_count, results_length):
 magnified_columns_existing = ['open', 'high', 'low', 'close', 'volume', 'vwap']
 magnified_columns_new = ['open', 'high', 'low', 'close', 'volume', 'vwap', 'rsi']
 
-# Non-monetary fields are used for currency conversion into dollars
-non_monetary_columns = ['share_id', 'date', 'report_type', 'currency', 'usd_exc']
+# Non-monetary columns
+non_monetary_columns = ['share_id', 'date', 'report_type', 'filing_date', 'report_period_id', 'currency_id']
 
 # Mandatory columns
 mandatory_columns = {

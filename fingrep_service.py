@@ -15,7 +15,6 @@ import db_ops
 import edgar_service
 import finviz
 import forex
-import fundamentals
 import polygon
 import utils
 from db_ops import upsert_dataframe, get_foreign_keys, foreign_keys_cache
@@ -112,7 +111,7 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
     counter = 0
     fundamentals_dict = request_fundamentals(ticker=ticker)
     if fundamentals_dict is None:
-        time.sleep(3) #todo should I remove sleep here?
+        time.sleep(3)
         fundamentals_dict = request_fundamentals(ticker=ticker)
         if fundamentals_dict is None:
             logger.error(f"get_and_insert_fundamentals: Skipping fundamentals insertion for {ticker}")
@@ -144,8 +143,14 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
                 df = df[df['date'].dt.date == pd.Timestamp(period_ending).date()]
             if df.empty:
                 continue
-            # Add period, share_id and currency columns
-            df.loc[:, ['report_type', 'share_id', 'currency']] = 'q' if statement.endswith('_q') else 'a', share_id, fundamentals_dict['currency']
+            # Currency
+            if db_ops.foreign_keys_cache is None:
+                db_ops.get_foreign_keys()
+            currency_id = db_ops.foreign_keys_cache['currencies'].get(fundamentals_dict['currency'])
+            if currency_id is None:
+                logger.warning(f"Currency_id is None, yfinance provided currency: {fundamentals_dict['currency']}")
+            # Add report type, share_id and currency_id columns
+            df.loc[:, ['report_type', 'share_id', 'currency_id']] = 'q' if statement.endswith('_q') else 'a', share_id, currency_id
             # Table name
             table_name = statement.rstrip('_q')
             # Filter required columns
@@ -171,9 +176,9 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
                 .reset_index() # Date formation to prevent an error for forex.request_usd_currency_value
             )
             # Find the oldest row with non-null currency
-            oldest_non_null = df[df['currency'].notna()].sort_values('date', ascending=True).iloc[0]
-            # Apply this currency and share_id values to all rows where currency is None
-            df['currency'] = df['currency'].fillna(oldest_non_null['currency'])
+            oldest_non_null = df[df['currency_id'].notna()].sort_values('date', ascending=True).iloc[0]
+            # Apply this currency_id and share_id values to all rows where currency_id is None
+            df['currency_id'] = df['currency_id'].fillna(oldest_non_null['currency_id'])
             df['share_id'] = df['share_id'].fillna(oldest_non_null['share_id'])
             # Date must be str for the get_usd_exchange_rate function
             df['date'] = df['date'].dt.strftime('%Y-%m-%d')
@@ -186,11 +191,6 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
                 continue
             # Fill other columns for balance sheet and cash flow statements
             df = fill_calc_columns(df=df, table_name=table_name)
-            # Currency conversion
-            df['usd_exc'] = df.apply(lambda row: forex.get_usd_exchange_rate(row, date_column='date'), axis=1)
-            monetary_columns = df.columns.difference(utils.non_monetary_columns)
-            df[monetary_columns] = df[monetary_columns].div(df['usd_exc'], axis=0).mul(10000).round()
-            df.drop(columns=['usd_exc', 'currency'], inplace=True)
             # Calc report period
             df[['report_period_id', 'filing_date']] = df.apply(lambda row: calc_report_period_id_and_filing_date(row, date_filed_tuple, filing_date), axis=1)
             # Remove rows that aren't equal to the filing date
@@ -198,13 +198,16 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
                 df = df[df['filing_date'].dt.date == pd.Timestamp(filing_date).date()]
             if df.empty:
                 continue
+            # Magnification
+            monetary_columns = df.columns.difference(utils.non_monetary_columns)
+            df[monetary_columns] = df[monetary_columns].mul(10000).round(0)
             # Important for ratios trigger function
             df.sort_values(by=['date'], inplace=True, ascending=True)
             if upsert_dataframe(df, table_name): counter += 1
     except Exception as e:
         logger.error(f"get_and_insert_fundamentals - Error preparing for insert fundamentals for ticker {ticker}: {e}\n{traceback.format_exception(e)}")
     finally:
-        return counter >= 3
+        return counter % 3 == 0 if counter != 0 else False
 
 
 def get_and_insert_trading_info(cik: str, share_id: int, date: datetime.date):
@@ -318,6 +321,7 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
 # Separates data for shares and share_info tables
 def extract_ticker_details_v3(ticker_details, finviz_data):
     foreign_keys = db_ops.get_foreign_keys()
+
     ticker_data = {
         'ticker': ticker_details.get('ticker'),
         'cik': ticker_details.get('cik'),
@@ -431,7 +435,7 @@ def update_fundamentals():
     df_latest_filings = edgar_service.get_latest_filings()
     if df_latest_filings is not None and not df_latest_filings.empty:
         # Partially insert key financials
-        #df_latest_filings = df_latest_filings.head(20) #todo don't forget to remove this in prod
+        df_latest_filings = df_latest_filings.head(20) #todo don't forget to remove this in prod
         df_latest_filings.loc[:,['revenue', 'eps', 'net_income', 'avg_shares_outstanding', 'date', 'report_period_id', 'partially_inserted']] = df_latest_filings.apply(edgar_service.update_income_positions, axis=1)
         df_partial_insert = df_latest_filings[df_latest_filings['partially_inserted'] == True]
         df_cik = db_ops.get_ids_by_cik(df_partial_insert['cik'].values.tolist())
@@ -449,11 +453,10 @@ def update_fundamentals():
     # Delete filings older than a month
     db_ops.delete_fillings_older_than_month()
     # Update fundamentals
-    df_full_insert = db_ops.get_filings_older_than_four_days_and_before_last_sunday()
+    df_full_insert = db_ops.get_filings_for_full_insert()
     if not df_full_insert.empty:
         df_full_insert['period_ending'] = df_full_insert.apply(lambda row: get_period_ending_by_accession_number(accession_number=row['accession_number']),axis=1)
-        df_full_insert['fully_inserted'] = df_full_insert.apply(lambda row: get_and_insert_fundamentals(share_id=row['id'],
-                                        ticker=row['ticker'],cik=row['cik'], period_ending=row['period_ending'], period_ending_range_search=True, filing_date=row['filing_date']),axis=1)
+        df_full_insert['fully_inserted'] = df_full_insert.apply(lambda row: get_and_insert_fundamentals(share_id=row['id'],ticker=row['ticker'],cik=row['cik'],period_ending=row['period_ending'],period_ending_range_search=True,filing_date=row['filing_date']),axis=1)
         df_full_insert['full_insert_attempt_date'] = date.today().strftime('%Y-%m-%d')
         df_latest_filings = df_full_insert[df_full_insert['fully_inserted'] == True]
         df_latest_filings = df_latest_filings[['accession_number', 'cik', 'fully_inserted', 'full_insert_attempt_date', 'filing_date']]
