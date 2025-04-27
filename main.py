@@ -8,19 +8,19 @@ from ConnType import DBLocation
 from SSHTunnelManager import SSHTunnelManager
 from db_ops import get_existing_tickers, get_banned_tickers
 from config import logger
-from utils import get_formatted_utc_date
+from utils import get_utc_date
 
 
 def get_stock_data():
     # Get existing tickers, banned tickers and new daily data
     existing_tickers = get_existing_tickers()
     banned_tickers = get_banned_tickers()
-    df_grouped_daily = fingrep_service.get_grouped_daily_bars()
+    df_grouped_daily = fingrep_service.get_grouped_daily_bars(date_str=get_utc_date(config.DAYS))
     # Data frame for existing tickers
     df_grouped_daily['id'] = df_grouped_daily['T'].map(existing_tickers)
     df_grouped_daily_existing = df_grouped_daily.dropna(subset=['id'])
     # Importing data for existing tickers
-    fingrep_service.rename_and_insert_grouped_daily_bars(df_grouped_daily_existing.copy())
+    fingrep_service.insert_grouped_daily_bars(df_grouped_daily_existing.copy())
 
     # Data frame for new tickers
     df_grouped_daily_new = df_grouped_daily[df_grouped_daily['id'].isna()]
@@ -38,12 +38,12 @@ def get_stock_data():
         print(counter)
         counter += 1
 
-    # Update ATR and RSI for existing tickers
+    # Update RSI for existing tickers
     fingrep_service.update_rsi_existing_tickers()
 
     # Update market breadth
     if not config.mb_historical:
-        db_ops.update_market_breadth(get_formatted_utc_date())
+        db_ops.update_market_breadth(get_utc_date(days=config.DAYS))
     else:
         for i in range(100, 0, -1):
             date_str = datetime.utcnow() - timedelta(days=i)

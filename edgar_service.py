@@ -48,11 +48,6 @@ def get_latest_filings():
         # Drop unnecessary columns
         df_edgar.drop(columns=['company', 'form'], inplace=True)
         df_edgar[['partially_inserted', 'fully_inserted']] = False
-        # Check for duplicated accession number
-        duplicates = df_edgar['accession_number'].value_counts()[lambda x: x > 1].index.tolist()
-        if len(duplicates) > 0:
-            logger.warning(f"get_latest_filings: df_edgar has duplicated accession numbers: {duplicates} \n Fundamentals must be manually inserted.")
-        df_edgar.drop_duplicates(subset=['accession_number'], keep=False, inplace=True)
         # Remove already partially inserted and inserted rows
         if df_db is not None and not df_db.empty:
             partially_inserted_filings = df_db[df_db['partially_inserted'] == True]['accession_number'].tolist()
@@ -200,7 +195,7 @@ def get_company_facts(cik: str, retries: int = 3, delay: int = 5):
             if attempt < retries - 1:
                 time.sleep(delay)
             else:
-                logger.critical(f"Error getting company facts for CIK {cik}: {e}")
+                logger.warning(f"Error getting company facts for CIK {cik}: {e}")
     return None
 
 

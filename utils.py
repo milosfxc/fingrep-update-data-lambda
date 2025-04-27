@@ -1,6 +1,7 @@
 import re
-from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from typing import Union
+
 import config
 
 headers = {"User-Agent": "milosfxc@gmail.com"}
@@ -146,9 +147,9 @@ def remove_stock_suffix(input_string):
     pattern = r'(Class A Common Stock|Common Stock|Class A Ordinary Shares|Ordinary Shares|Ordinary Share)\s*(\(.+?\))?$'
     return re.sub(pattern, '', input_string).strip()
 
-def get_formatted_utc_date():
-    current_utc_date = datetime.utcnow() - timedelta(days=config.DAYS)
-    return current_utc_date.strftime("%Y-%m-%d")
+def get_utc_date(days: int = 0, as_str: bool = True) -> Union[str, datetime]:
+    current_utc_date = datetime.now(timezone.utc) - timedelta(days=days)
+    return current_utc_date.strftime("%Y-%m-%d") if as_str else current_utc_date
 
 
 def check_nan_ohlc(df):

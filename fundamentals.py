@@ -12,7 +12,14 @@ def request_fundamentals(ticker: str):
     try:
         ticker = yf.Ticker(ticker.replace('.', '-'))
         financials = dict()
-        financials['currency'] = ticker.info.get('financialCurrency')
+        currency = ticker.info.get('financialCurrency')
+        if currency is None:
+            currency = 'USD'
+            country = ticker.info.get('country', '').strip()
+            if country != 'United States':
+                logger.warning(f"Non-US ticker {ticker} (country: {country}) has no currency specified. \nDefaulting to USD. \nPlease verify currency manually.")
+
+        financials['currency'] = currency
         financials['balance_sheet'] = ticker.balance_sheet
         financials['income_statement'] = ticker.income_stmt
         financials['cash_flow'] = ticker.cash_flow

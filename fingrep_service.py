@@ -4,24 +4,23 @@ import traceback
 from datetime import datetime,date, timezone, timedelta
 import inspect
 import time
+from email.policy import default
+from shutil import which
 
-import numpy as np
 import pandas as pd
 import requests
-from fastcore.imports import df_equal
-
 import config
 import db_ops
 import edgar_service
 import finviz
-import forex
 import polygon
 import utils
-from db_ops import upsert_dataframe, get_foreign_keys, foreign_keys_cache
+from db_ops import upsert_dataframe, foreign_keys_cache
 from edgar_service import get_trading_info
 from fundamentals import request_fundamentals, get_period_ending_by_accession_number
 from ta_utils import rsi_tv_new_tickers, rsi_tv_existing_tickers
-from utils import mandatory_columns
+from utils import mandatory_columns, get_utc_date
+
 pd.set_option('display.max_rows', None)  # Show all rows
 pd.set_option('display.max_columns', None)  # Show all columns
 pd.set_option('display.width', None)  # To allow the console to use the full width
@@ -32,62 +31,62 @@ from config import logger
 def fill_calc_columns(df: pd.DataFrame, table_name: str):
     if table_name == 'balance_sheet':
         # Other non-current assets
-        equation = (df.get('current_assets', 0)
-                  - df.get('cash_and_short_term_investments',0)
-                  - df.get('net_receivables',0)
-                  - df.get('inventory',0))
-        cond = df.get('current_assets', 0) > equation
+        equation = (df.get('current_assets', pd.Series(data=0, index=df.index))
+                  - df.get('cash_and_short_term_investments',pd.Series(data=0, index=df.index))
+                  - df.get('net_receivables',pd.Series(data=0, index=df.index))
+                  - df.get('inventory',pd.Series(data=0, index=df.index)))
+        cond = df.get('current_assets', pd.Series(data=0, index=df.index)) > equation
         df.loc[cond, 'other_current_assets'] = equation
 
         # Other non-current assets
-        equation = (df.get('non_current_assets', 0)
-                  - df.get('property_plant_equipment_net',0)
-                  - df.get('goodwill',0)
-                  - df.get('intangible_assets',0)
-                  - df.get('long_term_investments',0)
-                  - df.get('non_current_deferred_assets',0))
-        cond = df.get('non_current_assets', 0) > equation
+        equation = (df.get('non_current_assets', pd.Series(data=0, index=df.index))
+                  - df.get('property_plant_equipment_net', pd.Series(data=0, index=df.index))
+                  - df.get('goodwill', pd.Series(data=0, index=df.index))
+                  - df.get('intangible_assets', pd.Series(data=0, index=df.index))
+                  - df.get('long_term_investments', pd.Series(data=0, index=df.index))
+                  - df.get('non_current_deferred_assets', pd.Series(data=0, index=df.index)))
+        cond = df.get('non_current_assets', pd.Series(data=0, index=df.index)) > equation
         df.loc[cond, 'other_non_current_assets'] = equation
         
         # Calc other current liabilities
-        equation = (df.get('current_liabilities', 0)
-                   - df.get('payables_and_expenses',0)
-                   - df.get('short_term_debt', 0))
-        cond = df.get('current_liabilities', 0) > equation
+        equation = (df.get('current_liabilities', pd.Series(data=0, index=df.index))
+                   - df.get('payables_and_expenses',pd.Series(data=0, index=df.index))
+                   - df.get('short_term_debt', pd.Series(data=0, index=df.index)))
+        cond = df.get('current_liabilities', pd.Series(data=0, index=df.index)) > equation
         df.loc[cond, 'other_current_liabilities'] = equation
 
         # Calc other non-current liabilities
-        equation = df.get('non_current_liabilities', 0) - df.get('long_term_debt', 0)
-        cond = df.get('non_current_liabilities', 0) > equation
+        equation = df.get('non_current_liabilities', pd.Series(data=0, index=df.index)) - df.get('long_term_debt', pd.Series(data=0, index=df.index))
+        cond = df.get('non_current_liabilities', pd.Series(data=0, index=df.index)) > equation
         df.loc[cond, 'other_non_current_liabilities'] = equation
 
         return df
     elif table_name == 'cash_flow':
         # Calc other operating activities
-        equation = (df.get('operating_cash_flow', 0)
-                    - df.get('operating_net_income', 0)
-                    - df.get('operating_gains_losses', 0)
-                    - df.get('operating_da', 0)
-                    - df.get('deferred_income_tax', 0)
-                    - df.get('share_based_compensation', 0)
-                    - df.get('change_working_capital', 0))
-        cond = df.get('operating_cash_flow', 0) > equation
+        equation = (df.get('operating_cash_flow', pd.Series(data=0, index=df.index))
+                    - df.get('operating_net_income', pd.Series(data=0, index=df.index))
+                    - df.get('operating_gains_losses', pd.Series(data=0, index=df.index))
+                    - df.get('operating_da', pd.Series(data=0, index=df.index))
+                    - df.get('deferred_income_tax', pd.Series(data=0, index=df.index))
+                    - df.get('share_based_compensation', pd.Series(data=0, index=df.index))
+                    - df.get('change_working_capital', pd.Series(data=0, index=df.index)))
+        cond = df.get('operating_cash_flow', pd.Series(data=0, index=df.index)) > equation
         df.loc[cond, 'other_operating_activities'] = equation
         # Calc other investing activities
-        equation = (df.get('investing_cash_flow', 0)
-                    - df.get('capital_expenditure', 0)
-                    - df.get('investments_PPE', 0)
-                    - df.get('acquisitions_net', 0)
-                    - df.get('purchases_of_investments', 0))
-        cond = df.get('investing_cash_flow', 0) > equation
+        equation = (df.get('investing_cash_flow', pd.Series(data=0, index=df.index))
+                    - df.get('capital_expenditure', pd.Series(data=0, index=df.index))
+                    - df.get('investments_PPE', pd.Series(data=0, index=df.index))
+                    - df.get('acquisitions_net', pd.Series(data=0, index=df.index))
+                    - df.get('purchases_of_investments', pd.Series(data=0, index=df.index)))
+        cond = df.get('investing_cash_flow', pd.Series(data=0, index=df.index)) > equation
         df.loc[cond, 'other_investing_activities'] = equation
         # Calc other financing activities
-        equation = (df.get('financing_cash_flow',0)
-                     - df.get('net_debt_issuance',0)
-                     - df.get('net_common_shares_issued',0)
-                     - df.get('net_preferred_shares_issued',0)
-                     - df.get('dividends_paid',0))
-        cond = df.get('financing_cash_flow',0) > equation
+        equation = (df.get('financing_cash_flow', pd.Series(data=0, index=df.index))
+                     - df.get('net_debt_issuance', pd.Series(data=0, index=df.index))
+                     - df.get('net_common_shares_issued', pd.Series(data=0, index=df.index))
+                     - df.get('net_preferred_shares_issued', pd.Series(data=0, index=df.index))
+                     - df.get('dividends_paid',pd.Series(data=0, index=df.index)))
+        cond = df.get('financing_cash_flow', pd.Series(data=0, index=df.index)) > equation
         df.loc[cond, 'other_financing_activities'] = equation
         # Calc change in cash
         if 'end_cash_balance' in df.columns and 'beginning_cash_balance' in df.columns:
@@ -97,11 +96,11 @@ def fill_calc_columns(df: pd.DataFrame, table_name: str):
         return df
     else:
         # Calc other operating expenses
-        equation = (df.get('operating_expenses',0)
-                     - df.get('general_and_administrative_expenses',0)
-                     - df.get('depreciation_amortization_depletion',0)
-                     - df.get('research_and_development_expenses',0))
-        cond = df.get('operating_expenses',0) > equation
+        equation = (df.get('operating_expenses', pd.Series(0, index=df.index))
+                     - df.get('general_and_administrative_expenses', pd.Series(0, index=df.index))
+                     - df.get('depreciation_amortization_depletion', pd.Series(0, index=df.index))
+                     - df.get('research_and_development_expenses', pd.Series(0, index=df.index)))
+        cond = df.get('operating_expenses', pd.Series(0, index=df.index)) > equation
         df.loc[cond, 'other_operating_expenses'] = equation
 
         return df
@@ -148,7 +147,7 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
                 db_ops.get_foreign_keys()
             currency_id = db_ops.foreign_keys_cache['currencies'].get(fundamentals_dict['currency'])
             if currency_id is None:
-                logger.warning(f"Currency_id is None, yfinance provided currency: {fundamentals_dict['currency']}")
+                logger.warning(f"Currency_id is None for currency symbol {fundamentals_dict['currency']} for ticker {ticker}")
             # Add report type, share_id and currency_id columns
             df.loc[:, ['report_type', 'share_id', 'currency_id']] = 'q' if statement.endswith('_q') else 'a', share_id, currency_id
             # Table name
@@ -189,6 +188,9 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
             df.dropna(subset=utils.mandatory_columns[table_name], inplace=True)
             if df.empty:
                 continue
+            # Convert all numeric columns to float, dolt is using decimal type and yfinance float so there is a mismatch
+            cols_to_float = df.columns.difference(['date', 'report_type'])
+            df[cols_to_float] = df[cols_to_float].astype(float)
             # Fill other columns for balance sheet and cash flow statements
             df = fill_calc_columns(df=df, table_name=table_name)
             # Calc report period
@@ -206,6 +208,7 @@ def get_and_insert_fundamentals(share_id: int, ticker: str, cik: str, period_end
             if upsert_dataframe(df, table_name): counter += 1
     except Exception as e:
         logger.error(f"get_and_insert_fundamentals - Error preparing for insert fundamentals for ticker {ticker}: {e}\n{traceback.format_exception(e)}")
+        logger.error(f"Dataframe for table_name = {table_name}:\n{df}")
     finally:
         return counter % 3 == 0 if counter != 0 else False
 
@@ -230,20 +233,21 @@ def call_and_update_market_breadth(date):
     db_ops.update_market_breadth(date)
 
 
-def get_grouped_daily_bars():
-
-        data = polygon.request_grouped_daily_bars()
+def get_grouped_daily_bars(date_str: str) -> pd.DataFrame:
+        data = polygon.request_grouped_daily_bars(date=date_str)
+        if data['resultsCount'] == 0:
+            return pd.DataFrame()
         df = pd.DataFrame(data['results'])
         # Checks resultsCount and the actual results array length
-        method_name = inspect.currentframe().f_code.co_name
         row_count = len(df)
-        if row_count < 8000:
-            logger.warning(f"{method_name}: request_grouped_daily_bars has returned {row_count}.")
+        if row_count < 9000:
+            logger.critical(f"Request_grouped_daily_bars has returned {row_count} and expected at least 9000. Exiting the script.",stack_info=True)
+            sys.exit(1)
         # Removes rows that contain at least one NaN OHLC value
         tickers_with_nan = df.loc[df[['o', 'h', 'l', 'c']].isna().any(axis=1), 'T'].tolist()
         if tickers_with_nan:
-            logger.warning(f"{method_name}: The following tickers had at least one NaN OHLC value on the date ", datetime.utcnow(), ":",
-                  tickers_with_nan)
+            logger.warning(f": The following tickers had at least one NaN OHLC value on the date {get_utc_date(days=config.DAYS)}: ",
+                           tickers_with_nan)
         # Volume column conversion to integer
         df['v'] = df['v'].astype(int)
         return df
@@ -271,7 +275,7 @@ def get_and_insert_aggregated_bars(ticker, ticker_id, date_from, limit):
     db_ops.upsert_dataframe_v2(df_aggregated_daily, 'd_timeframe')
 
 
-def rename_and_insert_grouped_daily_bars(df):
+def insert_grouped_daily_bars(df):
     df['date'] = pd.to_datetime(df['t'], unit='ms').dt.date
     df = df.drop(['T', 'n', 't'], axis=1)
     df['id'] = df['id'].astype(int)
@@ -320,28 +324,29 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
 
 # Separates data for shares and share_info tables
 def extract_ticker_details_v3(ticker_details, finviz_data):
-    foreign_keys = db_ops.get_foreign_keys()
+    if foreign_keys_cache is None:
+        db_ops.get_foreign_keys()
 
     ticker_data = {
         'ticker': ticker_details.get('ticker'),
         'cik': ticker_details.get('cik'),
         'name': utils.remove_stock_suffix(ticker_details.get('name')),
-        'exchange_id': foreign_keys['exchanges'].get(ticker_details.get('primary_exchange')),
-        'currency_id': foreign_keys['currencies'].get(ticker_details.get('currency_name').upper()),
+        'exchange_id': db_ops.foreign_keys_cache['exchanges'].get(ticker_details.get('primary_exchange')),
         'homepage_url': ticker_details.get('homepage_url'),
         'ipo_date': ticker_details.get('list_date'),
-        'share_type_id': foreign_keys['share_types'].get(ticker_details.get('type')),
+        'share_type_id': db_ops.foreign_keys_cache['share_types'].get(ticker_details.get('type')),
+        'composite_figi': ticker_details.get('composite_figi'),
         'shares_outstanding': ticker_details.get('share_class_shares_outstanding'),
         'weighted_shares_outstanding': ticker_details.get('weighted_shares_outstanding'),
-        'sector_id': foreign_keys['sectors'].get(finviz_data.get('sector')),
-        'industry_id': foreign_keys['industries'].get(finviz_data.get('industry')),
-        'country_id': foreign_keys['countries'].get(finviz_data.get('country'))
+        'sector_id': db_ops.foreign_keys_cache['sectors'].get(finviz_data.get('sector')),
+        'industry_id': db_ops.foreign_keys_cache['industries'].get(finviz_data.get('industry')),
+        'country_id': db_ops.foreign_keys_cache['countries'].get(finviz_data.get('country'))
     }
 
     shares = {key: value for key, value in ticker_data.items() if
-              key not in ['weighted_shares_outstanding', 'ipo_date', 'shares_outstanding', 'cik', 'homepage_url']}
+              key not in ['weighted_shares_outstanding', 'ipo_date', 'shares_outstanding', 'cik', 'homepage_url', 'composite_figi']}
     shares_info = {key: ticker_data[key] for key in
-                   ['weighted_shares_outstanding', 'ipo_date', 'shares_outstanding', 'cik', 'homepage_url']}
+                   ['weighted_shares_outstanding', 'ipo_date', 'shares_outstanding', 'cik', 'homepage_url', 'composite_figi']}
 
     return shares, shares_info
 
@@ -435,7 +440,7 @@ def update_fundamentals():
     df_latest_filings = edgar_service.get_latest_filings()
     if df_latest_filings is not None and not df_latest_filings.empty:
         # Partially insert key financials
-        df_latest_filings = df_latest_filings.head(20) #todo don't forget to remove this in prod
+        #df_latest_filings = df_latest_filings.head(20) #todo don't forget to remove this in prod
         df_latest_filings.loc[:,['revenue', 'eps', 'net_income', 'avg_shares_outstanding', 'date', 'report_period_id', 'partially_inserted']] = df_latest_filings.apply(edgar_service.update_income_positions, axis=1)
         df_partial_insert = df_latest_filings[df_latest_filings['partially_inserted'] == True]
         df_cik = db_ops.get_ids_by_cik(df_partial_insert['cik'].values.tolist())
@@ -461,3 +466,19 @@ def update_fundamentals():
         df_latest_filings = df_full_insert[df_full_insert['fully_inserted'] == True]
         df_latest_filings = df_latest_filings[['accession_number', 'cik', 'fully_inserted', 'full_insert_attempt_date', 'filing_date']]
         db_ops.upsert_latest_filings(df_latest_filings, upsert_fully_inserted_and_attempt_date=True)
+
+
+def get_prev_grouped_daily_bars():
+    for i in range(1,10):
+        prev_date = get_utc_date(days=config.DAYS + i, as_str=False)
+        if prev_date.weekday() in (5, 6):
+            continue
+        df = get_grouped_daily_bars(date_str=prev_date.strftime("%Y-%m-%d"))
+        if not df.empty:
+            return df
+    logger.critical(f"Couldn't obtain previous day grouped daily data. Exiting the script.", exc_info=True)
+    sys.exit(1)
+
+def get_all_tickers(date_str: str):
+    return polygon.request_all_tickers(date=date_str)
+

@@ -336,14 +336,14 @@ def upsert_latest_filings(df: pd.DataFrame, upsert_fully_inserted_and_attempt_da
         upsert_query = f"""
             INSERT INTO latest_filings ({', '.join(df.columns)}) 
             VALUES %s
-            ON CONFLICT (accession_number) DO UPDATE 
+            ON CONFLICT (accession_number, cik) DO UPDATE 
             SET partially_inserted = EXCLUDED.partially_inserted;
         """
     else:
         upsert_query = f"""
             INSERT INTO latest_filings ({', '.join(df.columns)}) 
             VALUES %s
-            ON CONFLICT (accession_number) DO UPDATE 
+            ON CONFLICT (accession_number, cik) DO UPDATE 
             SET fully_inserted = EXCLUDED.fully_inserted, 
             full_insert_attempt_date = EXCLUDED.full_insert_attempt_date;
         """

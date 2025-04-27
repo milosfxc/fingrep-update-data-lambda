@@ -2,13 +2,16 @@ import datetime
 
 import edgar
 import pandas as pd
+import yfinance as yf
 from edgar import get_filings, Company
 
 import config
 import db_ops
 import edgar_service
 import fingrep_service
+import polygon
 from fundamentals import get_period_ending_by_accession_number
+from utils import get_utc_date
 
 # Set pandas to display all rows and columns
 pd.set_option('display.max_rows', None)  # Show all rows
@@ -21,7 +24,7 @@ if __name__ == '__main__':
     #print(db_ops.get_dolt_statement('ADC','income_statement', False))
     #print(fingrep_service.get_and_insert_fundamentals(799, 'NWTG', '1934245'))
     #print(db_ops.get_id_and_cik())
-    fingrep_service.update_fundamentals()
+    #fingrep_service.update_fundamentals()
     #print(db_ops.get_ids_by_by_cik(['1690080', '1650648']))
     #df_full_insert = db_ops.get_filings_older_than_four_days_and_before_last_sunday()
     # if not df_full_insert.empty:
@@ -49,3 +52,27 @@ if __name__ == '__main__':
     #print(c)
     #print(edgar_service.get_filing_currency('30737400000', c))
     #print(get_filings(filing_date='2024-05-28',form='6-K'))
+    # df = fingrep_service.get_grouped_daily_bars(get_utc_date(days=config.DAYS))
+    # df_prev = fingrep_service.get_prev_grouped_daily_bars()
+    # # Find tickers that aren't in df_prev
+    #
+    # new_tickers = df[~df['T'].isin(df_prev['T'])]
+    # df = fingrep_service.get_grouped_daily_bars(date_str=get_utc_date(days=config.DAYS))
+    # df_prev = fingrep_service.get_prev_grouped_daily_bars()
+    # df_diff = df[~df['T'].isin(df_prev['T'])]
+    # df_all = pd.DataFrame(fingrep_service.get_all_tickers(date_str=get_utc_date(days=config.DAYS)))# join this dataframe with df_diff, join by column t.
+    # df_all.rename(columns={'ticker':'T'}, inplace=True)
+    # merged_df = pd.merge(
+    #     df_diff,
+    #     df_all,
+    #     on='T',  # Join key (ticker column)
+    #     how='left'  # Keep all rows from df_diff, add matching data from df_all
+    # )
+    # print(merged_df[['T', 'composite_figi', 'cik', 'type']])
+    # ticker = yf.Ticker('VGI')
+    # print(ticker.info.get('x', '').strip())
+    #fingrep_service.get_and_insert_fundamentals(610, 'VIOT','1742770')
+    df = get_filings(form=['10-K', '10-Q', '20-F', '6-K'], filing_date='2025-04-25', amendments=False).to_pandas()
+    duplicates = df['accession_number'].value_counts()[lambda x: x > 1].index.tolist()
+    print(duplicates)
+    print(df)
