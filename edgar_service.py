@@ -62,6 +62,9 @@ def get_latest_filings():
 def update_income_positions(row):
     accession_number = row['accession_number']
     cols = ['revenue', 'eps', 'net_income', 'avg_shares_outstanding', 'date', 'report_period_id', 'partially_inserted']
+    if pd.isna(row['share_id']):
+        logger.info(f"Returning None, no matching share_id for company with CIK {row['cik']}")
+        return pd.Series(data=[None, None, None, None, None, None, False],index=cols)
     filing = get_by_accession_number(accession_number=accession_number)
     if filing is None or not hasattr(filing, 'period_of_report'):
         logger.info(f"Couldn't get filing or period_or_report for the filing accession number: {accession_number}")
@@ -75,7 +78,7 @@ def update_income_positions(row):
     try:
         df_filing = filing.obj().financials.get_income_statement().get_dataframe()
     except Exception as e:
-        logger.info(f"Unexpected error processing filing {accession_number}: {str(e)}", exc_info=True)
+        logger.info(f"Unexpected error processing filing {accession_number} CIK {row['cik']}: {str(e)}", exc_info=True)
         return pd.Series(data=[None, None, None, None, None, None, False],index=cols)
     if df_filing.empty:
         return pd.Series(data=[None, None, None, None, None, None, False],index=cols)

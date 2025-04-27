@@ -441,17 +441,16 @@ def update_fundamentals():
     if df_latest_filings is not None and not df_latest_filings.empty:
         # Partially insert key financials
         #df_latest_filings = df_latest_filings.head(20) #todo don't forget to remove this in prod
-        df_latest_filings.loc[:,['revenue', 'eps', 'net_income', 'avg_shares_outstanding', 'date', 'report_period_id', 'partially_inserted']] = df_latest_filings.apply(edgar_service.update_income_positions, axis=1)
+        df_cik = db_ops.get_ids_by_cik(df_latest_filings['cik'].unique().tolist())
+        df_latest_filings = pd.merge(df_latest_filings,df_cik, how='left', on='cik')
+        df_latest_filings.loc[:,['revenue', 'eps', 'net_income', 'avg_shares_outstanding', 'date', 'report_period_id', 'partially_inserted']] = (
+            df_latest_filings.apply(edgar_service.update_income_positions, axis=1))
         df_partial_insert = df_latest_filings[df_latest_filings['partially_inserted'] == True]
-        df_cik = db_ops.get_ids_by_cik(df_partial_insert['cik'].values.tolist())
-        if df_cik:
-            df_cik = pd.DataFrame(df_cik)
-            df_partial_insert = pd.merge(df_partial_insert, df_cik, how='inner', on = 'cik')
-            is_inserted = db_ops.upsert_dataframe(df_partial_insert[df_partial_insert.columns.difference(['cik', 'accession_number', 'fully_inserted'])],'income_statement')
-            if is_inserted:
-                df_latest_filings['partially_inserted'] = df_latest_filings['cik'].map(df_partial_insert.set_index('cik')['partially_inserted']).fillna(False)
+        is_inserted = db_ops.upsert_dataframe(df_partial_insert[df_partial_insert.columns.difference(['cik', 'accession_number', 'fully_inserted'])],'income_statement')
+        if is_inserted:
+            df_latest_filings['partially_inserted'] = df_latest_filings['cik'].map(df_partial_insert.set_index('cik')['partially_inserted']).fillna(False)
         # Upsert latest filings
-        df_latest_filings.drop(columns=['revenue', 'eps', 'net_income', 'report_type', 'date', 'report_period_id', 'avg_shares_outstanding'], inplace=True)
+        df_latest_filings.drop(columns=['revenue', 'eps', 'net_income', 'report_type', 'date', 'report_period_id', 'avg_shares_outstanding', 'share_id'], inplace=True)
         db_ops.upsert_latest_filings(df=df_latest_filings)
     else:
         logger.warning('update_fundamentals: no latest filings to update')
