@@ -129,13 +129,21 @@ pg_tables = {
     'income_statement': pg_income_statement_columns,
     'cash_flow': pg_cash_flow_columns,
 }
+balance_sheet_gaap = ['us-gaap:AssetsCurrent', 'us-gaap:CashAndCashEquivalentsAtCarryingValue', 'us-gaap:Cash',
+                           'us-gaap:RestrictedCashAndCashEquivalentsAtCarryingValue', 'us-gaap:RestrictedCash',
+                           'us-gaap:ShortTermInvestments', 'us-gaap:AvailableForSaleSecuritiesDebtSecuritiesCurrent', 'us-gaap:AccountsReceivableNetCurrent', 'us-gaap:InventoryNet']
+balance_sheet_ifrs = ['ifrs-full:CurrentAssets', 'ifrs-full:CashAndCashEquivalents', 'ifrs-full:Cash', 'ifrs-full:TradeAndOtherCurrentReceivables', 'ifrs-full:Inventories']
 
+income_statement = ['us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax', 'us-gaap:CostOfGoodsAndServicesSold', 'us-gaap:GrossProfit', 'us-gaap:EarningsPerShareBasic', 'us-gaap:EarningsPerShareDiluted']
+xbrl_tags = {
+    'us-gaap': {'balance_sheet': balance_sheet_gaap, 'income_statement': income_statement}, # 'cash_flow': None},
+    'ifrs-full': {'balance_sheet': balance_sheet_ifrs}#, 'income_statement': None, 'cash_flow': None}
+}
 
 edgar_company_facts_positions_path = {
     'EntityCommonStockSharesOutstanding': ['facts', 'dei', 'EntityCommonStockSharesOutstanding', 'units', 'shares'],
     'CommonStockSharesOutstanding': ['facts', 'us-gaap', 'CommonStockSharesOutstanding', 'units', 'shares'],
     'Assets': ['facts', 'us-gaap', 'Assets', 'units', 'USD'],
-
 }
 
 allowed_share_type_ids = [1, 6, 10, 14, 17, 18, 19, 21, 24]

@@ -7,7 +7,7 @@ import fingrep_service
 from ConnType import DBLocation
 from SSHTunnelManager import SSHTunnelManager
 from db_ops import get_existing_tickers, get_banned_tickers
-from config import logger
+from config import logger, update_fundamentals
 from utils import get_utc_date
 
 
@@ -64,7 +64,8 @@ def get_stock_data():
                 logger.error(f"Couldn't delete and reinsert ticker {ticker} for stock split.")
 
     # Update fundamentals
-    fingrep_service.update_fundamentals()
+    if update_fundamentals:
+        fingrep_service.update_fundamentals()
 
 
 

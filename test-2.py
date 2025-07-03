@@ -10,13 +10,16 @@ pd.set_option('display.width', None)  # To allow the console to use the full wid
 import db_ops
 
 if __name__ == '__main__':
-
+    ans = {'currency': None}
+    if all(key in ans for key in ['currency', 'period_end']):
+        print(True)
+    data = {
+        'cik': 10,
+        'other_column': 'C',
+        'partially_inserted':False
+    }
     # Sample df1
-    df1 = pd.DataFrame({
-        'cik': [101, 102, 103],
-        'other_column': ['A', 'B', 'C'],
-        'partially_inserted': [False, False, False]
-    })
+    df1 = pd.DataFrame( data={'value': data.values()}, index=[x for x in data.keys()])
 
     # Sample df2
     df2 = pd.DataFrame({
@@ -24,7 +27,5 @@ if __name__ == '__main__':
         'partially_inserted': [True, False, True]
     })
 
-    # Apply the mapping
-    df1['partially_inserted'] = df1['cik'].map(df2.set_index('cik')['partially_inserted'])
 
     print(df1)
