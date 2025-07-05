@@ -206,3 +206,9 @@ report_periods = {'2020': 1, '2020q1': 2, '2020q2': 3, '2020q3': 4, '2020q4': 5,
 
 report_types_id = {'a': 1, 'q': 2}
 form_report_type = {'10-K': 'a', '10-Q': 'q', '20-F': 'a', '6-K': 'q'}
+
+current_assets_list = ['cash_and_short_term_investments', 'cash_and_cash_equivalents', 'short_term_investments', 'net_receivables', 'inventory', 'other_current_assets']
+non_current_assets_list = ['property_plant_equipment_net', 'goodwill', 'intangible_assets', 'long_term_investments', 'non_current_deferred_assets', 'other_non_current_assets']
+current_liabilities_list = ['payables_and_expenses', 'account_payables', 'accrued_liabilities_current', 'short_term_debt', 'other_current_liabilities']
+non_current_liabilities_list = ['long_term_debt', 'other_non_current_liabilities']
+equity_list = ['minority_interest', 'shareholders_equity', 'capital_stock', 'share_premium', 'retained_earnings', 'treasury_shares', 'accumulated_other_comprehensive_income_loss']

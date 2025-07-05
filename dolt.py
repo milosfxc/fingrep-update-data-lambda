@@ -4,6 +4,7 @@ import json
 import edgar
 import pandas as pd
 import yfinance as yf
+from PIL.XbmImagePlugin import XbmImageFile
 from edgar import get_filings, Company, XBRL
 from edgar.xbrl.stitching import XBRLS
 
@@ -70,13 +71,22 @@ if __name__ == '__main__':
     #                  .by_value(lambda x: x > 1_000_000)
     #                  .sort_by('value', ascending=False)
     #                  .limit(10))
-    filing = Company('CVNA').latest('10-K')
-    df = filing.xbrl().statements.income_statement()#.xbrl().query().by_statement_type('IncomeStatement').by_instant_date().by_date_range('2023-07-01', '2024-06-30').by_dimension(None).by_value(11.86).to_dataframe()
-    df = df.to_dataframe()
-    df = pd.to_numeric(df[filing.period_of_report], errors='coerce').dropna()
+    filing = Company('AAL').latest('10-K')
+    statements = fundamentals.get_filing_details_v2(filing.accession_number,1)
+    for stmt in statements.values():
+        print(stmt.T)
+    #df_bc = filing.xbrl().statements.balance_sheet().to_dataframe()
+    #print(df_bc[['label', 'concept', '2024-12-31']])
+    # df_is = filing.xbrl().statements.income_statement().to_dataframe()
+    # df_cf = filing.xbrl().statements.cashflow_statement().to_dataframe()
 
+    # print(fundamentals.get_statement(filing,'IncomeStatement',df_is,'us-gaap','2023-07-01', '2024-06-30').T)
+    # print(fundamentals.get_statement(filing,'CashFlowStatement',df_cf,'us-gaap','2023-07-01', '2024-06-30').T)
+    #df = filing.xbrl().statements.income_statement()#.xbrl().query().by_statement_type('IncomeStatement').by_instant_date().by_date_range('2023-07-01', '2024-06-30').by_dimension(None).by_value(11.86).to_dataframe()
+    #df = df.to_dataframe()
+    #df = pd.to_numeric(df[filing.period_of_report], errors='coerce').dropna()
     #print(fundamentals.get_period_start(filing))
-    print(fundamentals.get_period_start_and_currency(filing))
+    #print(fundamentals.get_statement(filing, 'CashFlowStatement', df, 'us-gaap', '2023-07-01', '2024-06-30').T)
 
 
     # df = Company('AAL').latest('10-K').xbrl().query(include_dimensions=True).by_dimension(None).by_instant_date('2024-12-31').by_concept("us-gaap:Assets",exact=True).to_dataframe()
@@ -162,7 +172,8 @@ if __name__ == '__main__':
     # cashflow_trend = stitched_statements.cashflow_statement()
     # print(income_trend.to_dataframe().to_csv())
     # print(utils.pg_income_statement_columns.values())
-    #tag_map_1 = xbrl_utils.get_all_children('loc_CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsIncludingDisposalGroupAndDiscontinuedOperationsAbstract', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-scf-dbo-pre-2025.xml', 'presentationArc')
+    tag_map_1 = xbrl_utils.get_all_children('loc_InventoryNet', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-sfp-cls-cal-2025.xml', 'presentationArc')
+    print(tag_map_1)
     # tag_map_2 = xbrl_utils.get_all_children_v2('loc_NetCashProvidedByUsedInInvestingActivitiesAbstract', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-scf-indir-pre-2025.xml', 'presentationArc')
     # tag_map_3 = xbrl_utils.get_all_children_v2('loc_NetCashProvidedByUsedInInvestingActivitiesAbstract', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-scf-indira-pre-2025.xml', 'presentationArc')
     # tag_map_add = xbrl_utils.get_all_children_v2('loc_AdditionalCashFlowElementsFinancingActivitiesAbstract', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-scf-indira-pre-2025.xml', 'presentationArc')

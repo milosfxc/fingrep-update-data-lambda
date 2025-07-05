@@ -124,9 +124,20 @@ def calc_revenue(revenues):
     return total_revenue # returns total revenue if none of the revenues is aggregate
 
 if __name__ == "__main__":
-    # fingrep_service.get_and_insert_fundamentals(share_id=136,ticker='DHAI',cik='1883788')
-    # tenk = Company("NWTG").get_filings(form="10-K").latest(1)
-    # financials = tenk.financials
-    # print(financials.get_income_statement().get_dataframe())
-    filing = get_by_accession_number('0001104659-24-119521').attachments[2].download()#.financials.get_income_statement().get_dataframe()
-    print(filing)
+    import pandas as pd
+    import numpy as np
+
+    # Sample data with a mix of strings, NaN, and already correct values
+    df_stmt = pd.DataFrame({
+        'concept': ['us-gaap:Assets', 'ifrs:Revenue', np.nan, 'custom:Tag', None, 'no_colon']
+    })
+
+    print("Before replacement:")
+    print(df_stmt)
+
+    # Apply your replacement
+    df_stmt['concept'] = df_stmt['concept'].str.replace(':', '_', regex=False)
+
+    print("\nAfter replacement:")
+    print(df_stmt)
+

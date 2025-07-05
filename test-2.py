@@ -10,9 +10,7 @@ pd.set_option('display.width', None)  # To allow the console to use the full wid
 import db_ops
 
 if __name__ == '__main__':
-    ans = {'currency': None}
-    if all(key in ans for key in ['currency', 'period_end']):
-        print(True)
+
     data = {
         'cik': 10,
         'other_column': 'C',
@@ -28,4 +26,8 @@ if __name__ == '__main__':
     })
 
 
-    print(df1)
+    x = 0
+    if x:
+        print('hello')
+    else:
+        print('Hallo')
