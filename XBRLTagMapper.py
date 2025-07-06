@@ -36,6 +36,7 @@ balance_sheet_gaap = {
                               'us-gaap:CryptoAssetFairValueNoncurrent'},
     'non_current_deferred_assets': {'us-gaap:DeferredIncomeTaxAssetsNet'},
     'other_non_current_assets': None, # Calculated
+    'liabilities_and_equity': {'us-gaap:LiabilitiesAndStockholdersEquity'}, # delete during balance_sheet validation
     'liabilities': {'us-gaap:Liabilities'},
     'current_liabilities': {'us-gaap:LiabilitiesCurrent'},
     'payables_and_expenses': {'us-gaap:AccountsPayableAndAccruedLiabilitiesCurrent'},
@@ -74,6 +75,7 @@ balance_sheet_gaap = {
                                                     'us-gaap:AociLossCashFlowHedgeCumulativeGainLossAfterTax', 'us-gaap:AccumulatedOtherComprehensiveIncomeLossForeignCurrencyTranslationAdjustmentNetOfTax',
                                                     'us-gaap:AociDerivativeQualifyingAsHedgeExcludedComponentAfterTax', 'us-gaap:AccumulatedOtherComprehensiveIncomeLossFinancialLiabilityFairValueOptionAfterTax',
                                                     'us-gaap:AociMarketRiskBenefitInstrumentSpecificCreditRiskAfterTax', 'us-gaap:AccumulatedOtherComprehensiveIncomeLossNetOfTax'}
+
 }
 
 income_statement_gaap = {
@@ -139,12 +141,15 @@ income_statement_gaap = {
     'other_operating_expenses': None, # Calculated
     'operating_income': {'us-gaap:OperatingIncomeLoss'},
     'other_income': {'us-gaap:OtherNonoperatingIncomeExpense'}, # todo new column
-    'ebt': {'us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest'},
+    'ebt': {'us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest', 'us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments'},
+    'income_equity_method_investments': {'us-gaap:IncomeLossFromEquityMethodInvestments'},
     'interest_expense': {'us-gaap:InterestExpense', 'us-gaap:InterestAndDebtExpense', 'us-gaap:InterestExpenseNonoperating'},
     'ebit': None, # Calculated
     'reconciled_deprecation': None, # todo you need to find this value from cf stmt and maybe it's better to name it 'dda'. This is from cf us-gaap:DepreciationDepletionAndAmortization, us-gaap:DepreciationAndAmortization
     'ebitda': None, # Calculated
     'income_tax': {'us-gaap:IncomeTaxExpenseBenefit'},
+    'net_income_including_non_controlling_interests': {'us-gaap:ProfitLoss'}, # todo new column
+    'net_income_non_controlling_interests': {'us-gaap:NetIncomeLossAttributableToNoncontrollingInterest'}, # todo new column
     'net_income': {'us-gaap:NetIncomeLoss'},
     'eps': {'us-gaap:EarningsPerShareBasic'}, # todo rename column name 'eps_basic'
     'diluted_eps': {'us-gaap:EarningsPerShareDiluted'},
@@ -266,15 +271,15 @@ cash_flow_gaap = {
                      'us-gaap:IncreaseDecreaseInFederalFundsPurchasedAndSecuritiesSoldUnderAgreementsToRepurchaseNet', 'us-gaap:ProceedsFromRepaymentsOfLinesOfCredit', 'us-gaap:ProceedsFromIssuanceOfDebt', 'us-gaap:ProceedsFromRepaymentsOfCommercialPaper', 'us-gaap:ProceedsFromIssuanceOfCommercialPaper',
                      'us-gaap:RepaymentsOfFederalHomeLoanBankBorrowings', 'us-gaap:ProceedsFromFederalHomeLoanBankBorrowings', 'us-gaap:MaturitiesOfSeniorDebt', 'us-gaap:RepaymentsOfDebtAndCapitalLeaseObligations', 'us-gaap:IncreaseDecreaseInOutstandingChecksFinancingActivities',
                      'us-gaap:ProceedsFromIssuanceOfMediumTermNotes', 'us-gaap:RepaymentsOfMediumTermNotes', 'us-gaap:FinanceLeasePrincipalPayments', 'us-gaap:ProceedsFromPaymentsForInSecuritiesSoldUnderAgreementsToRepurchase'},
-    'debt_issued': None,
-    'debt_repayment': None,
+    'debt_issued': None, # Calculated
+    'debt_repayment': None, # Calculated
     # Additional fields
     'free_cash_flow': None, # Calculated
-    'beginning_cash_balance': {'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents',
+    'start_cash_balance': {'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents', # todo rename column
                                'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsIncludingDisposalGroupAndDiscontinuedOperations',
                                'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsDisposalGroupIncludingDisc'},
     'end_cash_balance': {'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents',
-                         'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents:1',
+                         'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents_1',
                          'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsIncludingDisposalGroupAndDiscontinuedOperations',
                          'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsIncludingDisposalGroupAndDiscontinuedOperations:1'
                          'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsDisposalGroupIncludingDisc'},

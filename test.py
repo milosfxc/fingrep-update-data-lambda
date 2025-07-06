@@ -125,19 +125,9 @@ def calc_revenue(revenues):
 
 if __name__ == "__main__":
     import pandas as pd
-    import numpy as np
 
-    # Sample data with a mix of strings, NaN, and already correct values
-    df_stmt = pd.DataFrame({
-        'concept': ['us-gaap:Assets', 'ifrs:Revenue', np.nan, 'custom:Tag', None, 'no_colon']
-    })
+    s = pd.Series([None, None, None])
+    negative_sum = s[s < 0].max()
 
-    print("Before replacement:")
-    print(df_stmt)
-
-    # Apply your replacement
-    df_stmt['concept'] = df_stmt['concept'].str.replace(':', '_', regex=False)
-
-    print("\nAfter replacement:")
-    print(df_stmt)
-
+    print(negative_sum)  # Output: 0.0
+    print(type(negative_sum))  # Output: <class 'float'>

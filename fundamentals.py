@@ -1,7 +1,7 @@
 import inspect
 import sys
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict
 import os
 import pickle
@@ -126,68 +126,7 @@ def get_filings_by_company(ticker: str) -> pd.DataFrame:
         return company_filings
 
 
-def get_filing_details(accession_number: str, is_xbrl: int) -> Optional[Dict[str, pd.DataFrame]]:
-    # Checks for xbrl tags
-    if is_xbrl == 1:
-        # filing data
-        filing = edgar.get_by_accession_number(accession_number=accession_number)
-        xbrl_data = filing.obj().financials.xbrl_data.instance
-        # Schema check
-        schema = 'us-gaap' if not xbrl_data.query_facts(schema='us-gaap').empty else 'ifrs-full'
-        df_statements = {'balance_sheet': pd.DataFrame(), 'income_statement': pd.DataFrame(),
-                         'cash_flow': pd.DataFrame()}
-        xbrl_statements = XBRLTagMapper.xbrl_tags[schema]
-        for stmt in xbrl_statements.keys():
-            df_stmt = df_statements[stmt]
-            for tag in xbrl_statements[stmt]:
-                df_position = xbrl_data.query_facts(schema='us-gaap', concept=tag)[
-                    ['value', 'concept', 'context_id', 'units', 'decimals', 'end_date']]
-                if df_stmt.empty:
-                    df_stmt = df_position
-                elif not df_position.isna().all().all():
-                    df_stmt = pd.concat([df_stmt, df_position])
-            contexts_mapping = dict()
-            range_context = None
-            if not df_stmt.empty:
-                context_ids = set(df_stmt['context_id'].unique())
-                for context_id in context_ids:
-                    context = xbrl_data.contexts.get(context_id)
-                    if not context['dimensions']:  # This removes contexts for special dimensions such SEE region
-                        if filing.period_of_report == context['instant']:
-                            contexts_mapping[context_id] = context['instant']
-                        elif filing.period_of_report == context['end_date']:
-                            if range_context is None:
-                                context['id'] = context_id
-                                range_context = context
-                            else:
-                                temp_context_days = (
-                                        datetime.strptime(context['end_date'], '%Y-%m-%d') - datetime.strptime(
-                                    context['start_date'], '%Y-%m-%d')).days
-                                range_context_days = (datetime.strptime(range_context['end_date'],
-                                                                        '%Y-%m-%d') - datetime.strptime(
-                                    range_context['start_date'], '%Y-%m-%d')).days
-                                target = 365 if filing.form in {'10-K', '20-F'} else 90
-                                nearest = min([temp_context_days, range_context_days], key=lambda x: abs(x - target))
-                                if temp_context_days == nearest:
-                                    context['id'] = context_id
-                                    range_context = context
-                if range_context:
-                    contexts_mapping[range_context['id']] = range_context['end_date']
-
-            print(df_stmt)
-            df_stmt['context_id'] = df_stmt['context_id'].map(contexts_mapping)
-            print(df_stmt)
-            df_stmt.dropna(subset=['context_id'], inplace=True)
-            df_statements[stmt] = df_stmt
-        return df_statements
-    elif is_xbrl == 0:
-        return None
-    else:
-        logger.critical(f"Variable is_xbrl was not of type int, but it's {type(is_xbrl)}. Stopping the application.")
-        sys.exit(1)
-
-
-def get_filing_details_v2(accession_number:str, is_xbrl:int) -> Optional[Dict[str,pd.DataFrame]]:
+def get_filing_details(accession_number:str, is_xbrl:int) -> Optional[Dict[str,pd.DataFrame]]:
     if  is_xbrl == 1:
         filing = edgar.get_by_accession_number(accession_number=accession_number)
         statements = {
@@ -197,6 +136,12 @@ def get_filing_details_v2(accession_number:str, is_xbrl:int) -> Optional[Dict[st
         }
         # Acc standard, currency, period start
         ascps = get_period_start_and_currency_and_acc_standard(filing, statements['IncomeStatement'])
+        # Dataframes for XBRL query
+        previous_end_date = (datetime.strptime(ascps['period_start'], '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
+        print(previous_end_date)
+        df_instant_prev_end = filing.xbrl().query().by_dimension(None).by_instant_date(previous_end_date).to_dataframe('concept', 'numeric_value', 'statement_type')
+        df_instant_end = filing.xbrl().query().by_dimension(None).by_instant_date(filing.period_of_report).to_dataframe('concept', 'numeric_value', 'statement_type')
+        df_period = filing.xbrl().query().by_dimension(None).by_date_range(ascps['period_start'], filing.period_of_report).to_dataframe('concept', 'numeric_value', 'statement_type')
         # XBRL Mappings
         xbrl_map = dict()
         # Load data from pickle
@@ -204,34 +149,34 @@ def get_filing_details_v2(accession_number:str, is_xbrl:int) -> Optional[Dict[st
             with open('data/xbrl_map', 'rb') as f:
                 xbrl_map = pickle.load(f)
         for stmt in statements.keys():
-            statements[stmt] = get_statement(filing, stmt, statements[stmt], ascps['acc_standard'], ascps['period_start'])
+            statements[stmt] = get_statement(stmt, statements[stmt], ascps['acc_standard'], df_instant_end, df_period, filing.period_of_report)
+        statements['BalanceSheet'] = validate_balance_sheet(statements['BalanceSheet'])
+        statements['IncomeStatement'] = validate_income_statement(inc_stmt=statements['IncomeStatement'],cf_stmt=statements['CashFlowStatement'])
+        statements['CashFlowStatement'] = validate_cashflow_statement(df_instant_prev_end,df_instant_end,df_period,statements['CashFlowStatement'], ascps['acc_standard'])
         return statements
     else:
         return None # todo yfinance
 
-def get_statement(filing: edgar.Filing, stmt_name: str, df_stmt: pd.DataFrame, acc_standard: str, period_start: str) -> pd.DataFrame:
+def get_statement(stmt_name: str, df_stmt: pd.DataFrame, acc_standard: str, df_instant: pd.DataFrame, df_period: pd.DataFrame, period_end: str) -> dict[str,float]:
     stmt_tags = XBRLTagMapper.xbrl_tags[acc_standard][stmt_name]
+    df_period = df_period[df_period['statement_type'] != 'CashFlowStatement'] if stmt_name == 'IncomeStatement' else df_period[df_period['statement_type'] != 'IncomeStatement']
+    df_tags = df_instant if stmt_name == 'BalanceSheet' else df_period
+    # Replace _ with :
+    df_stmt['concept'] = df_stmt['concept'].str.replace('_', ':')
     ans = {}
     for position, tags in stmt_tags.items():
         if tags is not None:
-            ans[position] = get_position_value(filing, stmt_name, df_stmt, tags, period_start)
+            ans[position] = get_position_value(df_stmt, df_tags,tags, period_end)
         else:
             ans[position] = None
-    return pd.DataFrame({k: [v] for k, v in ans.items()})
+    #return pd.DataFrame({k: [v] for k, v in ans.items()})
+    return ans
 
-
-def get_position_value(filing: edgar.Filing, stmt_name: str, df_stmt: pd.DataFrame, xbrl_tags: set, period_start: str) -> float | None:
-    df_stmt['concept'] = df_stmt['concept'].str.replace(':', '_')
+def get_position_value(df_stmt: pd.DataFrame, df_tags: pd.DataFrame, xbrl_tags: set, period_end: str) -> float | None:
     df_stmt = df_stmt[df_stmt['concept'].isin(xbrl_tags)]
-    period_end = filing.period_of_report
     values = pd.to_numeric(df_stmt[period_end], errors='coerce').dropna().tolist()
     # EXTRACTED XBRL INSTANCE DOCUMENT if statement has no values for position
     if not values:
-        if stmt_name == 'BalanceSheet':
-            df_tags = filing.xbrl().query().by_dimension(None).by_instant_date(period_end).to_dataframe('concept', 'numeric_value', 'statement_type')
-        else:
-            df_tags = filing.xbrl().query().by_dimension(None).by_date_range(period_start, period_end).to_dataframe('concept', 'numeric_value', 'statement_type')
-            df_tags = df_tags[df_tags['statement_type'] != 'CashFlowStatement'] if stmt_name == 'IncomeStatement' else df_tags[df_tags['statement_type'] != 'IncomeStatement']
         df_tags = df_tags[df_tags['concept'].isin(xbrl_tags)]
         tag_values = pd.to_numeric(df_tags['numeric_value'], errors='coerce').dropna().tolist()
 
@@ -278,57 +223,175 @@ def get_currency(filing: edgar.Filing, unit_ref: str) -> str | None:
         return iso_cur[1].upper()
     return None
 
-def validate_balance_sheet(bs: dict[str,float]) -> pd.DataFrame:
+def validate_balance_sheet(bs_stmt: dict[str,float]) -> dict[str,float] | None:
     # Calc
-    current_assets_total = sum(bs.get(position, 0) for position in utils.current_assets_list)
-    non_current_assets_total = sum(bs.get(position, 0) for position in utils.non_current_assets_list)
-    current_liabilities_total = sum(bs.get(position, 0) for position in utils.current_liabilities_list)
-    non_current_liabilities_total = sum(bs.get(position, 0) for position in utils.non_current_liabilities_list)
-
-    assets = bs.get('assets',0)
-    current_assets = bs.get('current_assets',0)
-    non_current_assets = bs.get('non_current_assets',0)
-    liabilities = bs.get('liabilities',0)
-    current_liabilities = bs.get('current_liabilities',0)
-    non_current_liabilities = bs.get('non_current_liabilities',0)
-    equity = max(bs.get('equity',0),bs.get('shareholders_equity',0))
-
-    if not current_assets:
-        current_assets = assets - non_current_assets if assets and non_current_assets else None
-    if not non_current_assets:
-        non_current_assets = assets - current_assets if assets and current_assets else None
-    if not liabilities:
-        liabilities = assets - equity if assets and equity else None
-    if not current_liabilities:
-        current_liabilities = liabilities - non_current_liabilities if liabilities and non_current_liabilities else None
-    if not non_current_liabilities:
-        non_current_liabilities = liabilities - current_liabilities if liabilities and non_current_liabilities else None
+    current_assets_total = sum(bs_stmt.get(position) or 0 for position in utils.current_assets_list)
+    non_current_assets_total = sum(bs_stmt.get(position) or 0 for position in utils.non_current_assets_list)
+    current_liabilities_total = sum(bs_stmt.get(position) or 0 for position in utils.current_liabilities_list)
+    non_current_liabilities_total = sum(bs_stmt.get(position) or 0 for position in utils.non_current_liabilities_list)
+    print(type(bs_stmt))
+    assets = bs_stmt.get('assets') or 0
+    liab_and_equity = bs_stmt.get('liabilities_and_equity') or 0
+    assets = max(assets, liab_and_equity)
+    assets = assets if assets > 0 else None
+    bs_stmt.pop('liabilities_and_equity')
+    current_assets = bs_stmt.get('current_assets')
+    non_current_assets = bs_stmt.get('non_current_assets')
+    liabilities = bs_stmt.get('liabilities')
+    current_liabilities = bs_stmt.get('current_liabilities')
+    non_current_liabilities = bs_stmt.get('non_current_liabilities')
+    equity = max(bs_stmt.get('equity') or 0, bs_stmt.get('shareholders_equity') or 0)
+    equity = equity if equity > 0 else None
+    # left side
+    if assets:
+        if not current_assets:
+            current_assets = assets - non_current_assets if non_current_assets else None
+        if not non_current_assets:
+            non_current_assets = assets - current_assets if current_assets else None
+        if not liabilities:
+            liabilities = assets - equity if equity else None
+    # right side
+    if liabilities:
+        if not current_liabilities:
+            current_liabilities = liabilities - non_current_liabilities if non_current_liabilities else None
+        if not non_current_liabilities:
+            non_current_liabilities = liabilities - current_liabilities if current_liabilities else None
+    # Update major balance sheet positions
+    bs_stmt['current_assets'] = current_assets
+    bs_stmt['non_current_assets'] = non_current_assets
+    bs_stmt['liabilities'] = liabilities
+    bs_stmt['current_liabilities'] = current_liabilities
+    bs_stmt['non_current_liabilities'] = non_current_liabilities
+    bs_stmt['equity'] = equity
     # Calc other positions
     if current_assets and current_assets_total:
-        bs['other_current_assets'] = current_assets - current_assets_total
+        bs_stmt['other_current_assets'] = current_assets - current_assets_total
     if non_current_assets and non_current_assets_total:
-        bs['other_non_current_assets'] = non_current_assets - non_current_assets_total
+        bs_stmt['other_non_current_assets'] = non_current_assets - non_current_assets_total
     if current_liabilities and current_liabilities_total:
-        bs['other_current_liabilities'] = current_liabilities - current_liabilities_total
+        bs_stmt['other_current_liabilities'] = current_liabilities - current_liabilities_total
     if non_current_liabilities and non_current_liabilities_total:
-        bs['other_non_current_liabilities'] = non_current_liabilities = non_current_liabilities_total
+        bs_stmt['other_non_current_liabilities'] = non_current_liabilities - non_current_liabilities_total
     # Calc complex position
     # cash_and_short_term_investments
-    cash_and_short_term_investments = bs.get('cash_and_short_term_investments',0)
+    cash_and_short_term_investments = bs_stmt.get('cash_and_short_term_investments', 0)
     if not cash_and_short_term_investments:
-        cash_and_cash_equivalents = bs.get('cash_and_cash_equivalents',0)
-        short_term_investments = bs.get('short_term_investments',0)
+        cash_and_cash_equivalents = bs_stmt.get('cash_and_cash_equivalents', 0)
+        short_term_investments = bs_stmt.get('short_term_investments', 0)
         if cash_and_cash_equivalents or short_term_investments:
-            bs['cash_and_short_term_investments'] = cash_and_cash_equivalents + short_term_investments
+            bs_stmt['cash_and_short_term_investments'] = cash_and_cash_equivalents + short_term_investments
     # payables_and_expenses
-    payables_and_expenses = bs.get('payables_and_expenses',0)
+    payables_and_expenses = bs_stmt.get('payables_and_expenses', 0)
     if not payables_and_expenses:
-        account_payables = bs.get('account_payables',0)
-        accrued_liabilities_current = bs.get('accrued_liabilities_current', 0)
+        account_payables = bs_stmt.get('account_payables', 0)
+        accrued_liabilities_current = bs_stmt.get('accrued_liabilities_current', 0)
         if account_payables or accrued_liabilities_current:
-            bs['payables_and_expenses'] = account_payables + accrued_liabilities_current
+            bs_stmt['payables_and_expenses'] = account_payables + accrued_liabilities_current
 
-    return bs
+    return bs_stmt
+
+def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, float]) -> dict[str,float] | None:
+    revenue = inc_stmt.get('revenue')
+    cost_of_revenue = abs(inc_stmt.get('cost_of_revenue'))
+    gross_profit = inc_stmt.get('gross_profit')
+    operating_income = inc_stmt.get('operating_income')
+    operating_expenses = abs(inc_stmt.get('operating_expenses'))
+    other_income = inc_stmt.get('other_income')
+    ebt = inc_stmt.get('ebt')
+    interest_expense = abs(inc_stmt.get('ebt')) # todo it could be positive
+    dda = cf_stmt.get('operating_da')
+    ebit = None
+    ebitda = None
+    if revenue:
+        if gross_profit:
+            cost_of_revenue = revenue - gross_profit
+        elif cost_of_revenue:
+            gross_profit = revenue - cost_of_revenue
+    if operating_income:
+        if gross_profit:
+            operating_expenses = gross_profit - operating_income
+        if ebt and not other_income:
+            other_income = operating_income - ebt
+        if not ebt and other_income:
+            ebt = operating_income + other_income
+    elif operating_expenses and gross_profit:
+        operating_income = gross_profit - operating_expenses
+    if ebt and interest_expense:
+        ebit = ebt + interest_expense
+    if ebit and dda:
+        ebitda = ebit + dda
+
+    inc_stmt['cost_of_revenue'] = cost_of_revenue
+    inc_stmt['gross_profit'] = gross_profit
+    inc_stmt['operating_income'] = operating_income
+    inc_stmt['operating_expenses'] = operating_expenses
+    inc_stmt['other_income'] = other_income
+    inc_stmt['ebt'] = ebt
+    inc_stmt['interest_expense'] = interest_expense
+    inc_stmt['reconciled_deprecation'] = dda
+    inc_stmt['ebit'] = ebit
+    inc_stmt['ebitda'] = ebitda
+
+    return inc_stmt
+
+def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_stmt: dict[str,float], acc_standard: str) -> dict[str,float] | None:
+    # CAPEX calc
+    capital_expenditure = None
+    df_ppe = df_period[df_period['concept'].isin(XBRLTagMapper.xbrl_tags[acc_standard]['CashFlowStatement']['purc_sale_ppe'])]
+    capex_values = pd.to_numeric(df_ppe['numeric_value'], errors='coerce')
+    capex_sum = capex_values[capex_values < 0].sum()
+    capital_expenditure = capex_sum if capex_sum else None
+    cf_stmt['capital_expenditure'] = capital_expenditure
+    # Debt dataframe
+    df_debt = df_period[df_period['concept'].isin(XBRLTagMapper.xbrl_tags[acc_standard]['CashFlowStatement']['iss_pay_debt'])]
+    debt_values = pd.to_numeric(df_debt['numeric_value'], errors='coerce')
+    # Debt Issued
+    debt_issued = debt_values[debt_values > 0].sum()
+    if debt_issued:
+        cf_stmt['debt_issued'] = debt_issued
+    # Debt Repayment
+    debt_repayment = debt_values[debt_values < 0].sum()
+    if debt_repayment:
+        cf_stmt['debt_repayment'] = debt_repayment
+    # Free Cash Flow
+    free_cash_flow = None
+    operating_cash_flow = cf_stmt.get('operating_cash_flow')
+    if operating_cash_flow and capital_expenditure:
+        free_cash_flow = operating_cash_flow + operating_cash_flow
+        cf_stmt['free_cash_flow'] = free_cash_flow
+
+    # Cash end
+    df_cash_end = df_instant_end[df_instant_end['statement_type'] == 'CashFlowStatement']
+    df_cash_end = df_cash_end[df_cash_end['concept'].isin(XBRLTagMapper.xbrl_tags[acc_standard]['CashFlowStatement']['end_cash_balance'])]
+    end_cash_balance = df_cash_end['numeric_value'].max()
+    if end_cash_balance:
+        cf_stmt['end_cash_balance'] = end_cash_balance
+    # Cash start
+    start_cash_balance = None
+    net_change = cf_stmt.get('inc_dec_cash')
+    if net_change and end_cash_balance:
+        start_cash_balance = end_cash_balance - net_change
+    else:
+        df_cash_start = df_instant_start[df_instant_start['statement_type'] == 'CashFlowStatement']
+        df_cash_start = df_cash_start[df_cash_start['concept'].isin(XBRLTagMapper.xbrl_tags[acc_standard]['CashFlowStatement']['start_cash_balance'])]
+        start_cash_balance = df_cash_start['numeric_value'].max()
+    if start_cash_balance:
+        cf_stmt['start_cash_balance'] = start_cash_balance
+
+    return cf_stmt
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
