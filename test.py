@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from fmpsdk import income_statement
 
+import XBRLTagMapper
 import db_ops
 import pandas as pd
 
@@ -123,11 +124,14 @@ def calc_revenue(revenues):
             return revenues[i]
     return total_revenue # returns total revenue if none of the revenues is aggregate
 
+
+
+
 if __name__ == "__main__":
-    import pandas as pd
+    cor = XBRLTagMapper.income_statement_gaap['cost_of_revenue']
+    opex = XBRLTagMapper.income_statement_gaap['operating_expenses']
+    for a in cor:
+        if a in opex:
+            print(a)
 
-    s = pd.Series([None, None, None])
-    negative_sum = s[s < 0].max()
 
-    print(negative_sum)  # Output: 0.0
-    print(type(negative_sum))  # Output: <class 'float'>

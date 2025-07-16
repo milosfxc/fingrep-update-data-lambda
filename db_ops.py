@@ -1,14 +1,10 @@
+import json
 import logging
-import subprocess
 
-import mysql
-from pandas.core.interchange.dataframe_protocol import DataFrame
+from edgar.formatting import accession_number_text
 from psycopg2.extras import DictCursor, execute_values
 import pandas as pd
-import mysql.connector
-from wheel.macosx_libfile import swap32
 
-import utils
 from config import DB_NAME, DB_USER, LOCAL_DB_HOST, DB_PORT, DB_PASSWORD
 import config
 from ConnType import DBLocation
@@ -18,6 +14,8 @@ import psycopg2
 # Logger
 logger = logging.getLogger(__name__)
 
+
+# Connections
 
 @contextmanager
 def get_db_connection():
@@ -51,6 +49,8 @@ def postgresql_remote_connection():
     except psycopg2.Error as db_error:
         logger.error(f"Remote db connection error: {db_error}")
 
+
+# CRUD functions for fingrep db
 
 def get_existing_tickers():
     try:
@@ -120,7 +120,9 @@ def get_last_100():
         logger.error(f"get_last_100: {error}")
         raise
 
+
 foreign_keys_cache = None
+
 
 def get_foreign_keys():
     global foreign_keys_cache
@@ -173,13 +175,14 @@ def delete_aggregate_bars(ticker_id: str):
         return False
 
 
-def upsert_dataframe(df: pd.DataFrame, table_name: str)-> bool:
+def upsert_dataframe(df: pd.DataFrame, table_name: str) -> bool:
     # Replace NaN with None and False with None
     df = df.astype(object).where(pd.notnull(df), None).replace(0, None)
     # Create a list of column update expressions for ON CONFLICT
     update_columns = ', '.join([f"{col} = EXCLUDED.{col}" for col in df.columns if col not in ['share_id', 'date']])
     # Composite key is different for trade_info and fundamentals(bs,is,cf,ra)
-    composite_key = "(share_id, date, report_type)" if table_name in {"balance_sheet", "income_statement", "cash_flow"} else "(share_id, date)"
+    composite_key = "(share_id, date, report_type)" if table_name in {"balance_sheet", "income_statement",
+                                                                      "cash_flow"} else "(share_id, date)"
     # Create the SQL query for upserting
     upsert_query = f"""
         INSERT INTO {table_name} ({', '.join(df.columns)}) 
@@ -328,9 +331,7 @@ def get_latest_filings_by_max_filing_date():
         return None
 
 
-
-
-def upsert_latest_filings(df: pd.DataFrame, upsert_fully_inserted_and_attempt_date: bool=False):
+def upsert_latest_filings(df: pd.DataFrame, upsert_fully_inserted_and_attempt_date: bool = False):
     # Replace NaN with None
     df = df.astype(object).where(pd.notnull(df), None)
 
@@ -361,7 +362,6 @@ def upsert_latest_filings(df: pd.DataFrame, upsert_fully_inserted_and_attempt_da
     except psycopg2.DatabaseError as e:
         logger.error(f"upsert_latest_filings: {e}")
         return False
-
 
 
 def get_filings_for_full_insert():
@@ -398,71 +398,34 @@ def delete_fillings_older_than_month():
     except psycopg2.DatabaseError as e:
         logger.error(f"delete_old_fillings: {e}")
 
-# Dolt earnings database
+
+# Filings table
 @contextmanager
-def get_dolt_db_connection():
-    dolt_conn = dolt_local_connection()
+def get_filings_db_connection():
+    conn = psycopg2.connect(database='filings', user=DB_USER, host=LOCAL_DB_HOST, port=DB_PORT, password=DB_PASSWORD)
     try:
-        yield dolt_conn  # Yield the connection to the caller
+        yield conn
     finally:
-        dolt_conn.close()  # Close the connection when done
+        conn.close()
 
-def dolt_local_connection():
-    return mysql.connector.connect(database='earnings', user='root', host='localhost', port=3306, password='')
 
-def get_dolt_statement(ticker: str, table_name: str, latest: bool = False, period: str = 'Year'):
-    if table_name == 'balance_sheet':
-        sql = f"""
-        SELECT bsa.date, CASE WHEN bsa.period = 'Year' THEN 'a' ELSE 'q' END AS report_type, bsa.total_assets AS assets, bsa.total_current_assets AS current_assets, 
-        bsa.cash_and_equivalents AS cash_and_cash_equivalents, bsa.receivables + bsa.notes_receivable AS net_receivables, 
-        bsl.total_liabilities AS liabilities, bsl.total_current_liabilities AS current_liabilities, 
-        bsl.total_liabilities - bsl.total_current_liabilities AS non_current_liabilities, bse.total_equity AS equity,
-        bse.shares_outstanding, ROUND(bse.book_value_per_share * bse.shares_outstanding,0) AS common_stock_equity
-        FROM balance_sheet_assets AS bsa 
-        INNER JOIN balance_sheet_equity AS bse 
-            ON bsa.date = bse.date 
-            AND bsa.act_symbol = bse.act_symbol 
-            AND bsa.period = bse.period 
-        INNER JOIN balance_sheet_liabilities AS bsl 
-            ON bsa.date = bsl.date 
-            AND bsa.act_symbol = bsl.act_symbol 
-            AND bsa.period = bsl.period
-        WHERE bsa.act_symbol = '{ticker}'
-        AND bsa.period = '{period}'
-        AND bsa.date >= '2020-12-31'
-        """
-        if latest:
-            sql = sql + f" AND bsa.DATE = (SELECT MAX(DATE) FROM balance_sheet_assets WHERE act_symbol = '{ticker}' AND period = '{period}')"
-    elif table_name == 'income_statement':
-        sql = f"""
-        SELECT isst.date, CASE WHEN isst.period = 'Year' THEN 'a' ELSE 'q' END AS report_type, isst.sales AS revenue, isst.gross_profit, isst.interest_expense + isst.pretax_income + isst.depreciation_and_amortization as ebitda, 
-        isst.interest_expense + isst.pretax_income AS ebit, isst.net_income, isst.average_shares AS avg_shares_outstanding, isst.diluted_eps_before_non_recurring_items AS normalized_eps,
-        ROUND(isst.net_income / isst.average_shares, 2) AS eps, isst.diluted_net_eps AS diluted_eps
-        FROM income_statement AS isst
-        WHERE isst.act_symbol = '{ticker}'
-        AND isst.period = '{period}'
-        AND isst.date >= '2020-12-31'
-        """
-        if latest:
-            sql = sql + f"AND isst.date = (SELECT MAX(date) FROM income_statement WHERE act_symbol = '{ticker}' AND period = '{period}')"
-    elif table_name == 'cash_flow':
-        sql = f"""
-        SELECT cf.date, CASE WHEN cf.period = 'Year' THEN 'a' ELSE 'q' END AS report_type, cf.net_cash_from_operating_activities AS operating_cash_flow
-        FROM cash_flow_statement AS cf 
-        WHERE cf.act_symbol = '{ticker}'
-        AND cf.period = '{period}'
-        AND cf.date >= '2020-12-31'
-        """
-        if latest:
-            sql = sql + f"AND cf.date = (SELECT MAX(date) FROM cash_flow_statement WHERE act_symbol = '{ticker}' AND period = '{period}')"
-    else:
-        return pd.DataFrame()
-    try:
-        with get_dolt_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(sql)
-                rows = cur.fetchall()
-                columns = [desc[0] for desc in cur.description]
-                return pd.DataFrame(rows, columns=columns) if rows else pd.DataFrame(columns=columns)
-    except mysql.connector.Error as e:
-        logger.critical(f"Error fetching from dolt {table_name}", exc_info=True)
+def insert_filing(accession_number, filing: dict):
+
+    with get_filings_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO filings (accession_number, data)
+                VALUES (%s, %s)
+                ON CONFLICT (accession_number) DO NOTHING;
+            """,(accession_number, json.dumps(filing)))
+        conn.commit()
+
+def get_filings_by_accession_numbers(accession_numbers: list[str]) -> dict[str,dict]:
+    with get_filings_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT accession_number, data 
+                FROM filings 
+                WHERE accession_number = ANY(%s);
+            """, (accession_numbers,))
+            return {row[0]: row[1] for row in cur.fetchall()}

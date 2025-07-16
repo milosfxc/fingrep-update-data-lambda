@@ -1,31 +1,85 @@
 from utils import income_statement
 
 balance_sheet_gaap = {
+    # Banks
+    'deposits': {'us-gaap:TimeDepositMaturitiesRollingYearTwo', 'us-gaap:NoninterestBearingDepositLiabilitiesDomestic', 'us-gaap:DepositsWholesale', 'us-gaap:TimeDepositMaturitiesRollingYearFive',
+                 'us-gaap:DepositsForeign', 'us-gaap:DepositsRetail', 'us-gaap:InterestBearingDepositLiabilitiesDomestic', 'us-gaap:DemandDepositAccounts',
+                 'us-gaap:DepositsNegotiableOrderOfWithdrawalNOW', 'us-gaap:DepositContractsLiabilities', 'us-gaap:DepositsSavingsDeposits', 'us-gaap:NoninterestBearingDepositLiabilities',
+                 'us-gaap:TimeDepositMaturitiesRollingYearFour', 'us-gaap:NoninterestBearingDepositLiabilitiesForeign', 'us-gaap:TimeDepositMaturitiesAfterRollingYearFive',
+                 'us-gaap:DepositsDomestic', 'us-gaap:InterestBearingDepositLiabilitiesForeign', 'us-gaap:InterestBearingDepositLiabilities', 'us-gaap:TimeDeposits',
+                 'us-gaap:TimeDepositMaturitiesNextRollingTwelveMonths', 'us-gaap:TimeDepositMaturitiesAfterNextRollingTwelveMonths', 'us-gaap:TimeDepositMaturitiesRollingYearThree',
+                 'us-gaap:DepositsMoneyMarketDepositsAndNegotiableOrderOfWithdrawalNOW', 'us-gaap:DepositsMoneyMarketDeposits', 'us-gaap:Deposits'},
+    'investments_all': {'loc_FixturesAndEquipmentGross', 'us-gaap:LongTermInvestments', 'us-gaap:OtherRestrictedAssetsCurrent', 'us-gaap:AvailableForSaleSecuritiesDebtMaturitiesWithinOneYearFairValue',
+                    'us-gaap:MarketableSecurities', 'loc_MarketableSecuritiesCurrent', 'loc_RealEstateInvestmentPropertyNet', 'us-gaap:AdvancesToAffiliate', 'loc_MortgageLoanOnRealEstateNonincomeProducing',
+                    'loc_SecuritiesHeldAsCollateralAtFairValue', 'us-gaap:DebtSecuritiesHeldToMaturityAllowanceForCreditLossCurrent', 'us-gaap:NotesAndLoansReceivableNetNoncurrent',
+                    'us-gaap:MarketableSecuritiesNoncurrent', 'us-gaap:DebtSecuritiesCurrent', 'loc_HeldToMaturitySecurities', 'us-gaap:DebtSecuritiesNoncurrent', 'loc_RealEstateInvestmentPropertyAtCost',
+                    'loc_AvailableForSaleSecuritiesDebtSecuritiesCurrent', 'us-gaap:TradingSecurities', 'loc_InvestmentsInAffiliatesSubsidiariesAssociatesAndJointVentures', 'us-gaap:AvailableForSaleSecuritiesDebtSecuritiesCurrent',
+                    'us-gaap:TradingSecuritiesDebt', 'loc_AllowanceForLoanAndLeaseLossesRealEstate', 'loc_Investments', 'us-gaap:OtherLongTermInvestments', 'loc_SecuritiesBorrowed', 'us-gaap:ShortTermInvestments',
+                    'loc_MarketableSecurities', 'loc_DevelopmentInProcess', 'us-gaap:CryptoAssetFairValueNoncurrent', 'us-gaap:RestrictedInvestmentsCurrent', 'us-gaap:HeldToMaturitySecuritiesDebtMaturitiesSingleMaturityDateAmortizedCostBasis',
+                    'loc_TenantImprovements', 'us-gaap:LifeInsuranceCorporateOrBankOwnedAmount', 'loc_AvailableForSaleSecuritiesDebtSecuritiesNoncurrent', 'us-gaap:NotesAndLoansReceivableGrossNoncurrent',
+                    'us-gaap:EquitySecuritiesFvNiCurrentAndNoncurrent', 'loc_OtherInvestments', 'loc_RealEstateInvestmentsUnconsolidatedRealEstateAndOtherJointVentures', 'us-gaap:HeldToMaturitySecuritiesDebtMaturitiesAfterFiveThroughTenYearsNetCarryingAmount',
+                    'loc_HeldToMaturitySecuritiesNoncurrent', 'us-gaap:DebtSecuritiesHeldToMaturityAmortizedCostAfterAllowanceForCreditLossCurrent', 'loc_CashCollateralForBorrowedSecurities', 'us-gaap:Investments',
+                    'us-gaap:AccountsReceivableGrossNoncurrent', 'loc_LandAvailableForDevelopment', 'us-gaap:LongTermInvestmentsAndReceivablesNet', 'loc_MortgageLoansOnRealEstateCommercialAndConsumerNet', 'us-gaap:AccountsReceivableNetNoncurrent',
+                    'loc_EquityMethodInvestments', 'us-gaap:HeldToMaturitySecuritiesDebtMaturitiesAfterTenYearsNetCarryingAmount', 'us-gaap:AvailableForSaleSecuritiesDebtMaturitiesWithoutSingleMaturityDateFairValue', 'loc_SecuritiesPurchasedUnderAgreementsToResell',
+                    'us-gaap:HeldToMaturitySecuritiesNoncurrent', 'loc_OtherInvestmentsAndSecuritiesAtCost', 'us-gaap:InvestmentInPhysicalCommodities', 'us-gaap:HeldToMaturitySecuritiesDebtMaturitiesAfterOneThroughFiveYearsNetCarryingAmount', 'loc_DebtSecurities',
+                    'loc_RealEstateInvestmentNonincomeProducing', 'loc_OtherShortTermInvestments', 'us-gaap:AvailableForSaleSecuritiesDebtMaturitiesAfterTenYearsFairValue', 'us-gaap:AvailableForSaleSecuritiesDebtMaturitiesAfterOneThroughFiveYearsFairValue',
+                    'us-gaap:OtherInvestmentsAndSecuritiesAtCost', 'loc_Land', 'us-gaap:DebtSecuritiesHeldToMaturityAmortizedCostAfterAllowanceForCreditLoss', 'loc_HeldToMaturitySecuritiesCurrent', 'us-gaap:CryptoAssetFairValueCurrent',
+                    'loc_RealEstateAcquiredThroughForeclosure', 'loc_NotesReceivableGross', 'loc_RealEstateInvestmentsOther', 'us-gaap:DebtSecuritiesHeldToMaturityAllowanceForCreditLossNoncurrent', 'us-gaap:AvailableForSaleSecuritiesDebtMaturitiesSingleMaturityDate',
+                    'us-gaap:AvailableForSaleSecuritiesDebtSecuritiesNoncurrent', 'loc_RentalProperties', 'loc_InterestsContinuedToBeHeldByTransferorFairValue', 'us-gaap:EquitySecuritiesFVNINoncurrent', 'loc_EquitySecuritiesFvNiCurrentAndNoncurrent',
+                    'us-gaap:DebtSecuritiesHeldToMaturityAmortizedCostAfterAllowanceForCreditLossNoncurrent', 'loc_OtherLongTermInvestments', 'loc_AdvancesToAffiliate', 'us-gaap:AvailableForSaleSecuritiesDebtSecurities', 'us-gaap:OtherShortTermInvestments',
+                    'us-gaap:HeldToMaturitySecuritiesCurrent', 'us-gaap:MarketableSecuritiesCurrent', 'loc_DerivativeAssets', 'loc_TradingSecuritiesDebt', 'us-gaap:AuctionRateSecuritiesNoncurrent', 'us-gaap:EquityMethodInvestments',
+                    'loc_DebtSecuritiesHeldToMaturityAmortizedCostAfterAllowanceForCreditLoss', 'us-gaap:EquitySecuritiesFvNi', 'us-gaap:AvailableForSaleSecuritiesDebtMaturitiesAfterFiveThroughTenYearsFairValue', 'loc_MarketableSecuritiesNoncurrent',
+                    'us-gaap:HeldToMaturitySecuritiesDebtMaturitiesWithoutSingleMaturityDateNetCarryingAmount', 'loc_DebtSecuritiesHeldToMaturityAllowanceForCreditLoss', 'us-gaap:RestrictedCashAndInvestmentsCurrent',
+                    'us-gaap:LongTermAccountsNotesAndLoansReceivableNetNoncurrent', 'us-gaap:AllowanceForNotesAndLoansReceivableNoncurrent', 'loc_LandImprovements', 'loc_RealEstateInvestments', 'loc_AvailableForSaleSecuritiesDebtSecurities',
+                    'loc_RealEstateInvestmentsJointVentures', 'loc_RealEstateInvestmentPropertyAccumulatedDepreciation', 'us-gaap:AllowanceForDoubtfulAccountsReceivableNoncurrent', 'loc_LandAndLandImprovements', 'us-gaap:OtherInvestments',
+                    'us-gaap:HeldToMaturitySecuritiesDebtMaturitiesWithinOneYearNetCarryingAmount', 'loc_InvestmentBuildingAndBuildingImprovements', 'us-gaap:InvestmentsInAffiliatesSubsidiariesAssociatesAndJointVentures', 'loc_LoansInsurancePolicy'},
+
+    # append to long  term debt us-gaap:LongTermDebt
+    # append to payables us-gaap:AccountsPayableCurrentAndNoncurrent us-gaap:AccountsPayableAndAccruedLiabilitiesCurrentAndNoncurrent
     'assets:': {'us-gaap:Assets'},
     'current_assets': {'us-gaap:AssetsCurrent'},
     'cash_and_short_term_investments': {'us-gaap:CashCashEquivalentsAndShortTermInvestments'},
-    'cash_and_cash_equivalents': {'us-gaap:Cash', 'us-gaap:CashEquivalentsAtCarryingValue', 'us-gaap:CashAndCashEquivalentsAtCarryingValue',
-                                  'us-gaap:RestrictedCashCurrent', 'us-gaap:RestrictedCashEquivalentsCurrent', 'us-gaap:RestrictedCashAndCashEquivalentsAtCarryingValue'},
+    'cash_and_cash_equivalents': {'us-gaap:FederalFundsSoldAndSecuritiesPurchasedUnderAgreementsToResell', 'us-gaap:DueFromBanks', 'us-gaap:SecuritiesPurchasedUnderAgreementsToResell', 'us-gaap:RestrictedCashCurrent',
+                                  'us-gaap:FederalFundsSoldAndSecuritiesPurchasedUnderAgreementsToResellPledgedAsCollateral', 'us-gaap:AssetBackedSecuritiesAtCarryingValue', 'us-gaap:CashEquivalentsAtCarryingValue',
+                                  'us-gaap:FederalFundsSold', 'us-gaap:USGovernmentAgenciesSecuritiesAtCarryingValue', 'us-gaap:CertificatesOfDepositAtCarryingValue', 'us-gaap:CashUninsuredAmount',
+                                  'us-gaap:RestrictedCashAndCashEquivalentsAtCarryingValue', 'us-gaap:CashCashEquivalentsAndFederalFundsSold', 'us-gaap:CommercialPaperAtCarryingValue',
+                                  'us-gaap:MoneyMarketFundsAtCarryingValue', 'us-gaap:RestrictedCashEquivalentsCurrent', 'us-gaap:FederalFundsSoldAndSecuritiesBorrowedOrPurchasedUnderAgreementsToResellFairValueDisclosure',
+                                  'us-gaap:CashAndCashEquivalentsAtCarryingValue', 'us-gaap:Cash', 'us-gaap:CashFDICInsuredAmount', 'us-gaap:MunicipalDebtSecuritiesAtCarryingValue', 'us-gaap:TimeDepositsAtCarryingValue',
+                                  'us-gaap:InterestBearingDepositsInBanks', 'us-gaap:OtherCashEquivalentsAtCarryingValue', 'us-gaap:CreditAndDebitCardReceivablesAtCarryingValue', 'us-gaap:CashAndDueFromBanks',
+                                  'us-gaap:USGovernmentSecuritiesAtCarryingValue'},
     'short_term_investments': {'us-gaap:ShortTermInvestments', 'us-gaap:EquitySecuritiesFvNi', 'us-gaap:MarketableSecuritiesCurrent', 'us-gaap:OtherShortTermInvestments',
                                'us-gaap:RestrictedInvestmentsCurrent', 'us-gaap:OtherRestrictedAssetsCurrent', 'us-gaap:RestrictedCashAndInvestmentsCurrent',
                                'us-gaap:HeldToMaturitySecuritiesCurrent', 'us-gaap:DebtSecuritiesHeldToMaturityAllowanceForCreditLossCurrent', 'us-gaap:DebtSecuritiesHeldToMaturityAmortizedCostAfterAllowanceForCreditLossCurrent',
                                'us-gaap:TradingSecuritiesDebt', 'us-gaap:AvailableForSaleSecuritiesDebtSecuritiesCurrent', 'us-gaap:DebtSecuritiesCurrent', 'us-gaap:CryptoAssetFairValueCurrent'},
-    'net_receivables': {'us-gaap:AccountsReceivableGrossCurrent', 'us-gaap:AllowanceForDoubtfulAccountsReceivableCurrent', 'us-gaap:AccountsReceivableNetCurrent',
-                        'us-gaap:NotesAndLoansReceivableGrossCurrent', 'us-gaap:AllowanceForNotesAndLoansReceivableCurrent', 'us-gaap:NotesAndLoansReceivableNetCurrent', 'us-gaap:AccountsNotesAndLoansReceivableNetCurrent',
-                        'us-gaap:NontradeReceivablesCurrent', 'us-gaap:UnbilledReceivablesCurrent', 'us-gaap:AccountsReceivableFromSecuritization','us-gaap:ReceivablesLongTermContractsOrPrograms', 'us-gaap:AccountsAndOtherReceivablesNetCurrent', 'us-gaap:ReceivablesNetCurrent'},
-    'inventory': {'us-gaap:InventoryNet', 'us-gaap:PublicUtilitiesInventory', 'us-gaap:InventoryCrudeOilProductsAndMerchandise', 'us-gaap:EnergyRelatedInventoryNaturalGasInStorage', 'us-gaap:InventoryAdjustments', 'us-gaap:EnergyRelatedInventoryPropaneGas',
-                  'us-gaap:AgriculturalRelatedInventoryPlantMaterial', 'us-gaap:RetailRelatedInventoryMerchandise', 'us-gaap:RetailRelatedInventory', 'us-gaap:EnergyRelatedInventoryCoal', 'us-gaap:InventoryLIFOReserve', 'us-gaap:AirlineRelatedInventory',
-                  'us-gaap:EnergyRelatedInventoryChemicals', 'us-gaap:InventoryForLongTermContractsOrPrograms', 'us-gaap:AirlineRelatedInventoryValuationReserves', 'us-gaap:InventoryFinishedGoods', 'us-gaap:CrudeOilAndNaturalGasLiquids',
-                  'us-gaap:EnergyRelatedInventoryOtherFossilFuel', 'us-gaap:InventoryWorkInProcess', 'us-gaap:EnergyRelatedInventoryPetroleum', 'us-gaap:InventoryRawMaterialsAndSupplies', 'us-gaap:AgriculturalRelatedInventory', 'us-gaap:AgriculturalRelatedInventoryGrowingCrops',
-                  'us-gaap:EnergyRelatedInventoryGasStoredUnderground', 'us-gaap:AirlineRelatedInventoryAircraftFuel', 'us-gaap:AirlineRelatedInventoryNet', 'us-gaap:InventoryFinishedGoodsAndWorkInProcess', 'us-gaap:AgriculturalRelatedInventoryFeedAndSupplies',
-                  'us-gaap:AirlineRelatedInventoryAircraftParts', 'us-gaap:InventoryValuationReserves', 'us-gaap:EnergyRelatedInventory', 'us-gaap:EnergyRelatedInventoryNaturalGasLiquids', 'us-gaap:InventoryGross', 'us-gaap:OtherInventory', 'us-gaap:RetailRelatedInventoryPackagingAndOtherSupplies'},
+    'net_receivables': {'us-gaap:PremiumsReceivableAllowanceForDoubtfulAccounts', 'us-gaap:AccountsReceivableBilledForLongTermContractsOrPrograms', 'us-gaap:NontradeReceivablesCurrent', 'us-gaap:NotesAndLoansReceivableNetCurrent',
+                        'us-gaap:ReceivablesLongTermContractsOrPrograms', 'us-gaap:DepositDerivativeContract', 'us-gaap:PremiumsAndOtherReceivablesNet', 'us-gaap:LoansReceivableHeldForSaleAmount', 'us-gaap:InterestReceivable',
+                        'us-gaap:AccountsReceivableNetCurrent', 'us-gaap:OtherReceivablesFromBrokerDealersAndClearingOrganizations', 'us-gaap:NotesReceivableGross', 'us-gaap:FinancingReceivableAllowanceForCreditLosses',
+                        'us-gaap:IncomeTaxReceivable', 'us-gaap:AccountsNotesAndLoansReceivableNetCurrent', 'us-gaap:AccountsReceivableFromSecuritization', 'us-gaap:UnbilledContractsReceivable', 'us-gaap:AllowanceForDoubtfulAccountsReceivable',
+                        'us-gaap:DepositSecuritySoldShort', 'us-gaap:NotesAndLoansReceivableGrossCurrent', 'us-gaap:NotesReceivableNet', 'us-gaap:UnbilledReceivablesCurrent', 'us-gaap:ReceivablesFromCustomers',
+                        'us-gaap:AccruedInvestmentIncomeReceivable', 'us-gaap:GoodFaithAndMarginDepositsWithBrokerDealers', 'us-gaap:DepositsPaidForSecuritiesBorrowedAtCarryingValue', 'us-gaap:CommissionsAndFloorBrokerageReceivables',
+                        'us-gaap:AllowanceForDoubtfulAccountsReceivableCurrent', 'us-gaap:PremiumsReceivableGross', 'us-gaap:ReceivablesFromBrokersDealersAndClearingOrganizations', 'us-gaap:AccruedFeesAndOtherRevenueReceivable',
+                        'us-gaap:VariationMarginReceivableDerivative', 'us-gaap:AccountsReceivableGross', 'us-gaap:DueFromCorrespondentBrokers', 'us-gaap:PremiumsReceivableAtCarryingValue', 'us-gaap:SecuritiesFailedToDeliver',
+                        'us-gaap:ReceivableInvestmentSale', 'us-gaap:AccountsReceivableNet', 'us-gaap:AccountsAndOtherReceivablesNetCurrent', 'us-gaap:ReceivablesNetCurrent', 'us-gaap:AccountsReceivableGrossCurrent',
+                        'us-gaap:AllowanceForNotesAndLoansReceivableCurrent', 'us-gaap:ReceivablesFromClearingOrganizations'},
+    'inventory': {'us-gaap:OtherInventory', 'us-gaap:RetailRelatedInventory', 'us-gaap:RetailRelatedInventoryMerchandise', 'us-gaap:AirlineRelatedInventoryNet', 'us-gaap:InventoryFinishedGoodsAndWorkInProcessNetOfReserves',
+                  'us-gaap:AgriculturalRelatedInventory', 'us-gaap:EnergyRelatedInventoryPetroleum', 'us-gaap:OtherInventorySupplies', 'us-gaap:CrudeOilAndNaturalGasLiquids', 'us-gaap:EnergyRelatedInventoryGasStoredUnderground',
+                  'us-gaap:AgriculturalRelatedInventoryGrowingCrops', 'us-gaap:EnergyRelatedInventoryPropaneGas', 'us-gaap:InventoryAdjustments', 'us-gaap:OtherInventoryNetOfReserves', 'us-gaap:OtherInventoryInTransit', 'us-gaap:InventoryFinishedGoods',
+                  'us-gaap:InventoryCrudeOilProductsAndMerchandise', 'us-gaap:InventoryRawMaterialsAndSupplies', 'us-gaap:OtherInventoryCapitalizedCosts', 'us-gaap:EnergyRelatedInventoryChemicals', 'us-gaap:OtherInventoryWarehouse',
+                  'us-gaap:EnergyRelatedInventory', 'us-gaap:InventoryRawMaterialsAndSuppliesNetOfReserves', 'us-gaap:RetailRelatedInventoryPackagingAndOtherSupplies', 'us-gaap:EnergyRelatedInventoryOtherFossilFuel', 'us-gaap:OtherInventoryInventoryAtOffSitePremises',
+                  'us-gaap:AirlineRelatedInventory', 'us-gaap:OtherInventoryPurchasedGoods', 'us-gaap:OtherInventoryDemo', 'us-gaap:InventoryRawMaterialsNetOfReserves', 'us-gaap:OtherInventoryScrap', 'us-gaap:InventoryGross',
+                  'us-gaap:InventoryFinishedGoodsNetOfReserves', 'us-gaap:AgriculturalRelatedInventoryPlantMaterial', 'us-gaap:InventoryWorkInProcess', 'us-gaap:OtherInventoryMaterialsSuppliesAndMerchandiseUnderConsignment',
+                  'us-gaap:OtherInventoriesSpareParts', 'us-gaap:AirlineRelatedInventoryValuationReserves', 'us-gaap:EnergyRelatedInventoryNaturalGasInStorage', 'us-gaap:AirlineRelatedInventoryAircraftParts', 'us-gaap:EnergyRelatedInventoryNaturalGasLiquids',
+                  'us-gaap:InventoryPartsAndComponentsNetOfReserves', 'us-gaap:InventoryOreStockpilesOnLeachPads', 'us-gaap:PublicUtilitiesInventory', 'us-gaap:InventoryValuationReserves', 'us-gaap:InventoryRawMaterials', 'us-gaap:InventorySuppliesNetOfReserves',
+                  'us-gaap:InventoryFinishedGoodsAndWorkInProcess', 'us-gaap:AirlineRelatedInventoryAircraftFuel', 'us-gaap:EnergyRelatedInventoryCoal', 'us-gaap:InventoryWorkInProcessNetOfReserves', 'us-gaap:InventoryForLongTermContractsOrPrograms',
+                  'us-gaap:AgriculturalRelatedInventoryFeedAndSupplies', 'us-gaap:InventoryLIFOReserve', 'us-gaap:InventoryNet'},
     'other_current_assets': None, # must be calculated
     'non_current_assets': None,
     'property_plant_equipment_net': {'us-gaap:TimberAndTimberlands', 'us-gaap:BuildingsAndImprovementsGross', 'us-gaap:CapitalizedComputerSoftwareGross', 'us-gaap:LandImprovements', 'us-gaap:FixturesAndEquipmentGross', 'us-gaap:PropertyPlantAndEquipmentGross', 'us-gaap:ConstructionInProgressGross', 'us-gaap:PropertyPlantAndEquipmentOther',
                                      'us-gaap:PropertyPlantAndEquipmentExcludingLessorAssetUnderOperatingLeaseBeforeAccumulatedDepreciation', 'us-gaap:LandAndLandImprovements', 'us-gaap:PropertyPlantAndEquipmentNet', 'us-gaap:AccumulatedDepreciationDepletionAndAmortizationPropertyPlantAndEquipment',
                                      'us-gaap:PropertySubjectToOrAvailableForOperatingLeaseGross', 'us-gaap:LeaseholdImprovementsGross', 'us-gaap:FurnitureAndFixturesGross', 'us-gaap:Land', 'us-gaap:MachineryAndEquipmentGross',
-                                     'us-gaap:PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAssetAfterAccumulatedDepreciationAndAmortization', 'us-gaap:OperatingLeaseRightOfUseAsset'},
-    'goodwill': {'us-gaap:goodwill', 'us-gaap:GoodwillTransfers', 'us-gaap:GoodwillForeignCurrencyTranslationGainLoss'
+                                     'us-gaap:PropertyPlantAndEquipmentAndFinanceLeaseRightOfUseAssetAfterAccumulatedDepreciationAndAmortization'},
+    'operating_lease': {'us-gaap:OperatingLeaseRightOfUseAsset'},
+    'goodwill': {'us-gaap:Goodwill', 'us-gaap:GoodwillTransfers', 'us-gaap:GoodwillForeignCurrencyTranslationGainLoss'
                  'us-gaap:GoodwillWrittenOffRelatedToSaleOfBusinessUnit', 'us-gaap:GoodwillOtherIncreaseDecrease', 'us-gaap:GoodwillSubsequentRecognitionOfDeferredTaxAsset',
                  'us-gaap:GoodwillImpairmentLoss', 'us-gaap:GoodwillAcquiredDuringPeriod', 'us-gaap:GoodwillPurchaseAccountingAdjustments', 'us-gaap:us-gaap:GoodwillTranslationAndPurchaseAccountingAdjustments'},
     'intangible_assets': {'us-gaap:FiniteLivedIntangibleAssetsGross', 'us-gaap:FiniteLivedIntangibleAssetsAccumulatedAmortization', 'us-gaap:IntangibleAssetsNetExcludingGoodwill', 'us-gaap:IndefiniteLivedIntangibleAssetsExcludingGoodwill', 'us-gaap:FiniteLivedIntangibleAssetsNet'},
@@ -34,7 +88,7 @@ balance_sheet_gaap = {
                               'us-gaap:DebtSecuritiesHeldToMaturityAllowanceForCreditLossNoncurrent', 'us-gaap:AllowanceForDoubtfulAccountsReceivableNoncurrent', 'us-gaap:HeldToMaturitySecuritiesNoncurrent', 'us-gaap:AdvancesToAffiliate', 'us-gaap:DebtSecuritiesNoncurrent',
                               'us-gaap:NotesAndLoansReceivableGrossNoncurrent', 'us-gaap:AccountsReceivableGrossNoncurrent', 'us-gaap:NotesAndLoansReceivableNetNoncurrent', 'us-gaap:AvailableForSaleSecuritiesDebtSecuritiesNoncurrent', 'us-gaap:LongTermInvestments', 'us-gaap:DebtSecuritiesHeldToMaturityAmortizedCostAfterAllowanceForCreditLossNoncurrent',
                               'us-gaap:CryptoAssetFairValueNoncurrent'},
-    'non_current_deferred_assets': {'us-gaap:DeferredIncomeTaxAssetsNet'},
+    'non_current_deferred_assets': {'us-gaap:DeferredIncomeTaxAssetsNet', 'us-gaap:DeferredTaxAssetsDeferredIncome'},
     'other_non_current_assets': None, # Calculated
     'liabilities_and_equity': {'us-gaap:LiabilitiesAndStockholdersEquity'}, # delete during balance_sheet validation
     'liabilities': {'us-gaap:Liabilities'},
@@ -79,7 +133,14 @@ balance_sheet_gaap = {
 }
 
 income_statement_gaap = {
-    'revenue': {'us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax', 'us-gaap:Revenues'},
+    'interest_income_b': {'us-gaap:InterestAndDividendIncomeOperating', 'us-gaap:InterestIncomeOperating'},
+    'interest_expense_b': {'us-gaap:InterestExpenseOperating', 'us-gaap:InterestExpense'},
+    'net_interest_b': {'us-gaap:InterestIncomeExpenseNet'},
+    'non_interest_income_b': {'us-gaap:NoninterestIncome'},
+    'non_interest_expense_b': {'us-gaap:NoninterestExpense'}, # actually operating expenses
+    'provisions_credit_losses': {'us-gaap:ProvisionForLoanLossesExpensed', 'us-gaap:ProvisionForLoanLeaseAndOtherLosses'},
+    'ner_premiums': {'us-gaap:PremiumsEarnedNet'},
+    'revenue': {'us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax', 'us-gaap:Revenues', 'us-gaap:RevenuesNetOfInterestExpense', 'us-gaap:PremiumsWrittenGross', 'us-gaap:PremiumsWrittenNet', 'us-gaap:RevenueFromContractWithCustomerIncludingAssessedTax'},
     'cost_of_revenue': {'us-gaap:CostOfRevenue', 'us-gaap:CostOfGoodsAndServicesSold', 'us-gaap:MerchantMarineOperatingDifferentialSubsidy', 'us-gaap:ReinsuranceEffectOnClaimsAndBenefitsIncurredAmountCeded',
                         'us-gaap:InterestCreditedToPolicyholdersAccountBalances', 'us-gaap:FuelCosts', 'us-gaap:ExciseAndSalesTaxes', 'us-gaap:CostOfGoodsAndServiceExcludingDepreciationDepletionAndAmortization',
                         'us-gaap:CostDirectMaterial', 'us-gaap:DirectOperatingCommunicationsCosts', 'us-gaap:CostDepreciationAmortizationAndDepletion', 'us-gaap:ManufacturingCosts', 'us-gaap:CostOfPropertyRepairsAndMaintenance',
@@ -140,17 +201,19 @@ income_statement_gaap = {
                                           'us-gaap:ResearchAndDevelopmentExpenseSoftwareExcludingAcquiredInProcessCost', 'us-gaap:ResearchAndDevelopmentAssetAcquiredOtherThanThroughBusinessCombinationWrittenOff'},
     'other_operating_expenses': None, # Calculated
     'operating_income': {'us-gaap:OperatingIncomeLoss'},
-    'other_income': {'us-gaap:OtherNonoperatingIncomeExpense'}, # todo new column
+    'other_income_net': None,
+    'expenses': None, # calculated
     'ebt': {'us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest', 'us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments'},
     'income_equity_method_investments': {'us-gaap:IncomeLossFromEquityMethodInvestments'},
     'interest_expense': {'us-gaap:InterestExpense', 'us-gaap:InterestAndDebtExpense', 'us-gaap:InterestExpenseNonoperating'},
+    'interest_inc_exp': {'us-gaap:InterestIncomeExpenseNonoperatingNet'},
     'ebit': None, # Calculated
     'reconciled_deprecation': None, # todo you need to find this value from cf stmt and maybe it's better to name it 'dda'. This is from cf us-gaap:DepreciationDepletionAndAmortization, us-gaap:DepreciationAndAmortization
     'ebitda': None, # Calculated
     'income_tax': {'us-gaap:IncomeTaxExpenseBenefit'},
-    'net_income_including_non_controlling_interests': {'us-gaap:ProfitLoss'}, # todo new column
+    'net_income_including_non_controlling_interests': {'us-gaap:ProfitLoss'}, # todo new column, also this tag 'us-gaap:IncomeLossFromContinuingOperationsIncludingPortionAttributableToNoncontrollingInterest', but it must be only one of these tags for this position or in other words it cannot be sum.
     'net_income_non_controlling_interests': {'us-gaap:NetIncomeLossAttributableToNoncontrollingInterest'}, # todo new column
-    'net_income': {'us-gaap:NetIncomeLoss'},
+    'net_income': {'us-gaap:NetIncomeLoss', 'us-gaap:NetIncomeLossAvailableToCommonStockholdersBasic'},
     'eps': {'us-gaap:EarningsPerShareBasic'}, # todo rename column name 'eps_basic'
     'diluted_eps': {'us-gaap:EarningsPerShareDiluted'},
     'avg_shares_basic': {'us-gaap:WeightedAverageNumberOfSharesOutstandingBasic'}, # todo rename column name maybe
@@ -162,14 +225,12 @@ cash_flow_gaap = {
     # Operating cash flow
     'operating_cash_flow': {'us-gaap:NetCashProvidedByUsedInOperatingActivities', 'us-gaap:NetCashProvidedByUsedInOperatingActivitiesContinuingOperations', 'us-gaap:CashProvidedByUsedInOperatingActivitiesDiscontinuedOperations'}, # 1 = 2 + 3
     'operating_net_income': {'us-gaap:ProfitLoss', 'us-gaap:IncomeLossIncludingPortionAttributableToNoncontrollingInterest', 'us-gaap:NetIncomeLoss'},
-    'operating_da': {'us-gaap:OperatingLeaseRightOfUseAssetAmortizationExpense', 'us-gaap:DepreciationDepletionAndAmortization', 'us-gaap:OtherDepreciationAndAmortization', 'us-gaap:CostOfGoodsAndServicesSoldDepreciation', # todo rename to dda
+    'operating_da': {'us-gaap:DepreciationAndAmortization', 'us-gaap:OperatingLeaseRightOfUseAssetAmortizationExpense', 'us-gaap:DepreciationDepletionAndAmortization', 'us-gaap:OtherDepreciationAndAmortization', 'us-gaap:CostOfGoodsAndServicesSoldDepreciation', # todo rename to dda
                      'us-gaap:CostOfGoodsAndServicesSoldDepreciation', 'us-gaap:DepreciationNonproduction', 'us-gaap:Depreciation', 'us-gaap:Depletion', 'us-gaap:CostDepletion', 'us-gaap:DepletionOfOilAndGasProperties',
                      'us-gaap:CostOfGoodsAndServicesSoldAmortization', 'us-gaap:AmortizationOfIntangibleAssets', 'us-gaap:AmortizationOfAcquisitionCosts', 'us-gaap:AmortizationOfDeferredSalesCommissions',
                      'us-gaap:FinanceLeaseRightOfUseAssetAmortization', 'us-gaap:AmortizationOfPowerContractsEmissionCredits', 'us-gaap:AmortizationOfNuclearFuelLease', 'us-gaap:AmortizationOfRegulatoryAsset',
                      'us-gaap:AmortizationOfAdvanceRoyalty', 'us-gaap:AmortizationOfDeferredPropertyTaxes', 'us-gaap:AmortizationOfRateDeferral', 'us-gaap:AmortizationOfDeferredHedgeGains',
-                     'us-gaap:AmortizationAndDepreciationOfDecontaminatingAndDecommissioningAssets', 'us-gaap:OtherAmortizationOfDeferredCharges', 'us-gaap:AdjustmentForAmortization',
-                     'us-gaap:AmortizationOfDebtDiscountPremium', 'us-gaap:AmortizationOfFinancingCosts', 'us-gaap:AmortizationOfFinancingCostsAndDiscounts' # todo exclude the last 3 except if they are the only ones
-                     },
+                     'us-gaap:AmortizationAndDepreciationOfDecontaminatingAndDecommissioningAssets', 'us-gaap:OtherAmortizationOfDeferredCharges', 'us-gaap:AdjustmentForAmortization'},
     'deferred_income_tax': {'us-gaap:DeferredIncomeTaxExpenseBenefit', 'us-gaap:DeferredIncomeTaxesAndTaxCredits'},
     'share_based_compensation': {'us-gaap:EmployeeBenefitsAndShareBasedCompensationNoncash', 'us-gaap:ShareBasedCompensation', 'us-gaap:RestrictedStockExpense', 'us-gaap:StockOptionPlanExpense'},
     'change_working_capital': {'us-gaap:IncreaseDecreaseInOperatingCapital', 'us-gaap:IncreaseDecreaseInPayableForInvestmentPurchased', 'us-gaap:IncreaseDecreaseInReceivableForInvestmentSold', 'us-gaap:IncreaseDecreaseInProfessionalFeePayable',
@@ -283,7 +344,8 @@ cash_flow_gaap = {
                          'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsIncludingDisposalGroupAndDiscontinuedOperations',
                          'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsIncludingDisposalGroupAndDiscontinuedOperations:1'
                          'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsDisposalGroupIncludingDisc'},
-    'inc_dec_cash': {'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect'}
+    'inc_dec_cash': {'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect',
+                     'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseExcludingExchangeRateEffect'}
 }
 
 

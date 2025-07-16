@@ -6,7 +6,9 @@ from typing import Optional, Dict
 import os
 import pickle
 import edgar
+import numpy as np
 import pandas as pd
+from cffi.cffi_opcode import PRIM_LONG
 from edgar import get_by_accession_number
 from fastcore.imports import df_equal
 from fmpsdk import balance_sheet_statement
@@ -18,7 +20,6 @@ import utils
 from config import logger
 import yfinance as yf
 
-from utils import current_liabilities_list, non_current_liabilities_list
 
 
 def request_fundamentals(ticker: str):
@@ -130,18 +131,43 @@ def get_filing_details(accession_number:str, is_xbrl:int) -> Optional[Dict[str,p
     if  is_xbrl == 1:
         filing = edgar.get_by_accession_number(accession_number=accession_number)
         statements = {
-            'BalanceSheet': filing.obj().financials.balance_sheet().to_dataframe(),
-            'IncomeStatement': filing.obj().financials.income_statement().to_dataframe(),
-            'CashFlowStatement': filing.obj().financials.cashflow_statement().to_dataframe()
+            'BalanceSheet': filing.obj().financials.balance_sheet().to_dataframe().replace(['',np.nan],None),
+            'IncomeStatement': filing.obj().financials.income_statement().to_dataframe().replace(['',np.nan],None),
+            'CashFlowStatement': filing.obj().financials.cashflow_statement().to_dataframe().replace(['',np.nan],None)
         }
+        # Rename columns to match period end date
+        for key,stmt in statements.items():
+            if len(stmt.columns) > 2 and filing.period_of_report in stmt.columns[2]:
+                stmt = stmt[['concept', 'label', stmt.columns[2]]]
+                statements[key] = stmt.rename(columns={stmt.columns[2]:filing.period_of_report}, inplace=False)
+            else:
+                logger.warning(f"The 3rd column that must contain {filing.period_of_report} for a filing with accession number {filing.accession_number}.\n"
+                               f"Dataframe columns {stmt.columns} for statement {key}")
         # Acc standard, currency, period start
-        ascps = get_period_start_and_currency_and_acc_standard(filing, statements['IncomeStatement'])
+        other_data = get_other_data(filing, statements['IncomeStatement'], statements['CashFlowStatement'])
         # Dataframes for XBRL query
-        previous_end_date = (datetime.strptime(ascps['period_start'], '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
-        print(previous_end_date)
-        df_instant_prev_end = filing.xbrl().query().by_dimension(None).by_instant_date(previous_end_date).to_dataframe('concept', 'numeric_value', 'statement_type')
-        df_instant_end = filing.xbrl().query().by_dimension(None).by_instant_date(filing.period_of_report).to_dataframe('concept', 'numeric_value', 'statement_type')
-        df_period = filing.xbrl().query().by_dimension(None).by_date_range(ascps['period_start'], filing.period_of_report).to_dataframe('concept', 'numeric_value', 'statement_type')
+        previous_end_date = (datetime.strptime(other_data['period_start'], '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
+        df_instant_prev_end = filing.xbrl().query().by_dimension(None).by_instant_date(previous_end_date).to_dataframe('concept', 'numeric_value', 'statement_type').replace(['',np.nan],None)
+        df_instant_end = filing.xbrl().query().by_dimension(None).by_instant_date(filing.period_of_report).to_dataframe('concept', 'numeric_value', 'statement_type').replace(['',np.nan],None)
+        df_period = filing.xbrl().query().by_dimension(None).by_date_range(other_data['period_start'], filing.period_of_report).to_dataframe('concept', 'numeric_value', 'statement_type').replace(['',np.nan],None)
+        # Archive filing
+        archive = {
+            'period_start': other_data['period_start'],
+            'period_end': filing.period_of_report,
+            'cf_period_start': other_data['cf_period_start'],
+            'acc_standard': other_data['acc_standard'],
+            'currency': other_data['currency'],
+            'form': filing.form,
+            'cik': filing.cik,
+            'statements': {key: df.to_dict() for key, df in statements.items()},
+            'df_instant_prev_end': df_instant_prev_end.to_dict(),
+            'df_instant_end': df_instant_end.to_dict(),
+            'df_period': df_period.to_dict()
+        }
+        db_ops.insert_filing(filing.accession_number, archive)
+        # Income statement and cashflow statement period compatibility
+        if other_data.get('cf_period_start') != other_data.get('period_start'):
+            statements.pop('CashFlowStatement')
         # XBRL Mappings
         xbrl_map = dict()
         # Load data from pickle
@@ -149,10 +175,12 @@ def get_filing_details(accession_number:str, is_xbrl:int) -> Optional[Dict[str,p
             with open('data/xbrl_map', 'rb') as f:
                 xbrl_map = pickle.load(f)
         for stmt in statements.keys():
-            statements[stmt] = get_statement(stmt, statements[stmt], ascps['acc_standard'], df_instant_end, df_period, filing.period_of_report)
+            statements[stmt] = get_statement(stmt, statements[stmt], other_data['acc_standard'], df_instant_end, df_period, filing.period_of_report)
+        # Data validation
         statements['BalanceSheet'] = validate_balance_sheet(statements['BalanceSheet'])
-        statements['IncomeStatement'] = validate_income_statement(inc_stmt=statements['IncomeStatement'],cf_stmt=statements['CashFlowStatement'])
-        statements['CashFlowStatement'] = validate_cashflow_statement(df_instant_prev_end,df_instant_end,df_period,statements['CashFlowStatement'], ascps['acc_standard'])
+        statements['IncomeStatement'] = validate_income_statement(inc_stmt=statements['IncomeStatement'],cf_stmt=statements.get('CashFlowStatement'))
+        if 'CashFlowStatement' in statements.keys(): # To prevent KeyError if IncomeStatement and CashFlowStatement period compatibility Fails
+            statements['CashFlowStatement'] = validate_cashflow_statement(df_instant_prev_end,df_instant_end,df_period,statements['CashFlowStatement'], other_data['acc_standard'])
         return statements
     else:
         return None # todo yfinance
@@ -164,15 +192,32 @@ def get_statement(stmt_name: str, df_stmt: pd.DataFrame, acc_standard: str, df_i
     # Replace _ with :
     df_stmt['concept'] = df_stmt['concept'].str.replace('_', ':')
     ans = {}
+    # Revenue
+    if stmt_name == 'IncomeStatement':
+        ans['revenue'] = get_position_value_sum_or_max(df_stmt,df_tags,stmt_tags.pop('revenue'),period_end)
     for position, tags in stmt_tags.items():
         if tags is not None:
-            ans[position] = get_position_value(df_stmt, df_tags,tags, period_end)
+            ans[position] = get_position_value_sum_or_sum(df_stmt, df_tags,tags, period_end)
         else:
             ans[position] = None
-    #return pd.DataFrame({k: [v] for k, v in ans.items()})
     return ans
 
-def get_position_value(df_stmt: pd.DataFrame, df_tags: pd.DataFrame, xbrl_tags: set, period_end: str) -> float | None:
+def get_position_value_sum_or_sum(df_stmt: pd.DataFrame, df_tags: pd.DataFrame, xbrl_tags: set, period_end: str) -> float | None:
+    df_stmt = df_stmt[df_stmt['concept'].isin(xbrl_tags)]
+    values = pd.to_numeric(df_stmt[period_end], errors='coerce').dropna().tolist()
+    # EXTRACTED XBRL INSTANCE DOCUMENT if statement has no values for position
+    if not values:
+        df_tags = df_tags[df_tags['concept'].isin(xbrl_tags)]
+        tag_values = pd.to_numeric(df_tags['numeric_value'], errors='coerce').dropna().tolist()
+        if tag_values:
+            values.append(max(tag_values, key=abs))
+        if not values:
+            return None
+    max_value, sum_value, sum_combo = max(values), sum(values),check_sum_combinations(values)
+    pos_value = max_value if sum_value - max_value == max_value else sum_combo if sum_combo else sum_value
+    return pos_value if pos_value != 0 else None
+
+def get_position_value_sum_or_max(df_stmt: pd.DataFrame, df_tags: pd.DataFrame, xbrl_tags: set, period_end: str) -> float | None:
     df_stmt = df_stmt[df_stmt['concept'].isin(xbrl_tags)]
     values = pd.to_numeric(df_stmt[period_end], errors='coerce').dropna().tolist()
     # EXTRACTED XBRL INSTANCE DOCUMENT if statement has no values for position
@@ -185,15 +230,17 @@ def get_position_value(df_stmt: pd.DataFrame, df_tags: pd.DataFrame, xbrl_tags: 
         if not values:
             return None
     max_value, sum_value = max(values), sum(values)
-    pos_value = max_value if sum_value - max_value == max_value else sum_value
+    pos_value = max_value if sum_value - max_value == max_value else max_value
     return pos_value if pos_value != 0 else None
 
 
-def get_period_start_and_currency_and_acc_standard(filing: edgar.Filing, df: pd.DataFrame) -> dict | None:
-    values = pd.to_numeric(df[filing.period_of_report], errors='coerce').dropna()
+def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf) -> dict | None:
     ans = {}
+    # Numeric column values
+    values_inc = pd.to_numeric(df_inc[filing.period_of_report], errors='coerce').dropna()
+    values_cf = pd.to_numeric(df_cf[filing.period_of_report], errors='coerce').dropna()
     # Accounting standard
-    for concept in df['concept']:
+    for concept in df_inc['concept']:
         if concept.startswith('us-gaap'):
             ans['acc_standard'] = 'us-gaap'
             break
@@ -203,9 +250,9 @@ def get_period_start_and_currency_and_acc_standard(filing: edgar.Filing, df: pd.
         else:
             ans['acc_standard'] = None
     # Currency and period start
-    for value in values:
+    for value in values_inc:
         if all(key in ans for key in ['currency', 'period_start']):
-            return ans
+            break
         df_pos = filing.xbrl().query().by_statement_type('IncomeStatement').by_dimension(None).by_value(
             float(value)).to_dataframe('concept', 'period_start', 'period_end', 'unit_ref').drop_duplicates()
         if len(df_pos) == 1 and df_pos.loc[0, 'period_end'] == filing.period_of_report:
@@ -213,6 +260,14 @@ def get_period_start_and_currency_and_acc_standard(filing: edgar.Filing, df: pd.
             currency = get_currency(filing, df_pos.loc[0, 'unit_ref'])
             if currency:
                 ans['currency'] = currency
+    # Period start for cashflow
+    for value in values_cf:
+        if all(key in ans for key in ['currency', 'period_start', 'cf_period_start']):
+            return ans
+        df_pos = (filing.xbrl().query().by_statement_type('CashFlowStatement').by_dimension(None).by_value(float(value))
+                  .to_dataframe('concept', 'period_start', 'period_end').drop_duplicates())
+        if len(df_pos) == 1 and df_pos.loc[0, 'period_end'] == filing.period_of_report:
+            ans['cf_period_start'] = df_pos.loc[0, 'period_start']
 
     return None
 
@@ -223,25 +278,35 @@ def get_currency(filing: edgar.Filing, unit_ref: str) -> str | None:
         return iso_cur[1].upper()
     return None
 
+
+def check_sum_combinations(values: list[float]):
+    sum_val = sum(values)
+    for val in values:
+        if val == (sum_val - val):
+            return val
+    return None
+
+
 def validate_balance_sheet(bs_stmt: dict[str,float]) -> dict[str,float] | None:
-    # Calc
     current_assets_total = sum(bs_stmt.get(position) or 0 for position in utils.current_assets_list)
     non_current_assets_total = sum(bs_stmt.get(position) or 0 for position in utils.non_current_assets_list)
     current_liabilities_total = sum(bs_stmt.get(position) or 0 for position in utils.current_liabilities_list)
     non_current_liabilities_total = sum(bs_stmt.get(position) or 0 for position in utils.non_current_liabilities_list)
-    print(type(bs_stmt))
     assets = bs_stmt.get('assets') or 0
     liab_and_equity = bs_stmt.get('liabilities_and_equity') or 0
     assets = max(assets, liab_and_equity)
     assets = assets if assets > 0 else None
     bs_stmt.pop('liabilities_and_equity')
+    property_plant_equipment_net = bs_stmt.get('property_plant_equipment_net') or 0
+    operating_lease = bs_stmt.get('operating_lease') or 0
     current_assets = bs_stmt.get('current_assets')
     non_current_assets = bs_stmt.get('non_current_assets')
     liabilities = bs_stmt.get('liabilities')
     current_liabilities = bs_stmt.get('current_liabilities')
     non_current_liabilities = bs_stmt.get('non_current_liabilities')
-    equity = max(bs_stmt.get('equity') or 0, bs_stmt.get('shareholders_equity') or 0)
-    equity = equity if equity > 0 else None
+    equity = bs_stmt.get('equity')
+    shareholders_equity = bs_stmt.get('shareholders_equity')
+    equity = equity if equity else shareholders_equity
     # left side
     if assets:
         if not current_assets:
@@ -256,6 +321,9 @@ def validate_balance_sheet(bs_stmt: dict[str,float]) -> dict[str,float] | None:
             current_liabilities = liabilities - non_current_liabilities if non_current_liabilities else None
         if not non_current_liabilities:
             non_current_liabilities = liabilities - current_liabilities if current_liabilities else None
+    else:
+        if current_liabilities and non_current_liabilities:
+            liabilities = current_liabilities + non_current_liabilities
     # Update major balance sheet positions
     bs_stmt['current_assets'] = current_assets
     bs_stmt['non_current_assets'] = non_current_assets
@@ -274,32 +342,53 @@ def validate_balance_sheet(bs_stmt: dict[str,float]) -> dict[str,float] | None:
         bs_stmt['other_non_current_liabilities'] = non_current_liabilities - non_current_liabilities_total
     # Calc complex position
     # cash_and_short_term_investments
-    cash_and_short_term_investments = bs_stmt.get('cash_and_short_term_investments', 0)
+    cash_and_short_term_investments = bs_stmt.get('cash_and_short_term_investments')
     if not cash_and_short_term_investments:
-        cash_and_cash_equivalents = bs_stmt.get('cash_and_cash_equivalents', 0)
-        short_term_investments = bs_stmt.get('short_term_investments', 0)
+        cash_and_cash_equivalents = bs_stmt.get('cash_and_cash_equivalents') or 0
+        short_term_investments = bs_stmt.get('short_term_investments') or 0
         if cash_and_cash_equivalents or short_term_investments:
             bs_stmt['cash_and_short_term_investments'] = cash_and_cash_equivalents + short_term_investments
+    # PPE
+    if operating_lease:
+        bs_stmt['property_plant_equipment_net'] = property_plant_equipment_net + bs_stmt.pop('operating_lease')
     # payables_and_expenses
-    payables_and_expenses = bs_stmt.get('payables_and_expenses', 0)
+    payables_and_expenses = bs_stmt.get('payables_and_expenses')
     if not payables_and_expenses:
-        account_payables = bs_stmt.get('account_payables', 0)
-        accrued_liabilities_current = bs_stmt.get('accrued_liabilities_current', 0)
+        account_payables = bs_stmt.get('account_payables') or 0
+        accrued_liabilities_current = bs_stmt.get('accrued_liabilities_current') or 0
         if account_payables or accrued_liabilities_current:
             bs_stmt['payables_and_expenses'] = account_payables + accrued_liabilities_current
 
     return bs_stmt
 
 def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, float]) -> dict[str,float] | None:
+    # Revenue
+    # – COGS
+    # = Gross Profit
+    # – Operating Expenses
+    # = Operating Income
+    # + Other Income
+    # – Other Expenses
+    # = Earnings Before Tax(EBT)
+    # – Income Tax
+    # = Net# Income
     revenue = inc_stmt.get('revenue')
-    cost_of_revenue = abs(inc_stmt.get('cost_of_revenue'))
+    cost_of_revenue = abs(inc_stmt.get('cost_of_revenue') or 0)
     gross_profit = inc_stmt.get('gross_profit')
     operating_income = inc_stmt.get('operating_income')
-    operating_expenses = abs(inc_stmt.get('operating_expenses'))
-    other_income = inc_stmt.get('other_income')
+    operating_expenses = abs(inc_stmt.get('operating_expenses') or 0)
+    selling_general_and_administrative_expense = abs(inc_stmt.get('selling_general_and_administrative_expense') or 0)
+    research_and_development_expenses = abs(inc_stmt.get('research_and_development_expenses') or 0)
+    other_operating_expenses = None
+    other_income_net = None
+    expenses = None
     ebt = inc_stmt.get('ebt')
-    interest_expense = abs(inc_stmt.get('ebt')) # todo it could be positive
-    dda = cf_stmt.get('operating_da')
+    interest_expense = abs(inc_stmt.get('interest_expense') or 0)
+    interest_inc_exp = inc_stmt.pop('interest_inc_exp')
+    dda = abs(cf_stmt.get('operating_da')) if cf_stmt else None
+    net_income_including_non_controlling_interests = inc_stmt.get('net_income_including_non_controlling_interests')
+    net_income_non_controlling_interests = inc_stmt.get('net_income_non_controlling_interests') or 0
+    net_income = inc_stmt.get('net_income')
     ebit = None
     ebitda = None
     if revenue:
@@ -308,29 +397,46 @@ def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, floa
         elif cost_of_revenue:
             gross_profit = revenue - cost_of_revenue
     if operating_income:
-        if gross_profit:
+        if revenue:
             operating_expenses = gross_profit - operating_income
-        if ebt and not other_income:
-            other_income = operating_income - ebt
-        if not ebt and other_income:
-            ebt = operating_income + other_income
+        if ebt:
+            other_income_net = operating_income - ebt
     elif operating_expenses and gross_profit:
         operating_income = gross_profit - operating_expenses
+    if operating_expenses:
+        other_operating_expenses = operating_expenses - selling_general_and_administrative_expense - research_and_development_expenses
+    if not interest_expense and interest_inc_exp:
+        interest_expense = interest_inc_exp * -1 # I multipy with -1 because it can be income or expense.
     if ebt and interest_expense:
         ebit = ebt + interest_expense
     if ebit and dda:
         ebitda = ebit + dda
+    if net_income:
+        if net_income_non_controlling_interests:
+            net_income_including_non_controlling_interests = net_income - net_income_non_controlling_interests
+        elif net_income_including_non_controlling_interests:
+            net_income_non_controlling_interests = net_income - net_income_including_non_controlling_interests
+    if revenue and net_income:
+        expenses = revenue - net_income
+
 
     inc_stmt['cost_of_revenue'] = cost_of_revenue
     inc_stmt['gross_profit'] = gross_profit
     inc_stmt['operating_income'] = operating_income
     inc_stmt['operating_expenses'] = operating_expenses
-    inc_stmt['other_income'] = other_income
+    inc_stmt['other_operating_expenses'] = other_operating_expenses
+    inc_stmt['selling_general_and_administrative_expense'] = selling_general_and_administrative_expense
+    inc_stmt['research_and_development_expenses'] = research_and_development_expenses
+    inc_stmt['other_income_net'] = other_income_net
+    inc_stmt['expenses'] = expenses
     inc_stmt['ebt'] = ebt
+    inc_stmt['income_tax'] = abs(inc_stmt.get('income_tax') or 0)
     inc_stmt['interest_expense'] = interest_expense
     inc_stmt['reconciled_deprecation'] = dda
     inc_stmt['ebit'] = ebit
     inc_stmt['ebitda'] = ebitda
+    inc_stmt['net_income_including_non_controlling_interests'] = net_income_including_non_controlling_interests if net_income_including_non_controlling_interests else None
+    inc_stmt['net_income_non_controlling_interests'] = net_income_non_controlling_interests if net_income_non_controlling_interests else None
 
     return inc_stmt
 
@@ -361,7 +467,7 @@ def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_
         cf_stmt['free_cash_flow'] = free_cash_flow
 
     # Cash end
-    df_cash_end = df_instant_end[df_instant_end['statement_type'] == 'CashFlowStatement']
+    df_cash_end = df_instant_end[df_instant_end['statement_type'].isin(['CashFlowStatement','BalanceSheet'])]
     df_cash_end = df_cash_end[df_cash_end['concept'].isin(XBRLTagMapper.xbrl_tags[acc_standard]['CashFlowStatement']['end_cash_balance'])]
     end_cash_balance = df_cash_end['numeric_value'].max()
     if end_cash_balance:
@@ -372,11 +478,14 @@ def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_
     if net_change and end_cash_balance:
         start_cash_balance = end_cash_balance - net_change
     else:
-        df_cash_start = df_instant_start[df_instant_start['statement_type'] == 'CashFlowStatement']
+        df_cash_start = df_instant_start[df_instant_start['statement_type'].isin(['CashFlowStatement', 'BalanceSheet'])]
         df_cash_start = df_cash_start[df_cash_start['concept'].isin(XBRLTagMapper.xbrl_tags[acc_standard]['CashFlowStatement']['start_cash_balance'])]
         start_cash_balance = df_cash_start['numeric_value'].max()
     if start_cash_balance:
         cf_stmt['start_cash_balance'] = start_cash_balance
+    # Cash change
+    if start_cash_balance and end_cash_balance and not net_change:
+        cf_stmt['inc_dec_cash'] = end_cash_balance - start_cash_balance
 
     return cf_stmt
 

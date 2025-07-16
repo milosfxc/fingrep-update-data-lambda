@@ -1,5 +1,6 @@
 import datetime
 import json
+from stat import FILE_ATTRIBUTE_DEVICE
 
 import edgar
 import pandas as pd
@@ -7,6 +8,7 @@ import yfinance as yf
 from PIL.XbmImagePlugin import XbmImageFile
 from edgar import get_filings, Company, XBRL
 from edgar.xbrl.stitching import XBRLS
+from sympy.logic.algorithms.dpll import pl_true_int_repr
 
 import XBRLTagMapper
 import config
@@ -21,11 +23,14 @@ from fundamentals import get_period_ending_by_accession_number
 from utils import get_utc_date
 
 # Set pandas to display all rows and columns
-pd.set_option('display.max_rows', None)  # Show all rows
-pd.set_option('display.max_columns', None)  # Show all columns
-pd.set_option('display.max_colwidth', None)  # No truncation in columns
-pd.set_option('display.width', 1000)  # To allow the console to use the full width
+pd.set_option('display.max_rows', None)            # Show all rows
+pd.set_option('display.max_columns', None)         # Show all columns
+pd.set_option('display.max_colwidth', 50)        # No truncation in cell values
+pd.set_option('display.width', 1000)               # Wide console width
+pd.set_option('display.expand_frame_repr', False)  # <<< THIS one disables line wrapping!
 pd.set_option('display.float_format', '{:,.2f}'.format)
+
+#pd.set_option('display.colheader_justify', 'left')  # Left-align headers
 #pd.set_option("display.expand_frame_repr", False)  # Prevent line wrapping between columns
 #pd.set_option("display.colheader_justify", "left") # Left-align headers
 if __name__ == '__main__':
@@ -71,12 +76,21 @@ if __name__ == '__main__':
     #                  .by_value(lambda x: x > 1_000_000)
     #                  .sort_by('value', ascending=False)
     #                  .limit(10))
-    filing = Company('AAL').latest('10-K')
-    xbrl = filing.xbrl().query().by_dimension(None).by_concept('us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents', exact=True).by_statement_type('CashFlowStatement').to_dataframe()
-    print(xbrl)
+
+
+    # filing = db_ops.get_filings_by_accession_numbers(['0000950170-25-034660'])
+    # print(pd.DataFrame(filing['0000950170-25-034660']['df_instant_prev_end']))
+    filing = Company('LNW').latest('10-Q')
+    # print(filing.xbrl().statements.income_statement().to_dataframe())
     statements = fundamentals.get_filing_details(filing.accession_number, 1)
     for stmt in statements.values():
-       print(pd.DataFrame({k: [v] for k, v in stmt.items()}).T)
+         print(pd.DataFrame({k: [v] for k, v in stmt.items()}).T)
+
+
+
+
+
+
     #df_bc = filing.xbrl().statements.balance_sheet().to_dataframe()
     #print(df_bc[['label', 'concept', '2024-12-31']])
     # df_is = filing.xbrl().statements.income_statement().to_dataframe()
@@ -174,12 +188,20 @@ if __name__ == '__main__':
     # cashflow_trend = stitched_statements.cashflow_statement()
     # print(income_trend.to_dataframe().to_csv())
     # print(utils.pg_income_statement_columns.values())
-    # tag_map_1 = xbrl_utils.get_all_children('loc_NetIncomeLossAvailableToCommonStockholdersDiluted', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-soi-cal-2025.xml', 'calculationArc')
-    # print(json.dumps(tag_map_1))
-    # tag_map_2 = xbrl_utils.get_all_children_v2('loc_NetCashProvidedByUsedInInvestingActivitiesAbstract', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-scf-indir-pre-2025.xml', 'presentationArc')
-    # tag_map_3 = xbrl_utils.get_all_children_v2('loc_NetCashProvidedByUsedInInvestingActivitiesAbstract', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-scf-indira-pre-2025.xml', 'presentationArc')
-    # tag_map_add = xbrl_utils.get_all_children_v2('loc_AdditionalCashFlowElementsFinancingActivitiesAbstract', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-scf-indira-pre-2025.xml', 'presentationArc')
-    # tag_map_4 = xbrl_utils.get_all_children_v2('loc_NetCashProvidedByUsedInInvestingActivitiesAbstract', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-scf-inv-pre-2025.xml', 'presentationArc')
-    # tag_map_5 = xbrl_utils.get_all_children_v2('loc_NetCashProvidedByUsedInInvestingActivitiesAbstract', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-scf-re-pre-2025.xml', 'presentationArc')
-    # tag_map_6 = xbrl_utils.get_all_children_v2('loc_NetCashProvidedByUsedInInvestingActivitiesAbstract', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-scf-sbo-pre-2025.xml', 'presentationArc')
-    #print(json.dumps(tag_map_1))
+
+    # tag_map_1 = xbrl_utils.get_all_children('loc_InventoryGross', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-sfp-cls2-cal-2025.xml', 'calculationArc')
+    # tag_map_2 = xbrl_utils.get_all_children('loc_InventoryNet', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-sfp-cls2-cal-2025.xml', 'calculationArc')
+    # tag_map_3 = xbrl_utils.get_all_children('loc_OtherInventory', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-sfp-cls2-cal-2025.xml', 'calculationArc')
+    # tag_map_2 = xbrl_utils.get_all_children('loc_InvestmentsAbstract', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-sfp-ucreo-pre-2025.xml', 'presentationArc')
+    # tag_list_1 = xbrl_utils.get_all_children_as_list(tag_map_1)
+    # tag_list_2 = xbrl_utils.get_all_children_as_list(tag_map_2)
+    # tag_map = xbrl_utils.get_all_children_as_list(tag_map_1)
+    # tag_map = [a.replace('loc_','us-gaap:') for a in tag_map]
+    # dep = XBRLTagMapper.balance_sheet_gaap['net_receivables']
+    # ag = set(tag_map).union(set(dep))
+    # print(ag)
+    # print(dep.union(ag))
+    # short_term_investments = XBRLTagMapper.balance_sheet_gaap['short_term_investments']
+    # long_term_investments = XBRLTagMapper.balance_sheet_gaap['long_term_investments']
+    # investments = XBRLTagMapper.balance_sheet_gaap['investments']
+
