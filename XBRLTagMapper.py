@@ -46,7 +46,7 @@ balance_sheet_gaap = {
                                   'us-gaap:MoneyMarketFundsAtCarryingValue', 'us-gaap:RestrictedCashEquivalentsCurrent', 'us-gaap:FederalFundsSoldAndSecuritiesBorrowedOrPurchasedUnderAgreementsToResellFairValueDisclosure',
                                   'us-gaap:CashAndCashEquivalentsAtCarryingValue', 'us-gaap:Cash', 'us-gaap:CashFDICInsuredAmount', 'us-gaap:MunicipalDebtSecuritiesAtCarryingValue', 'us-gaap:TimeDepositsAtCarryingValue',
                                   'us-gaap:InterestBearingDepositsInBanks', 'us-gaap:OtherCashEquivalentsAtCarryingValue', 'us-gaap:CreditAndDebitCardReceivablesAtCarryingValue', 'us-gaap:CashAndDueFromBanks',
-                                  'us-gaap:USGovernmentSecuritiesAtCarryingValue'},
+                                  'us-gaap:USGovernmentSecuritiesAtCarryingValue', 'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents'},
     'short_term_investments': {'us-gaap:ShortTermInvestments', 'us-gaap:EquitySecuritiesFvNi', 'us-gaap:MarketableSecuritiesCurrent', 'us-gaap:OtherShortTermInvestments',
                                'us-gaap:RestrictedInvestmentsCurrent', 'us-gaap:OtherRestrictedAssetsCurrent', 'us-gaap:RestrictedCashAndInvestmentsCurrent',
                                'us-gaap:HeldToMaturitySecuritiesCurrent', 'us-gaap:DebtSecuritiesHeldToMaturityAllowanceForCreditLossCurrent', 'us-gaap:DebtSecuritiesHeldToMaturityAmortizedCostAfterAllowanceForCreditLossCurrent',
@@ -201,12 +201,12 @@ income_statement_gaap = {
                                           'us-gaap:ResearchAndDevelopmentExpenseSoftwareExcludingAcquiredInProcessCost', 'us-gaap:ResearchAndDevelopmentAssetAcquiredOtherThanThroughBusinessCombinationWrittenOff'},
     'other_operating_expenses': None, # Calculated
     'operating_income': {'us-gaap:OperatingIncomeLoss'},
-    'other_income_net': None,
+    'net_non_operating_income': {'us-gaap:NonoperatingIncomeExpense'},
     'expenses': None, # calculated
     'ebt': {'us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest', 'us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments'},
     'income_equity_method_investments': {'us-gaap:IncomeLossFromEquityMethodInvestments'},
-    'interest_expense': {'us-gaap:InterestExpense', 'us-gaap:InterestAndDebtExpense', 'us-gaap:InterestExpenseNonoperating'},
-    'interest_inc_exp': {'us-gaap:InterestIncomeExpenseNonoperatingNet'},
+    'interest_expense': {'us-gaap:InterestExpense', 'us-gaap:InterestAndDebtExpense', 'us-gaap:InterestExpenseDebt', 'us-gaap:InterestExpenseNonoperating'},
+    'interest_inc_exp': {'us-gaap:InterestIncomeExpenseNonoperatingNet', 'us-gaap:InterestIncomeExpenseNet'},
     'ebit': None, # Calculated
     'reconciled_deprecation': None, # todo you need to find this value from cf stmt and maybe it's better to name it 'dda'. This is from cf us-gaap:DepreciationDepletionAndAmortization, us-gaap:DepreciationAndAmortization
     'ebitda': None, # Calculated

@@ -80,8 +80,10 @@ if __name__ == '__main__':
 
     # filing = db_ops.get_filings_by_accession_numbers(['0000950170-25-034660'])
     # print(pd.DataFrame(filing['0000950170-25-034660']['df_instant_prev_end']))
-    filing = Company('LNW').latest('10-Q')
-    # print(filing.xbrl().statements.income_statement().to_dataframe())
+    #filing = Company('LNW').latest('10-Q')
+    filing = Company('MGPI').latest('10-Q')
+    df  = filing.xbrl().statements.income_statement().to_dataframe()
+    print(df)
     statements = fundamentals.get_filing_details(filing.accession_number, 1)
     for stmt in statements.values():
          print(pd.DataFrame({k: [v] for k, v in stmt.items()}).T)

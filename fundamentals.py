@@ -1,6 +1,3 @@
-import inspect
-import sys
-import traceback
 from datetime import datetime, timedelta
 from typing import Optional, Dict
 import os
@@ -8,14 +5,9 @@ import pickle
 import edgar
 import numpy as np
 import pandas as pd
-from cffi.cffi_opcode import PRIM_LONG
 from edgar import get_by_accession_number
-from fastcore.imports import df_equal
-from fmpsdk import balance_sheet_statement
-
 import XBRLTagMapper
 import db_ops
-import edgar_service
 import utils
 from config import logger
 import yfinance as yf
@@ -195,6 +187,10 @@ def get_statement(stmt_name: str, df_stmt: pd.DataFrame, acc_standard: str, df_i
     # Revenue
     if stmt_name == 'IncomeStatement':
         ans['revenue'] = get_position_value_sum_or_max(df_stmt,df_tags,stmt_tags.pop('revenue'),period_end)
+        if not ans['revenue']:
+            revenue_series = df_stmt.loc[df_stmt['label'].str.contains('revenue', case=False, na=False) & df_stmt[period_end].notna(), period_end]
+            ans['revenue'] = revenue_series.max() if not revenue_series.empty else None
+    # Iterate over statement positions
     for position, tags in stmt_tags.items():
         if tags is not None:
             ans[position] = get_position_value_sum_or_sum(df_stmt, df_tags,tags, period_end)
@@ -288,10 +284,7 @@ def check_sum_combinations(values: list[float]):
 
 
 def validate_balance_sheet(bs_stmt: dict[str,float]) -> dict[str,float] | None:
-    current_assets_total = sum(bs_stmt.get(position) or 0 for position in utils.current_assets_list)
-    non_current_assets_total = sum(bs_stmt.get(position) or 0 for position in utils.non_current_assets_list)
-    current_liabilities_total = sum(bs_stmt.get(position) or 0 for position in utils.current_liabilities_list)
-    non_current_liabilities_total = sum(bs_stmt.get(position) or 0 for position in utils.non_current_liabilities_list)
+
     assets = bs_stmt.get('assets') or 0
     liab_and_equity = bs_stmt.get('liabilities_and_equity') or 0
     assets = max(assets, liab_and_equity)
@@ -306,7 +299,11 @@ def validate_balance_sheet(bs_stmt: dict[str,float]) -> dict[str,float] | None:
     non_current_liabilities = bs_stmt.get('non_current_liabilities')
     equity = bs_stmt.get('equity')
     shareholders_equity = bs_stmt.get('shareholders_equity')
+    if not shareholders_equity and not equity:
+        sh_eq_pos = [bs_stmt.get('capital_stock'), bs_stmt.get('share_premium'), bs_stmt.get('retained_earnings'), bs_stmt.get('treasury_shares'), bs_stmt.get('accumulated_other_comprehensive_income_loss')]
+        shareholders_equity = sum(pos for pos in sh_eq_pos if pos)
     equity = equity if equity else shareholders_equity
+
     # left side
     if assets:
         if not current_assets:
@@ -314,7 +311,12 @@ def validate_balance_sheet(bs_stmt: dict[str,float]) -> dict[str,float] | None:
         if not non_current_assets:
             non_current_assets = assets - current_assets if current_assets else None
         if not liabilities:
-            liabilities = assets - equity if equity else None
+            if current_liabilities and non_current_liabilities:
+                liabilities = current_liabilities + non_current_liabilities
+            elif equity:
+                liabilities = assets - equity
+        if liabilities:
+            equity = assets - liabilities
     # right side
     if liabilities:
         if not current_liabilities:
@@ -331,15 +333,6 @@ def validate_balance_sheet(bs_stmt: dict[str,float]) -> dict[str,float] | None:
     bs_stmt['current_liabilities'] = current_liabilities
     bs_stmt['non_current_liabilities'] = non_current_liabilities
     bs_stmt['equity'] = equity
-    # Calc other positions
-    if current_assets and current_assets_total:
-        bs_stmt['other_current_assets'] = current_assets - current_assets_total
-    if non_current_assets and non_current_assets_total:
-        bs_stmt['other_non_current_assets'] = non_current_assets - non_current_assets_total
-    if current_liabilities and current_liabilities_total:
-        bs_stmt['other_current_liabilities'] = current_liabilities - current_liabilities_total
-    if non_current_liabilities and non_current_liabilities_total:
-        bs_stmt['other_non_current_liabilities'] = non_current_liabilities - non_current_liabilities_total
     # Calc complex position
     # cash_and_short_term_investments
     cash_and_short_term_investments = bs_stmt.get('cash_and_short_term_investments')
@@ -359,6 +352,19 @@ def validate_balance_sheet(bs_stmt: dict[str,float]) -> dict[str,float] | None:
         if account_payables or accrued_liabilities_current:
             bs_stmt['payables_and_expenses'] = account_payables + accrued_liabilities_current
 
+    # Calc other positions
+    current_assets_total = sum(bs_stmt.get(position) or 0 for position in utils.current_assets_list)
+    non_current_assets_total = sum(bs_stmt.get(position) or 0 for position in utils.non_current_assets_list)
+    current_liabilities_total = sum(bs_stmt.get(position) or 0 for position in utils.current_liabilities_list)
+    non_current_liabilities_total = sum(bs_stmt.get(position) or 0 for position in utils.non_current_liabilities_list)
+    if current_assets and current_assets_total:
+        bs_stmt['other_current_assets'] = current_assets - current_assets_total
+    if non_current_assets and non_current_assets_total:
+        bs_stmt['other_non_current_assets'] = non_current_assets - non_current_assets_total
+    if current_liabilities and current_liabilities_total:
+        bs_stmt['other_current_liabilities'] = current_liabilities - current_liabilities_total
+    if non_current_liabilities and non_current_liabilities_total:
+        bs_stmt['other_non_current_liabilities'] = non_current_liabilities - non_current_liabilities_total
     return bs_stmt
 
 def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, float]) -> dict[str,float] | None:
@@ -380,7 +386,7 @@ def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, floa
     selling_general_and_administrative_expense = abs(inc_stmt.get('selling_general_and_administrative_expense') or 0)
     research_and_development_expenses = abs(inc_stmt.get('research_and_development_expenses') or 0)
     other_operating_expenses = None
-    other_income_net = None
+    net_non_operating_income = inc_stmt.get('net_non_operating_income')
     expenses = None
     ebt = inc_stmt.get('ebt')
     interest_expense = abs(inc_stmt.get('interest_expense') or 0)
@@ -397,14 +403,19 @@ def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, floa
         elif cost_of_revenue:
             gross_profit = revenue - cost_of_revenue
     if operating_income:
-        if revenue:
+        if gross_profit and operating_income:
             operating_expenses = gross_profit - operating_income
-        if ebt:
-            other_income_net = operating_income - ebt
+        if ebt: # todo should I add here not net_non_operating_income?
+            net_non_operating_income = ebt - operating_income
+        else:
+            ebt = operating_income + net_non_operating_income
+        if not revenue and not operating_expenses:
+            operating_expenses = abs(operating_income)
     elif operating_expenses and gross_profit:
         operating_income = gross_profit - operating_expenses
     if operating_expenses:
         other_operating_expenses = operating_expenses - selling_general_and_administrative_expense - research_and_development_expenses
+        # min(selling_general_and_administrative_expense, research_and_development_expenses) = 0 todo later
     if not interest_expense and interest_inc_exp:
         interest_expense = interest_inc_exp * -1 # I multipy with -1 because it can be income or expense.
     if ebt and interest_expense:
@@ -418,6 +429,8 @@ def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, floa
             net_income_non_controlling_interests = net_income - net_income_including_non_controlling_interests
     if revenue and net_income:
         expenses = revenue - net_income
+    elif operating_expenses:
+        expenses = operating_expenses + interest_expense if interest_expense > 0 else operating_expenses # interest_expense can be positive due to variable interest_inc_exp,so that's why > 0
 
 
     inc_stmt['cost_of_revenue'] = cost_of_revenue
@@ -427,7 +440,7 @@ def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, floa
     inc_stmt['other_operating_expenses'] = other_operating_expenses
     inc_stmt['selling_general_and_administrative_expense'] = selling_general_and_administrative_expense
     inc_stmt['research_and_development_expenses'] = research_and_development_expenses
-    inc_stmt['other_income_net'] = other_income_net
+    inc_stmt['net_non_operating_income'] = net_non_operating_income
     inc_stmt['expenses'] = expenses
     inc_stmt['ebt'] = ebt
     inc_stmt['income_tax'] = abs(inc_stmt.get('income_tax') or 0)
