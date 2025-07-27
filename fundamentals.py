@@ -6,6 +6,8 @@ import edgar
 import numpy as np
 import pandas as pd
 from edgar import get_by_accession_number
+from numpy.ma.core import min_val
+
 import XBRLTagMapper
 import db_ops
 import utils
@@ -184,12 +186,15 @@ def get_statement(stmt_name: str, df_stmt: pd.DataFrame, acc_standard: str, df_i
     # Replace _ with :
     df_stmt['concept'] = df_stmt['concept'].str.replace('_', ':')
     ans = {}
-    # Revenue
+    # Income statement special positions
     if stmt_name == 'IncomeStatement':
+        # Revenue
         ans['revenue'] = get_position_value_sum_or_max(df_stmt,df_tags,stmt_tags.pop('revenue'),period_end)
         if not ans['revenue']:
             revenue_series = df_stmt.loc[df_stmt['label'].str.contains('revenue', case=False, na=False) & df_stmt[period_end].notna(), period_end]
             ans['revenue'] = revenue_series.max() if not revenue_series.empty else None
+        # Net Income
+        ans['net_income'] = get_position_value_sum_or_max(df_stmt,df_tags,stmt_tags.pop('net_income'),period_end)
     # Iterate over statement positions
     for position, tags in stmt_tags.items():
         if tags is not None:
@@ -220,7 +225,6 @@ def get_position_value_sum_or_max(df_stmt: pd.DataFrame, df_tags: pd.DataFrame, 
     if not values:
         df_tags = df_tags[df_tags['concept'].isin(xbrl_tags)]
         tag_values = pd.to_numeric(df_tags['numeric_value'], errors='coerce').dropna().tolist()
-
         if tag_values:
             values.append(max(tag_values, key=abs))
         if not values:
@@ -278,7 +282,7 @@ def get_currency(filing: edgar.Filing, unit_ref: str) -> str | None:
 def check_sum_combinations(values: list[float]):
     sum_val = sum(values)
     for val in values:
-        if val == (sum_val - val):
+        if val == (sum_val - abs(val)):
             return val
     return None
 
@@ -390,11 +394,12 @@ def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, floa
     expenses = None
     ebt = inc_stmt.get('ebt')
     interest_expense = abs(inc_stmt.get('interest_expense') or 0)
-    interest_inc_exp = inc_stmt.pop('interest_inc_exp')
-    dda = abs(cf_stmt.get('operating_da')) if cf_stmt else None
+    interest_inc_exp = inc_stmt.pop('net_interest')
+    dda = abs(cf_stmt.get('operating_da') or 0) if cf_stmt else None
     net_income_including_non_controlling_interests = inc_stmt.get('net_income_including_non_controlling_interests')
     net_income_non_controlling_interests = inc_stmt.get('net_income_non_controlling_interests') or 0
     net_income = inc_stmt.get('net_income')
+    print(f"NET INCOME {net_income}")
     ebit = None
     ebitda = None
     if revenue:
@@ -407,18 +412,18 @@ def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, floa
             operating_expenses = gross_profit - operating_income
         if ebt: # todo should I add here not net_non_operating_income?
             net_non_operating_income = ebt - operating_income
-        else:
+        elif net_non_operating_income is not None:
             ebt = operating_income + net_non_operating_income
-        if not revenue and not operating_expenses:
+        if not revenue and not operating_expenses and operating_income < 0:
             operating_expenses = abs(operating_income)
     elif operating_expenses and gross_profit:
         operating_income = gross_profit - operating_expenses
     if operating_expenses:
         other_operating_expenses = operating_expenses - selling_general_and_administrative_expense - research_and_development_expenses
-        # min(selling_general_and_administrative_expense, research_and_development_expenses) = 0 todo later
+        # todo find a way to display correct values if other_operating_expenses are negative
     if not interest_expense and interest_inc_exp:
-        interest_expense = interest_inc_exp * -1 # I multipy with -1 because it can be income or expense.
-    if ebt and interest_expense:
+        interest_expense = abs(interest_inc_exp) if interest_inc_exp < 0 else 0 # Only expense counts in EBIT calculation
+    if ebt and interest_expense is not None:
         ebit = ebt + interest_expense
     if ebit and dda:
         ebitda = ebit + dda

@@ -80,10 +80,13 @@ if __name__ == '__main__':
 
     # filing = db_ops.get_filings_by_accession_numbers(['0000950170-25-034660'])
     # print(pd.DataFrame(filing['0000950170-25-034660']['df_instant_prev_end']))
-    #filing = Company('LNW').latest('10-Q')
-    filing = Company('MGPI').latest('10-Q')
-    df  = filing.xbrl().statements.income_statement().to_dataframe()
-    print(df)
+    filing = Company('AIZ').latest('10-Q')
+    # attachs = filing.attachments
+    # for attach in attachs :
+    #     if '_cal.xml' in attach.document and ' CALCULATION LINKBASE ' in attach.description:
+    #         calc = attach.text()
+    #         xbrl_utils.read_calculation_schema(calc)
+
     statements = fundamentals.get_filing_details(filing.accession_number, 1)
     for stmt in statements.values():
          print(pd.DataFrame({k: [v] for k, v in stmt.items()}).T)
@@ -191,15 +194,25 @@ if __name__ == '__main__':
     # print(income_trend.to_dataframe().to_csv())
     # print(utils.pg_income_statement_columns.values())
 
-    # tag_map_1 = xbrl_utils.get_all_children('loc_InventoryGross', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-sfp-cls2-cal-2025.xml', 'calculationArc')
-    # tag_map_2 = xbrl_utils.get_all_children('loc_InventoryNet', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-sfp-cls2-cal-2025.xml', 'calculationArc')
-    # tag_map_3 = xbrl_utils.get_all_children('loc_OtherInventory', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-sfp-cls2-cal-2025.xml', 'calculationArc')
-    # tag_map_2 = xbrl_utils.get_all_children('loc_InvestmentsAbstract', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-sfp-ucreo-pre-2025.xml', 'presentationArc')
-    # tag_list_1 = xbrl_utils.get_all_children_as_list(tag_map_1)
-    # tag_list_2 = xbrl_utils.get_all_children_as_list(tag_map_2)
-    # tag_map = xbrl_utils.get_all_children_as_list(tag_map_1)
-    # tag_map = [a.replace('loc_','us-gaap:') for a in tag_map]
-    # dep = XBRLTagMapper.balance_sheet_gaap['net_receivables']
+    # tags = XBRLTagMapper.balance_sheet_gaap['property_plant_equipment_net']
+    # tag_map_1 = xbrl_utils.get_all_children('loc_BenefitsLossesAndExpensesAbstract', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-soi-ins-pre-2025.xml')
+    # tag_map_2 = xbrl_utils.get_all_children('loc_RealEstateInvestments', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-sfp-ibo-pre-2025.xml')
+    # tag_map_3 = xbrl_utils.get_all_children('loc_RealEstateInvestments', '/home/milos/Downloads/us-gaap-2025/stm/us-gaap-stm-sfp-ucreo-pre-2025.xml')
+    #
+    #
+    #
+    # tag_map = set(xbrl_utils.get_all_children_as_list(tag_map_1))
+    # tag_map_2 = set(xbrl_utils.get_all_children_as_list(tag_map_2))
+    # tag_map_3 = set(xbrl_utils.get_all_children_as_list(tag_map_3))
+    #
+    # tag_map = tag_map.union(tag_map_2).union(tag_map_3)
+    # tag_map = {a.replace('loc_','us-gaap:') for a in tag_map}
+    #
+    # for item in tag_map:
+    #     if item in tags:
+    #         print(item)
+    # dep = XBRLTagMapper.cash_flow_gaap['operating_da']
+    # print(tag_map - dep)
     # ag = set(tag_map).union(set(dep))
     # print(ag)
     # print(dep.union(ag))

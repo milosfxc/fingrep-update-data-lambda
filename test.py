@@ -1,4 +1,5 @@
 import datetime
+import re
 
 import yfinance
 from edgar import get_filings, set_identity, get_by_accession_number, Company
@@ -26,7 +27,7 @@ set_identity('milosfxc@gmail.com')
 
 
 if __name__ == "__main__":
-    values = [1, 2, None, 3, None, 4]
-    result = sum(x for x in values if x)
-    print(result)  # Output: 10
+    net_ppe = XBRLTagMapper.balance_sheet_gaap['property_plant_equipment_net']
+    real_estate = XBRLTagMapper.balance_sheet_gaap['real_estate']
 
+    print(net_ppe.intersection(real_estate))
