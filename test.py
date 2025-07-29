@@ -13,6 +13,7 @@ import pandas as pd
 
 import edgar_service
 import fingrep_service
+import fundamentals
 import utils
 from fundamentals import request_fundamentals
 
@@ -27,7 +28,5 @@ set_identity('milosfxc@gmail.com')
 
 
 if __name__ == "__main__":
-    net_ppe = XBRLTagMapper.balance_sheet_gaap['property_plant_equipment_net']
-    real_estate = XBRLTagMapper.balance_sheet_gaap['real_estate']
-
-    print(net_ppe.intersection(real_estate))
+    x = {'y': None}
+    x['y'].upper()

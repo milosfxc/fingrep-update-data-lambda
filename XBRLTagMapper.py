@@ -362,7 +362,9 @@ balance_sheet_gaap = {
              'us-gaap:JuniorSubordinatedDebentureOwedToUnconsolidatedSubsidiaryTrustCurrent',
              'us-gaap:SpecialAssessmentBond', 'us-gaap:UnsecuredDebt', 'us-gaap:LinesOfCreditCurrent',
              'us-gaap:LoansPayableCurrent', 'us-gaap:SeniorLongTermNotes',
-             'us-gaap:JuniorSubordinatedDebentureOwedToUnconsolidatedSubsidiaryTrustNoncurrent'}
+             'us-gaap:JuniorSubordinatedDebentureOwedToUnconsolidatedSubsidiaryTrustNoncurrent'},
+    'common_shares': {'us-gaap:CommonStockSharesOutstanding', 'dei:EntityCommonStockSharesOutstanding'},
+    'preferred_shares': {'us-gaap:PreferredStockSharesOutstanding'}
 
 }
 
@@ -485,7 +487,7 @@ income_statement_gaap = {
                                'us-gaap:CarryingCostsPropertyAndExplorationRights', 'us-gaap:SellingExpense',
                                'us-gaap:OtherLaborRelatedExpenses', 'us-gaap:GeneralAndAdministrativeExpense',
                                'us-gaap:GainLossOnDispositionOfAssets1',
-                               'us-gaap:LitigationSettlementInterest',
+                               'preffered_sharesus-gaap:LitigationSettlementInterest',
                                'us-gaap:BusinessCombinationAcquisitionRelatedCosts',
                                'us-gaap:DepreciationAndAmortization', 'us-gaap:AccretionExpense',
                                'us-gaap:RealEstateInsurance', 'us-gaap:ProvisionForDoubtfulAccounts',

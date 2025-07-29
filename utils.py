@@ -211,3 +211,21 @@ current_assets_list = ['cash_and_short_term_investments', 'net_receivables', 'in
 non_current_assets_list = ['property_plant_equipment_net', 'goodwill', 'intangible_assets', 'long_term_investments', 'non_current_deferred_assets']
 current_liabilities_list = ['payables_and_expenses', 'short_term_debt']
 non_current_liabilities_list = ['long_term_debt']
+
+forms = {
+    'annual': {
+        '10-K', '10-K/A',  # U.S. domestic annual reports
+        '20-F', '20-F/A',  # Foreign private issuer annual reports (non-Canadian)
+        '40-F', '40-F/A',  # Canadian issuer annual reports (MJDS filings)
+        '10-KT', '20-FT'   # Transition reports (rare, but annual-like)
+    },
+    'quarterly': {
+        '10-Q', '10-Q/A',  # U.S. domestic quarterly reports
+        '6-K'              # Foreign issuer current reports (often quarterly updates)
+    },
+    'other': {
+        '8-K',             # Current events (e.g., mergers, leadership changes)
+        'DEF 14A',         # Proxy statements
+        'S-1', 'F-1'       # Registration statements (IPOs)
+    }
+}

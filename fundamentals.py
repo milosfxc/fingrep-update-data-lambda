@@ -1,3 +1,4 @@
+from calendar import Calendar
 from datetime import datetime, timedelta
 from typing import Optional, Dict
 import os
@@ -162,6 +163,7 @@ def get_filing_details(accession_number:str, is_xbrl:int) -> Optional[Dict[str,p
         # Income statement and cashflow statement period compatibility
         if other_data.get('cf_period_start') != other_data.get('period_start'):
             statements.pop('CashFlowStatement')
+
         # XBRL Mappings
         xbrl_map = dict()
         # Load data from pickle
@@ -169,7 +171,7 @@ def get_filing_details(accession_number:str, is_xbrl:int) -> Optional[Dict[str,p
             with open('data/xbrl_map', 'rb') as f:
                 xbrl_map = pickle.load(f)
         for stmt in statements.keys():
-            statements[stmt] = get_statement(stmt, statements[stmt], other_data['acc_standard'], df_instant_end, df_period, filing.period_of_report)
+            statements[stmt] = get_statement(stmt, statements[stmt], other_data, df_instant_end, df_period, filing.period_of_report)
         # Data validation
         statements['BalanceSheet'] = validate_balance_sheet(statements['BalanceSheet'])
         statements['IncomeStatement'] = validate_income_statement(inc_stmt=statements['IncomeStatement'],cf_stmt=statements.get('CashFlowStatement'))
@@ -179,11 +181,11 @@ def get_filing_details(accession_number:str, is_xbrl:int) -> Optional[Dict[str,p
     else:
         return None # todo yfinance
 
-def get_statement(stmt_name: str, df_stmt: pd.DataFrame, acc_standard: str, df_instant: pd.DataFrame, df_period: pd.DataFrame, period_end: str) -> dict[str,float]:
-    stmt_tags = XBRLTagMapper.xbrl_tags[acc_standard][stmt_name]
+def get_statement(stmt_name: str, df_stmt: pd.DataFrame, other_data: dict, df_instant: pd.DataFrame, df_period: pd.DataFrame, period_end: str) -> dict[str,float]:
+    stmt_tags = XBRLTagMapper.xbrl_tags[other_data['acc_standard']][stmt_name]
     df_period = df_period[df_period['statement_type'] != 'CashFlowStatement'] if stmt_name == 'IncomeStatement' else df_period[df_period['statement_type'] != 'IncomeStatement']
     df_tags = df_instant if stmt_name == 'BalanceSheet' else df_period
-    # Replace _ with :
+    # Replace _ with:
     df_stmt['concept'] = df_stmt['concept'].str.replace('_', ':')
     ans = {}
     # Income statement special positions
@@ -201,6 +203,10 @@ def get_statement(stmt_name: str, df_stmt: pd.DataFrame, acc_standard: str, df_i
             ans[position] = get_position_value_sum_or_sum(df_stmt, df_tags,tags, period_end)
         else:
             ans[position] = None
+    # Additional data
+    ans['fiscal_period'] = other_data['fiscal_period']
+    ans['calendar_period'] = other_data['calendar_period']
+    ans['currency'] = other_data['currency']
     return ans
 
 def get_position_value_sum_or_sum(df_stmt: pd.DataFrame, df_tags: pd.DataFrame, xbrl_tags: set, period_end: str) -> float | None:
@@ -260,6 +266,12 @@ def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf) -> dict | 
             currency = get_currency(filing, df_pos.loc[0, 'unit_ref'])
             if currency:
                 ans['currency'] = currency
+    # Filing date
+    ans['filing_date'] = filing.header.acceptance_datetime
+    # Fiscal and Calendar Period
+    entity_info = filing.xbrl().entity_info
+    ans['fiscal_period'] = get_fiscal_period(entity_info,filing.form)
+    ans['calendar_period'] = get_calendar_period(filing.period_of_report, filing.form)
     # Period start for cashflow
     for value in values_cf:
         if all(key in ans for key in ['currency', 'period_start', 'cf_period_start']):
@@ -399,7 +411,6 @@ def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, floa
     net_income_including_non_controlling_interests = inc_stmt.get('net_income_including_non_controlling_interests')
     net_income_non_controlling_interests = inc_stmt.get('net_income_non_controlling_interests') or 0
     net_income = inc_stmt.get('net_income')
-    print(f"NET INCOME {net_income}")
     ebit = None
     ebitda = None
     if revenue:
@@ -509,8 +520,49 @@ def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_
 
 
 
+def get_calendar_period(date_str: str, form: str) -> str | None:
+    """
+    Returns the calendar period (YYYY for annual forms, YYYYQ1-YYYYQ4 for quarterly)
+    based on a date string and SEC form type.
+    """
+    try:
+        date = datetime.strptime(date_str, '%Y-%m-%d')
+        if form.upper() in utils.forms['annual']:
+            return str(date.year)
+        # Quarter calculation
+        quarter = (date.month - 1) // 3 + 1
+        return f"{date.year}Q{quarter}"
+    except (ValueError, TypeError):
+        pass
+    return None
 
 
+def get_fiscal_period(entity_info:dict, form:str) -> str | None:
+    """
+    Returns a formatted fiscal period string based on the SEC form type.
+        - For annual forms (10-K, 20-F, etc.): Returns the fiscal year (YYYY).
+        - For quarterly forms: Returns fiscal year + quarter (YYYYQ1, YYYYQ2, etc.).
+        - Returns None if required data is missing or invalid.
+    """
+    try:
+        if form in utils.forms['annual']:
+            return entity_info['fiscal_year']
+        else:
+            return entity_info['fiscal_year'] + entity_info['fiscal_period'].upper()
+    except (KeyError,AttributeError):
+        pass
+    return None
+
+
+
+    # entity_info = filing.xbrl().entity_info
+    # fiscal_year = entity_info.get('fiscal_year')
+    # fiscal_quarter = entity_info.get('fiscal_period')
+    # if filing.form in {'10-Q','6-K'} and fiscal_quarter and fiscal_quarter.upper() in {'Q1', 'Q2', 'Q3', 'Q4'}:
+    #     ans['fiscal_period'] = fiscal_year + fiscal_quarter.upper() if fiscal_year else None
+    #     ans['calendar_period'] = get_quarter(filing.period_of_report)
+    # else:
+    #     ans['fiscal_period'] = fiscal_year
 
 
 

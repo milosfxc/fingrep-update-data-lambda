@@ -80,7 +80,10 @@ if __name__ == '__main__':
 
     # filing = db_ops.get_filings_by_accession_numbers(['0000950170-25-034660'])
     # print(pd.DataFrame(filing['0000950170-25-034660']['df_instant_prev_end']))
-    filing = Company('AIZ').latest('10-Q')
+    filing = Company('JPM').latest('10-Q')
+    print(filing.xbrl().query().by_concept('CommonStockSharesOutstanding',exact=False).by_instant_date(filing.period_of_report).to_dataframe('label','concept', 'value','period_instant'))
+    # print(filing.xbrl().query().by_value(2779094488).to_dataframe('label','concept', 'value','period_instant'))
+
     # attachs = filing.attachments
     # for attach in attachs :
     #     if '_cal.xml' in attach.document and ' CALCULATION LINKBASE ' in attach.description:
@@ -90,8 +93,6 @@ if __name__ == '__main__':
     statements = fundamentals.get_filing_details(filing.accession_number, 1)
     for stmt in statements.values():
          print(pd.DataFrame({k: [v] for k, v in stmt.items()}).T)
-
-
 
 
 
