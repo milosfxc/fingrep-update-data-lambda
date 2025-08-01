@@ -7,7 +7,6 @@ import edgar
 import numpy as np
 import pandas as pd
 from edgar import get_by_accession_number
-from numpy.ma.core import min_val
 
 import XBRLTagMapper
 import db_ops
@@ -130,6 +129,7 @@ def get_filing_details(accession_number:str, is_xbrl:int) -> Optional[Dict[str,p
             'IncomeStatement': filing.obj().financials.income_statement().to_dataframe().replace(['',np.nan],None),
             'CashFlowStatement': filing.obj().financials.cashflow_statement().to_dataframe().replace(['',np.nan],None)
         }
+
         # Rename columns to match period end date
         for key,stmt in statements.items():
             if len(stmt.columns) > 2 and filing.period_of_report in stmt.columns[2]:

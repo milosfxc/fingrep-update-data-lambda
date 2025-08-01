@@ -80,19 +80,22 @@ if __name__ == '__main__':
 
     # filing = db_ops.get_filings_by_accession_numbers(['0000950170-25-034660'])
     # print(pd.DataFrame(filing['0000950170-25-034660']['df_instant_prev_end']))
-    filing = Company('JPM').latest('10-Q')
-    print(filing.xbrl().query().by_concept('CommonStockSharesOutstanding',exact=False).by_instant_date(filing.period_of_report).to_dataframe('label','concept', 'value','period_instant'))
-    # print(filing.xbrl().query().by_value(2779094488).to_dataframe('label','concept', 'value','period_instant'))
-
-    # attachs = filing.attachments
-    # for attach in attachs :
-    #     if '_cal.xml' in attach.document and ' CALCULATION LINKBASE ' in attach.description:
-    #         calc = attach.text()
-    #         xbrl_utils.read_calculation_schema(calc)
-
+    filing = Company('MARA').latest('10-Q')
+    print(filing.xbrl().statements.income_statement())
     statements = fundamentals.get_filing_details(filing.accession_number, 1)
     for stmt in statements.values():
          print(pd.DataFrame({k: [v] for k, v in stmt.items()}).T)
+
+
+
+    # Use case of calculation schema
+    # tags = filing.xbrl().statements.balance_sheet().to_dataframe()['concept'].tolist()
+    # xbrl_tags = set()
+    # for tag in tags:
+    #     xbrl_tags.add(xbrl_utils.get_xbrl_tag_from_calculation_arc(tag))
+    # calc = xbrl_utils.find_filling_attachment(filing,'_cal.xml')
+    # role = xbrl_utils.find_calculation_schema_statement_role(calc,xbrl_tags)
+    # print(xbrl_utils.find_position_grouping_xbrl_tag(calc,role,XBRLTagMapper.balance_sheet_gaap['cash_and_cash_equivalents']))
 
 
 
