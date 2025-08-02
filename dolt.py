@@ -80,11 +80,14 @@ if __name__ == '__main__':
 
     # filing = db_ops.get_filings_by_accession_numbers(['0000950170-25-034660'])
     # print(pd.DataFrame(filing['0000950170-25-034660']['df_instant_prev_end']))
-    filing = Company('MARA').latest('10-Q')
-    print(filing.xbrl().statements.income_statement())
-    statements = fundamentals.get_filing_details(filing.accession_number, 1)
-    for stmt in statements.values():
-         print(pd.DataFrame({k: [v] for k, v in stmt.items()}).T)
+    filing = Company('MARA').latest('10-K')
+    # 2025-03-31 (Q1)
+    # print(set(filing.xbrl().statements.income_statement().to_dataframe()['concept'].tolist()))
+    print(filing.xbrl().get_period_views('IncomeStatement'))
+    # print(set(filing.xbrl().query().by_statement_type('IncomeStatement').by_date_range('2025-01-01', '2025-03-31').to_dataframe()['concept'].tolist()))
+    statements = fundamentals.get_filing_details(filing.accession_number, 1, 2)
+    db_ops.upsert_statement_v2(statements['BalanceSheet'],'balance_sheet', ['share_id','date', 'report_type'])
+
 
 
 

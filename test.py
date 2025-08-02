@@ -2,6 +2,7 @@ import datetime
 import re
 
 import yfinance
+from PIL.XbmImagePlugin import XbmImageFile
 from edgar import get_filings, set_identity, get_by_accession_number, Company
 from datetime import timedelta
 
@@ -29,8 +30,6 @@ set_identity('milosfxc@gmail.com')
 
 
 if __name__ == "__main__":
-    x = {'a': ['b', 'c'], 'b': ['d', 'e'], 'c': ['f', 'g']}
-    all_values = {item for sublist in x.values() for item in sublist}
-    keys_set = set(x.keys()).difference(all_values)
-    print(keys_set)
+    print(db_ops.get_cached_foreign_keys())
+
 

@@ -1001,3 +1001,4 @@ CREATE TRIGGER update_ratios_after_balance_sheet
 AFTER INSERT ON balance_sheet
 FOR EACH ROW
 EXECUTE FUNCTION update_ratios();
+

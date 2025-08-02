@@ -121,7 +121,7 @@ def get_filings_by_company(ticker: str) -> pd.DataFrame:
         return company_filings
 
 
-def get_filing_details(accession_number:str, is_xbrl:int) -> Optional[Dict[str,pd.DataFrame]]:
+def get_filing_details(accession_number:str, is_xbrl:int, share_id: int) -> Optional[Dict[str,dict]]:
     if  is_xbrl == 1:
         filing = edgar.get_by_accession_number(accession_number=accession_number)
         statements = {
@@ -136,10 +136,12 @@ def get_filing_details(accession_number:str, is_xbrl:int) -> Optional[Dict[str,p
                 stmt = stmt[['concept', 'label', stmt.columns[2]]]
                 statements[key] = stmt.rename(columns={stmt.columns[2]:filing.period_of_report}, inplace=False)
             else:
+                # todo I can use filing.xbrl().get_period_views(key) to get a missing statement
                 logger.warning(f"The 3rd column that must contain {filing.period_of_report} for a filing with accession number {filing.accession_number}.\n"
                                f"Dataframe columns {stmt.columns} for statement {key}")
-        # Acc standard, currency, period start
+        # Other data
         other_data = get_other_data(filing, statements['IncomeStatement'], statements['CashFlowStatement'])
+        other_data['share_id'] = share_id
         # Dataframes for XBRL query
         previous_end_date = (datetime.strptime(other_data['period_start'], '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
         df_instant_prev_end = filing.xbrl().query().by_dimension(None).by_instant_date(previous_end_date).to_dataframe('concept', 'numeric_value', 'statement_type').replace(['',np.nan],None)
@@ -204,9 +206,13 @@ def get_statement(stmt_name: str, df_stmt: pd.DataFrame, other_data: dict, df_in
         else:
             ans[position] = None
     # Additional data
-    ans['fiscal_period'] = other_data['fiscal_period']
-    ans['calendar_period'] = other_data['calendar_period']
-    ans['currency'] = other_data['currency']
+    ans['fiscal_period_id'] = utils.report_periods.get(other_data.get('fiscal_period'))
+    ans['calendar_period_id'] = utils.report_periods.get(other_data.get('calendar_period'))
+    ans['currency_id'] = db_ops.get_cached_foreign_keys()['currencies'].get(other_data.get('currency'))
+    ans['date'] = other_data['date']
+    ans['filing_date'] = other_data.get('filing_date')
+    ans['report_type'] = other_data.get('report_type')
+    ans['share_id'] = other_data['share_id']
     return ans
 
 def get_position_value_sum_or_sum(df_stmt: pd.DataFrame, df_tags: pd.DataFrame, xbrl_tags: set, period_end: str) -> float | None:
@@ -242,6 +248,11 @@ def get_position_value_sum_or_max(df_stmt: pd.DataFrame, df_tags: pd.DataFrame, 
 
 def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf) -> dict | None:
     ans = {}
+    # Report type
+    if filing.form in utils.forms['annual']:
+        ans['report_type'] = 'A'
+    elif filing.form in utils.forms['quarterly']:
+        ans['report_type'] = 'Q'
     # Numeric column values
     values_inc = pd.to_numeric(df_inc[filing.period_of_report], errors='coerce').dropna()
     values_cf = pd.to_numeric(df_cf[filing.period_of_report], errors='coerce').dropna()
@@ -266,8 +277,9 @@ def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf) -> dict | 
             currency = get_currency(filing, df_pos.loc[0, 'unit_ref'])
             if currency:
                 ans['currency'] = currency
-    # Filing date
+    # Filing date and period of report
     ans['filing_date'] = filing.header.acceptance_datetime
+    ans['date'] = filing.period_of_report
     # Fiscal and Calendar Period
     entity_info = filing.xbrl().entity_info
     ans['fiscal_period'] = get_fiscal_period(entity_info,filing.form)
@@ -313,6 +325,7 @@ def validate_balance_sheet(bs_stmt: dict[str,float]) -> dict[str,float] | None:
     liabilities = bs_stmt.get('liabilities')
     current_liabilities = bs_stmt.get('current_liabilities')
     non_current_liabilities = bs_stmt.get('non_current_liabilities')
+    debt = bs_stmt['debt']
     equity = bs_stmt.get('equity')
     shareholders_equity = bs_stmt.get('shareholders_equity')
     if not shareholders_equity and not equity:
@@ -367,7 +380,9 @@ def validate_balance_sheet(bs_stmt: dict[str,float]) -> dict[str,float] | None:
         accrued_liabilities_current = bs_stmt.get('accrued_liabilities_current') or 0
         if account_payables or accrued_liabilities_current:
             bs_stmt['payables_and_expenses'] = account_payables + accrued_liabilities_current
-
+    # Net Debt
+    if debt and cash_and_short_term_investments and (net_debt  := debt - cash_and_short_term_investments) > 0:
+        bs_stmt['net_debt'] = net_debt
     # Calc other positions
     current_assets_total = sum(bs_stmt.get(position) or 0 for position in utils.current_assets_list)
     non_current_assets_total = sum(bs_stmt.get(position) or 0 for position in utils.non_current_assets_list)

@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import Optional
 
 from edgar.formatting import accession_number_text
 from psycopg2.extras import DictCursor, execute_values
@@ -162,6 +163,15 @@ def get_foreign_keys():
         raise
 
 
+def get_cached_foreign_keys() -> Optional[dict]:
+    if foreign_keys_cache:
+        print('Cached')
+        return foreign_keys_cache
+    else:
+        print('Querying fk')
+        return get_foreign_keys()
+
+
 def delete_aggregate_bars(ticker_id: str):
     try:
         with get_db_connection() as conn:
@@ -236,6 +246,45 @@ def upsert_dataframe_v2(df: pd.DataFrame, table_name: str):
                 conn.commit()
     except psycopg2.DatabaseError as e:
         logger.error(f"upsert_dataframe_v2: {e}")
+
+
+def upsert_statement_v2(stmt_dict: dict, table_name: str, conflict_columns: list):
+    """
+    Insert or update a row in PostgreSQL table (UPSERT).
+
+    Args:
+        stmt_dict: Dictionary where keys are column names and values are data
+        table_name: Name of the table
+        conflict_columns: List of columns that make up the composite key for conflict detection
+    """
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                # Prepare columns and values
+                columns = ', '.join(stmt_dict.keys())
+                placeholders = ', '.join(['%s'] * len(stmt_dict))
+
+                # Prepare the UPDATE part (exclude conflict columns from being updated)
+                update_set = ', '.join([
+                    f"{col} = EXCLUDED.{col}"
+                    for col in stmt_dict.keys()
+                    if col not in conflict_columns
+                ])
+
+                # Build the full UPSERT query
+                query = f"""
+                    INSERT INTO {table_name} ({columns})
+                    VALUES ({placeholders})
+                    ON CONFLICT ({', '.join(conflict_columns)})
+                    DO UPDATE SET {update_set}
+                """
+
+                # Execute with parameterized values
+                cur.execute(query, list(stmt_dict.values()))
+                conn.commit()
+    except psycopg2.DatabaseError as e:
+        logger.error(f"insert_statement_v2 failed: {e}")
+        raise
 
 
 def insert_new_ticker(shares, shares_info):

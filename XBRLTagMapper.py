@@ -1,7 +1,7 @@
 from utils import income_statement
 
 balance_sheet_gaap = {
-    'assets:': {'us-gaap:Assets'},
+    'assets': {'us-gaap:Assets'},
     'current_assets': {'us-gaap:AssetsCurrent'},
     'deposits': {'us-gaap:TimeDepositMaturitiesRollingYearTwo', 'us-gaap:NoninterestBearingDepositLiabilitiesDomestic',
                  'us-gaap:DepositsWholesale', 'us-gaap:TimeDepositMaturitiesRollingYearFive',
@@ -363,9 +363,9 @@ balance_sheet_gaap = {
              'us-gaap:SpecialAssessmentBond', 'us-gaap:UnsecuredDebt', 'us-gaap:LinesOfCreditCurrent',
              'us-gaap:LoansPayableCurrent', 'us-gaap:SeniorLongTermNotes',
              'us-gaap:JuniorSubordinatedDebentureOwedToUnconsolidatedSubsidiaryTrustNoncurrent'},
-    'common_shares': {'us-gaap:CommonStockSharesOutstanding', 'dei:EntityCommonStockSharesOutstanding'},
-    'preferred_shares': {'us-gaap:PreferredStockSharesOutstanding'}
-
+    'net_debt': None,
+    'common_shares_outstanding': {'us-gaap:CommonStockSharesOutstanding', 'dei:EntityCommonStockSharesOutstanding'},
+    'preferred_shares_outstanding': {'us-gaap:PreferredStockSharesOutstanding'}
 }
 
 income_statement_gaap = {

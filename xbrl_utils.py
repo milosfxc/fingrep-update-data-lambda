@@ -3,7 +3,6 @@ from typing import Optional
 from xml.etree import ElementTree as ET
 
 import edgar
-from numpy.ma.core import max_val
 
 
 def get_all_children(parent:str, path:str) -> dict:
