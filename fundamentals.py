@@ -422,7 +422,7 @@ def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, floa
     ebt = inc_stmt.get('ebt')
     interest_expense = abs(inc_stmt.get('interest_expense') or 0)
     interest_inc_exp = inc_stmt.pop('net_interest')
-    dda = abs(cf_stmt.get('operating_da') or 0) if cf_stmt else None
+    da = abs(cf_stmt.get('operating_da') or 0) if cf_stmt else None
     net_income_including_non_controlling_interests = inc_stmt.get('net_income_including_non_controlling_interests')
     net_income_non_controlling_interests = inc_stmt.get('net_income_non_controlling_interests') or 0
     net_income = inc_stmt.get('net_income')
@@ -451,8 +451,8 @@ def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, floa
         interest_expense = abs(interest_inc_exp) if interest_inc_exp < 0 else 0 # Only expense counts in EBIT calculation
     if ebt and interest_expense is not None:
         ebit = ebt + interest_expense
-    if ebit and dda:
-        ebitda = ebit + dda
+    if ebit and da:
+        ebitda = ebit + da
     if net_income:
         if net_income_non_controlling_interests:
             net_income_including_non_controlling_interests = net_income - net_income_non_controlling_interests
@@ -476,12 +476,14 @@ def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, floa
     inc_stmt['ebt'] = ebt
     inc_stmt['income_tax'] = abs(inc_stmt.get('income_tax') or 0)
     inc_stmt['interest_expense'] = interest_expense
-    inc_stmt['reconciled_deprecation'] = dda
+    inc_stmt['deprecation_and_amortization'] = da
     inc_stmt['ebit'] = ebit
     inc_stmt['ebitda'] = ebitda
     inc_stmt['net_income_including_non_controlling_interests'] = net_income_including_non_controlling_interests if net_income_including_non_controlling_interests else None
     inc_stmt['net_income_non_controlling_interests'] = net_income_non_controlling_interests if net_income_non_controlling_interests else None
 
+    # Remove keys
+    inc_stmt.pop('operating_expenses_all')
     return inc_stmt
 
 def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_stmt: dict[str,float], acc_standard: str) -> dict[str,float] | None:

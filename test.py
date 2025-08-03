@@ -30,6 +30,9 @@ set_identity('milosfxc@gmail.com')
 
 
 if __name__ == "__main__":
-    print(db_ops.get_cached_foreign_keys())
+    sga = XBRLTagMapper.income_statement_gaap['selling_general_and_administrative_expense']
+    rd = XBRLTagMapper.income_statement_gaap['research_and_development_expenses']
+    dda = XBRLTagMapper.cash_flow_gaap['operating_da']
+    print(dda.intersection(rd))
 
 

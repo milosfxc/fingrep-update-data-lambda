@@ -380,7 +380,7 @@ income_statement_gaap = {
     'non_interest_expense': {'us-gaap:NoninterestExpense'},  # actually operating expenses
     'provisions_credit_losses': {'us-gaap:ProvisionForLoanLossesExpensed',
                                  'us-gaap:ProvisionForLoanLeaseAndOtherLosses'},
-    'ner_premiums': {'us-gaap:PremiumsEarnedNet'},
+    'net_premiums': {'us-gaap:PremiumsEarnedNet'},
     'revenue': {'us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax', 'us-gaap:Revenues',
                 'us-gaap:RevenuesNetOfInterestExpense', 'us-gaap:PremiumsWrittenGross', 'us-gaap:PremiumsWrittenNet',
                 'us-gaap:RevenueFromContractWithCustomerIncludingAssessedTax'},
@@ -578,7 +578,7 @@ income_statement_gaap = {
             'us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments'},
     'income_equity_method_investments': {'us-gaap:IncomeLossFromEquityMethodInvestments'},
     'ebit': None,  # Calculated
-    'reconciled_deprecation': None,
+    'deprecation_and_amortization': None,
     # todo you need to find this value from cf stmt and maybe it's better to name it 'dda'. This is from cf us-gaap:DepreciationDepletionAndAmortization, us-gaap:DepreciationAndAmortization
     'ebitda': None,  # Calculated
     'income_tax': {'us-gaap:IncomeTaxExpenseBenefit'},

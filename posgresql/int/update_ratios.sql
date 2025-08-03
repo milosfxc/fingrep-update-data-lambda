@@ -65,8 +65,8 @@ SELECT avg_shares_outstanding INTO _avg_sh_out FROM income_statement WHERE share
 SELECT common_shares_outstanding INTO _sh_out FROM trade_info WHERE share_id = NEW.share_id AND date = NEW.date;
 
 --SHARES OUTSTANDING ON DATE
-IF NEW.shares_outstanding > 0 THEN
-    _sh_out := NEW.shares_outstanding;
+IF NEW.common_shares_outstanding > 0 THEN
+    _sh_out := NEW.common_shares_outstanding;
 ELSIF _sh_out IS NULL OR _sh_out <= 0 THEN
     IF _avg_sh_out > 0 THEN
         _sh_out := _avg_sh_out;

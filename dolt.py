@@ -84,11 +84,11 @@ if __name__ == '__main__':
     # 2025-03-31 (Q1)
     # print(set(filing.xbrl().statements.income_statement().to_dataframe()['concept'].tolist()))
     print(filing.xbrl().get_period_views('IncomeStatement'))
-    # print(set(filing.xbrl().query().by_statement_type('IncomeStatement').by_date_range('2025-01-01', '2025-03-31').to_dataframe()['concept'].tolist()))
-    statements = fundamentals.get_filing_details(filing.accession_number, 1, 2)
+    statements = fundamentals.get_filing_details(filing.accession_number, 1, 1)
     db_ops.upsert_statement_v2(statements['BalanceSheet'],'balance_sheet', ['share_id','date', 'report_type'])
+    db_ops.upsert_statement_v2(statements['IncomeStatement'],'income_statement', ['share_id','date', 'report_type'])
 
-
+    print()
 
 
     # Use case of calculation schema
