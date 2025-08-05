@@ -164,12 +164,7 @@ def get_foreign_keys():
 
 
 def get_cached_foreign_keys() -> Optional[dict]:
-    if foreign_keys_cache:
-        print('Cached')
-        return foreign_keys_cache
-    else:
-        print('Querying fk')
-        return get_foreign_keys()
+    return foreign_keys_cache if foreign_keys_cache else get_foreign_keys()
 
 
 def delete_aggregate_bars(ticker_id: str):

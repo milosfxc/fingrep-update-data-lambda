@@ -766,12 +766,12 @@ cash_flow_gaap = {
                                'us-gaap:IncreaseDecreaseInDueFromEmployeeCurrent',
                                'us-gaap:IncreaseDecreaseInNotesReceivableRelatedPartiesCurrent',
                                'us-gaap:IncreaseDecreaseInAccountsReceivableRelatedParties'},
+    'other_operating_activities': None,
     # Investing cash flow
     'investing_cash_flow': {'us-gaap:NetCashProvidedByUsedInInvestingActivities',
                             'us-gaap:NetCashProvidedByUsedInInvestingActivitiesContinuingOperations',
                             'us-gaap:CashProvidedByUsedInInvestingActivitiesDiscontinuedOperations'},
-    # todo new column
-    'purc_sale_ppe': {'us-gaap:PaymentsForProceedsFromProductiveAssets', 'us-gaap:ProceedsFromSaleOfProductiveAssets',
+    'net_purchase_sale_ppe': {'us-gaap:PaymentsForProceedsFromProductiveAssets', 'us-gaap:ProceedsFromSaleOfProductiveAssets',
                       'us-gaap:ProceedsFromSaleOfOtherProductiveAssets', 'us-gaap:ProceedsFromDisposalCryptoAsset',
                       'us-gaap:ProceedsFromSaleOfIntangibleAssets',
                       'us-gaap:ProceedsFromSaleOfPropertyPlantAndEquipment',
@@ -787,8 +787,7 @@ cash_flow_gaap = {
                       'us-gaap:PaymentsToAcquireOtherPropertyPlantAndEquipment',
                       'us-gaap:PaymentsToAcquireFurnitureAndFixtures', 'us-gaap:PaymentsToAcquireMachineryAndEquipment',
                       'us-gaap:PaymentsToAcquireBuildings', 'us-gaap:PaymentsToAcquireLandHeldForUse'},
-    # todo new column
-    'purc_sale_investments': {'us-gaap:PaymentsForProceedsFromInvestments',
+    'net_purchase_sale_investments': {'us-gaap:PaymentsForProceedsFromInvestments',
                               'us-gaap:ProceedsFromSaleMaturityAndCollectionsOfInvestments',
                               'us-gaap:ProceedsFromSaleOfRestrictedInvestments',
                               'us-gaap:ProceedsFromSaleOfInsuranceInvestments',
@@ -836,8 +835,7 @@ cash_flow_gaap = {
                               'us-gaap:PaymentsToAcquireRestrictedCertificatesOfDeposit',
                               'us-gaap:PaymentsForProceedsFromOtherInvestingActivities'},
     'capital_expenditure': None,  # Calculated
-    # todo new column
-    'purc_sale_businesses': {'us-gaap:PaymentsForProceedsFromBusinessesAndInterestInAffiliates',
+    'net_business_acquisitions': {'us-gaap:PaymentsForProceedsFromBusinessesAndInterestInAffiliates',
                              'us-gaap:ProceedsFromDivestitureOfBusinessesAndInterestsInAffiliates',
                              'us-gaap:ProceedsFromDivestitureOfInterestInSubsidiariesAndAffiliates',
                              'us-gaap:ProceedsFromDivestitureOfInterestInJointVenture',
@@ -855,8 +853,7 @@ cash_flow_gaap = {
                              'us-gaap:PaymentsToAcquireBusinessesGross',
                              'us-gaap:PaymentsForProceedsFromPreviousAcquisition',
                              'us-gaap:PaymentsForPreviousAcquisition', 'us-gaap:ProceedsFromPreviousAcquisition'},
-    # todo new column
-    'loan_lease_activity': {'us-gaap:PaymentsForProceedsFromLoansAndLeases',
+    'net_loan_lease_activity': {'us-gaap:PaymentsForProceedsFromLoansAndLeases',
                             'us-gaap:PaymentsForProceedsFromOtherLoansAndLeases',
                             'us-gaap:ProceedsFromRecoveriesOfLoanPreviouslyChargedOff',
                             'us-gaap:PaymentsToAcquireLoansAndLeasesHeldForInvestment',
@@ -884,8 +881,7 @@ cash_flow_gaap = {
                        'us-gaap:PaymentsOfOrdinaryDividends', 'us-gaap:PaymentsOfDividendsMinorityInterest',
                        'us-gaap:PaymentsOfDividendsPreferredStockAndPreferenceStock',
                        'us-gaap:PaymentsOfDividendsCommonStock'},
-    # todo new column
-    'iss_pay_equity': {'us-gaap:ProceedsFromRepurchaseOfEquity', 'us-gaap:PaymentsForRepurchaseOfEquity',
+    'net_equity_issuance': {'us-gaap:ProceedsFromRepurchaseOfEquity', 'us-gaap:PaymentsForRepurchaseOfEquity',
                        'us-gaap:PaymentsForRepurchaseOfOtherEquity', 'us-gaap:PaymentsForRepurchaseOfWarrants',
                        'us-gaap:PaymentsForRepurchaseOfInitialPublicOffering',
                        'us-gaap:PaymentsForRepurchaseOfPrivatePlacement',
@@ -902,8 +898,7 @@ cash_flow_gaap = {
                        'us-gaap:ProceedsFromIssuanceOfPreferredStockPreferenceStockAndWarrants',
                        'us-gaap:ProceedsFromIssuanceOfWarrants',
                        'us-gaap:ProceedsFromIssuanceOfPreferredStockAndPreferenceStock'},
-    # todo new column
-    'iss_pay_debt': {'us-gaap:RepaymentsOfShortTermDebtMaturingInThreeMonthsOrLess',
+    'net_debt_issuance': {'us-gaap:RepaymentsOfShortTermDebtMaturingInThreeMonthsOrLess',
                      'us-gaap:ProceedsFromRepaymentsOfShortTermDebtMaturingInThreeMonthsOrLess',
                      'us-gaap:AdditionsToContractHoldersFunds', 'us-gaap:RepaymentsOfLongTermLinesOfCredit',
                      'us-gaap:ProceedsFromRepaymentsOfDebtMaturingInMoreThanThreeMonths',
@@ -956,8 +951,6 @@ cash_flow_gaap = {
                      'us-gaap:ProceedsFromIssuanceOfMediumTermNotes', 'us-gaap:RepaymentsOfMediumTermNotes',
                      'us-gaap:FinanceLeasePrincipalPayments',
                      'us-gaap:ProceedsFromPaymentsForInSecuritiesSoldUnderAgreementsToRepurchase'},
-    'debt_issued': None,  # Calculated
-    'debt_repayment': None,  # Calculated
     # Additional fields
     'free_cash_flow': None,  # Calculated
     'start_cash_balance': {'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents',
@@ -969,7 +962,7 @@ cash_flow_gaap = {
                          'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsIncludingDisposalGroupAndDiscontinuedOperations',
                          'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsIncludingDisposalGroupAndDiscontinuedOperations:1'
                          'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsDisposalGroupIncludingDisc'},
-    'inc_dec_cash': {
+    'change_in_cash': {
         'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect',
         'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseExcludingExchangeRateEffect'}
 }

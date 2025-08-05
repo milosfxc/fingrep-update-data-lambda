@@ -1,118 +1,41 @@
-from calendar import Calendar
-from datetime import datetime, timedelta
+from datetime import timedelta, datetime
 from typing import Optional, Dict
-import os
-import pickle
+
 import edgar
 import numpy as np
 import pandas as pd
-from edgar import get_by_accession_number
 
 import XBRLTagMapper
 import db_ops
-import utils
+import fundamentals
 from config import logger
-import yfinance as yf
+import utils
 
 
-
-def request_fundamentals(ticker: str):
-    try:
-        ticker = yf.Ticker(ticker.replace('.', '-'))
-        financials = dict()
-        currency = ticker.info.get('financialCurrency')
-        if currency is None:
-            currency = 'USD'
-            country = ticker.info.get('country', '').strip()
-            if country != 'United States':
-                logger.warning(
-                    f"Non-US ticker {ticker} (country: {country}) has no currency specified. \nDefaulting to USD. \nPlease verify currency manually.")
-
-        financials['currency'] = currency
-        financials['balance_sheet'] = ticker.balance_sheet
-        financials['income_statement'] = ticker.income_stmt
-        financials['cash_flow'] = ticker.cash_flow
-        financials['balance_sheet_q'] = ticker.quarterly_balance_sheet
-        financials['income_statement_q'] = ticker.quarterly_income_stmt
-        financials['cash_flow_q'] = ticker.quarterly_cash_flow
-
-        return financials
-
-    except Exception as e:
-        logger.error(f"yfinance API request error for ticker {ticker}: {e}")
-        return None
-
-
-def get_period_ending_by_accession_number(accession_number: str) -> str | None:
+def get_filings_by_company(ticker: str) -> pd.DataFrame:
     """
-    Retrieves the period ending date for a given accession number.
-
-    Args:
-        accession_number (str): The accession number of the filing.
-
-    Returns:
-        datetime or None: The period ending date if available, otherwise None.
+    Functions returns dataframe of all filings by company.
     """
-    try:
-        # Retrieve the filing
-        filing = get_by_accession_number(accession_number=accession_number)
+    forms = list(utils.forms['annual'].union(utils.forms['quarterly']))
+    company_filings = edgar.Company(ticker).get_filings(form=forms, filing_date='2020-01-01:').to_pandas()
+    if not company_filings.empty:
+        return company_filings[['accession_number', 'reportDate','form', 'isXBRL']]
+    else:
+        return pd.DataFrame(data=None)
 
-        # Check if filing is None
-        if filing is None:
-            return None
-
-        # Extract the period ending date
-        period_ending = filing.period_of_report
-
-        # Return the period ending date if it exists
-        if period_ending:
-            return period_ending
-        else:
-            return None
-    except Exception as e:
-        logger.error(f"Error retrieving period ending for accession number: {accession_number}: {e}", exc_info=True)
-        return None
-
-
-def calc_report_period_id(date: str, report_type: str):
-    # Report period calculation
-    row_date = pd.to_datetime(date)
-    report_type = report_type
-    year = row_date.year
-    report_period = None
-    if report_type == 'a':  # Annual
-        year_start = pd.Timestamp(f"{year}-01-01")
-        is_curr = (row_date - year_start).days / 365 > 0.5
-        report_period = f"{year}" if is_curr else f"{year - 1}"
-
-    elif report_type == 'q':  # Quarterly
-
-        q1_start = pd.Timestamp(f"{year}-01-01")
-        q1_end = pd.Timestamp(f"{year}-03-31")
-        q2_start = pd.Timestamp(f"{year}-04-01")
-        q2_end = pd.Timestamp(f"{year}-06-30")
-        q3_start = pd.Timestamp(f"{year}-07-01")
-        q3_end = pd.Timestamp(f"{year}-09-30")
-        q4_start = pd.Timestamp(f"{year}-10-01")
-        q4_end = pd.Timestamp(f"{year}-12-31")
-
-        if q1_start <= row_date <= q1_end:
-            is_curr = (row_date - q1_start).days / (q1_end - q1_start).days > 0.5
-            report_period = f"{year}q1" if is_curr else f"{year - 1}q4"
-        elif q2_start <= row_date <= q2_end:
-            is_curr = (row_date - q2_start).days / (q2_end - q2_start).days > 0.5
-            report_period = f"{year}q2" if is_curr else f"{year}q1"
-        elif q3_start <= row_date <= q3_end:
-            is_curr = (row_date - q3_start).days / (q3_end - q3_start).days > 0.5
-            report_period = f"{year}q3" if is_curr else f"{year}q2"
-        elif q4_start <= row_date <= q4_end:
-            is_curr = (row_date - q4_start).days / (q4_end - q4_start).days > 0.5
-            report_period = f"{year}q4" if is_curr else f"{year}q3"
-    # Return report period id
-    return utils.report_periods[report_period]
-
-
-
+def get_company_fundamentals(ticker: str, share_id: int):
+    df_filings = get_filings_by_company(ticker)
+    if df_filings.empty or df_filings.size == 4:
+        logger.warning(f"Filings for ticker {ticker} where missing or df_filings doesn't have required all required columns. Columns list: {df_filings.columns}")
+        return
+    # Sort by date in ascending order
+    df_filings['reportDate'] = pd.to_datetime(df_filings['reportDate'], errors='coerce')
+    df_filings.sort_values(by='reportDate',ascending=True,inplace=True)
+    # Fetch filings
+    for index, row in df_filings.iterrows():
+        statements = get_filing_details(row['accession_number'], row['isXBRL'], share_id)
+        for k, v in statements.items():
+            db_ops.upsert_statement_v2(v, utils.camel_to_snake(k), ['share_id', 'report_type', 'date'])
 
 
 def get_filing_details(accession_number:str, is_xbrl:int, share_id: int) -> Optional[Dict[str,dict]]:
@@ -159,12 +82,12 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int) -> Opti
         if other_data.get('cf_period_start') != other_data.get('period_start'):
             statements.pop('CashFlowStatement')
 
-        # XBRL Mappings
-        xbrl_map = dict()
-        # Load data from pickle
-        if os.path.exists('data/xbrl_map'):
-            with open('data/xbrl_map', 'rb') as f:
-                xbrl_map = pickle.load(f)
+        # # XBRL Mappings
+        # xbrl_map = dict()
+        # # Load data from pickle
+        # if os.path.exists('data/xbrl_map'):
+        #     with open('data/xbrl_map', 'rb') as f:
+        #         xbrl_map = pickle.load(f)
         for stmt in statements.keys():
             statements[stmt] = get_statement(stmt, statements[stmt], other_data, df_instant_end, df_period, filing.period_of_report)
         # Data validation
@@ -543,9 +466,9 @@ def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_
 
     # calculate other activities
     if operating_cash_flow:
-        cf_stmt['other_operating_activities'] = (operating_cash_flow - cf_stmt.get('operating_net_income', 0)
-                                                - cf_stmt.get('operating_da', 0) - cf_stmt.get('deferred_income_tax', 0)
-                                                - cf_stmt.get('share_based_compensation', 0) - cf_stmt.get('change_working_capital', 0))
+        cf_stmt['other_operating_activities'] = (operating_cash_flow - (cf_stmt['operating_net_income'] or 0)
+                                                - (cf_stmt['operating_da'] or 0)- (cf_stmt['deferred_income_tax'] or 0)
+                                                - (cf_stmt['share_based_compensation'] or 0) - (cf_stmt['change_working_capital'] or 0))
     if investing_cash_flow := cf_stmt['investing_cash_flow']:
         cf_stmt['other_investing_activities'] = (investing_cash_flow - (cf_stmt['capital_expenditure'] or 0)
                                                  - (cf_stmt['net_purchase_sale_ppe'] or 0) - (cf_stmt['net_purchase_sale_investments'] or 0)
@@ -592,20 +515,3 @@ def get_fiscal_period(entity_info:dict, form:str) -> str | None:
     except (KeyError,AttributeError):
         pass
     return None
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -3,7 +3,7 @@ import os
 from ConnType import DBLocation
 
 # stock market data config
-DAYS = 2
+DAYS = 3
 YEARS = 1
 mb_historical = False # false updates market breadth for the current day, true updates for the last 100 days
 insert_fundamentals = False # Insert fundamentals for new tickers

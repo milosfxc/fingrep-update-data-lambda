@@ -2,6 +2,8 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Union
 
+import numpy as np
+
 import config
 
 headers = {"User-Agent": "milosfxc@gmail.com"}
@@ -229,3 +231,11 @@ forms = {
         'S-1', 'F-1'       # Registration statements (IPOs)
     }
 }
+
+def camel_to_snake(name) -> str:
+    # Insert underscores before capital letters, lowercase everything
+    name = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    name = re.sub('([a-z0-9])([A-Z])', r'\1_\2', name)
+    return name.lower()
+
+

@@ -14,6 +14,7 @@ import XBRLTagMapper
 import config
 import db_ops
 import edgar_service
+import edgar_service_v2
 import fingrep_service
 import fundamentals
 import polygon
@@ -80,15 +81,16 @@ if __name__ == '__main__':
 
     # filing = db_ops.get_filings_by_accession_numbers(['0000950170-25-034660'])
     # print(pd.DataFrame(filing['0000950170-25-034660']['df_instant_prev_end']))
-    filing = Company('MARA').latest('10-K')
+    filing = Company('MARA').latest('10-Q')
     # 2025-03-31 (Q1)
-    # print(set(filing.xbrl().statements.income_statement().to_dataframe()['concept'].tolist()))
+    # print(filing.xbrl().statements.income_statement().to_dataframe())
     print(filing.xbrl().get_period_views('IncomeStatement'))
-    statements = fundamentals.get_filing_details(filing.accession_number, 1, 1)
-    db_ops.upsert_statement_v2(statements['BalanceSheet'],'balance_sheet', ['share_id','date', 'report_type'])
-    db_ops.upsert_statement_v2(statements['IncomeStatement'],'income_statement', ['share_id','date', 'report_type'])
+    statements = edgar_service_v2.get_filing_details(filing.accession_number, 1, 2)
+    data_types = set()
+    for k,v in statements.items():
+        #db_ops.upsert_statement_v2(v, utils.camel_to_snake(k), ['share_id','date','report_type'])
+        print(pd.DataFrame.from_dict(data=v,orient='index'))
 
-    print()
 
 
     # Use case of calculation schema
