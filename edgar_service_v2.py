@@ -4,6 +4,8 @@ from typing import Optional, Dict
 import edgar
 import numpy as np
 import pandas as pd
+from sqlalchemy.dialects.mssql.information_schema import columns
+from sqlalchemy.util import ellipses_string
 
 import XBRLTagMapper
 import db_ops
@@ -25,7 +27,7 @@ def get_filings_by_company(ticker: str) -> pd.DataFrame:
 
 def get_company_fundamentals(ticker: str, share_id: int):
     df_filings = get_filings_by_company(ticker)
-    if df_filings.empty or df_filings.size == 4:
+    if df_filings.empty or df_filings.size == 5:
         logger.warning(f"Filings for ticker {ticker} where missing or df_filings doesn't have required all required columns. Columns list: {df_filings.columns}")
         return
     # Sort by date in ascending order
@@ -33,12 +35,11 @@ def get_company_fundamentals(ticker: str, share_id: int):
     df_filings.sort_values(by='reportDate',ascending=True,inplace=True)
     # Fetch filings
     for index, row in df_filings.iterrows():
-        statements = get_filing_details(row['accession_number'], row['isXBRL'], share_id)
+        statements = get_filing_details(str(row['accession_number']), is_xbrl=int(row['isXBRL'].item()), share_id=share_id)
         for k, v in statements.items():
             db_ops.upsert_statement_v2(v, utils.camel_to_snake(k), ['share_id', 'report_type', 'date'])
 
-
-def get_filing_details(accession_number:str, is_xbrl:int, share_id: int) -> Optional[Dict[str,dict]]:
+def get_filing_details(accession_number:str, is_xbrl:int, share_id: int) -> Dict[str,dict]:
     if  is_xbrl == 1:
         filing = edgar.get_by_accession_number(accession_number=accession_number)
         statements = {
@@ -46,15 +47,17 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int) -> Opti
             'IncomeStatement': filing.obj().financials.income_statement().to_dataframe().replace(['',np.nan],None),
             'CashFlowStatement': filing.obj().financials.cashflow_statement().to_dataframe().replace(['',np.nan],None)
         }
+
         # Rename columns to match period end date
         for key,stmt in statements.items():
-            if len(stmt.columns) > 2 and filing.period_of_report in stmt.columns[2]:
+            if len(stmt.columns) > 2 and filing.period_of_report in stmt.columns[2] and {'concept', 'label'}.issubset(stmt.columns):
                 stmt = stmt[['concept', 'label', stmt.columns[2]]]
                 statements[key] = stmt.rename(columns={stmt.columns[2]:filing.period_of_report}, inplace=False)
             else:
-                # todo I can use filing.xbrl().get_period_views(key) to get a missing statement
-                logger.warning(f"The 3rd column that must contain {filing.period_of_report} for a filing with accession number {filing.accession_number}.\n"
-                               f"Dataframe columns {stmt.columns} for statement {key}")
+                statements[key] = get_statement_by_xbrl_query(filing,key)
+                if statements[key].empty:
+                    logger.warning(f"Could not find {key} in filing with accession number: {filing.accession_number}")
+                    return {}
         # Other data
         other_data = get_other_data(filing, statements['IncomeStatement'], statements['CashFlowStatement'])
         other_data['share_id'] = share_id
@@ -97,7 +100,7 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int) -> Opti
             statements['CashFlowStatement'] = validate_cashflow_statement(df_instant_prev_end,df_instant_end,df_period,statements['CashFlowStatement'], other_data['acc_standard'])
         return statements
     else:
-        return None # todo yfinance
+        return {} # todo yfinance
 
 def get_statement(stmt_name: str, df_stmt: pd.DataFrame, other_data: dict, df_instant: pd.DataFrame, df_period: pd.DataFrame, period_end: str) -> dict[str,float]:
     stmt_tags = XBRLTagMapper.xbrl_tags[other_data['acc_standard']][stmt_name]
@@ -474,7 +477,6 @@ def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_
                                                  - (cf_stmt['net_purchase_sale_ppe'] or 0) - (cf_stmt['net_purchase_sale_investments'] or 0)
                                                  - (cf_stmt['net_business_acquisitions'] or 0) - (cf_stmt['net_loan_lease_activity'] or 0))
     if financing_cash_flow := cf_stmt['financing_cash_flow']:
-        print(type(financing_cash_flow))
         cf_stmt['other_financing_activities'] = (financing_cash_flow - (cf_stmt['dividends_paid'] or 0)
                                                  - (cf_stmt['net_equity_issuance'] or 0) - (cf_stmt['net_debt_issuance'] or 0))
 
@@ -515,3 +517,42 @@ def get_fiscal_period(entity_info:dict, form:str) -> str | None:
     except (KeyError,AttributeError):
         pass
     return None
+
+
+def get_statement_by_xbrl_query(filing: edgar.Filing, stmt_name: str) -> pd.DataFrame:
+    if stmt_name == 'BalanceSheet':
+        df = filing.xbrl().query().by_statement_type(stmt_name).by_instant_date(filing.period_of_report).to_dataframe('concept', 'label', 'period_instant', 'numeric_value')
+        if not df.empty and {'concept', 'label', 'period_instant', 'numeric_value'}.issubset(df.columns):
+            df.drop(columns=['period_instant'],inplace=True)
+            df.rename(columns={'numeric_value':filing.period_of_report},inplace=True)
+            df['concept'] = df['concept'].str.replace(':','_')
+            return df
+
+    elif stmt_name == 'IncomeStatement' or stmt_name == 'CashFlowStatement':
+        df = filing.xbrl().query().by_statement_type(stmt_name).to_dataframe('concept', 'label', 'period_start','period_end', 'numeric_value')
+        if df.empty or not {'concept', 'label', 'period_start','period_end', 'numeric_value'}.issubset(df.columns): return pd.DataFrame(data=None)
+        df = df[df['period_end'] == str(filing.period_of_report)]
+        df = df.drop_duplicates(subset=['concept','numeric_value'])
+        # Calculate day differences
+        days_diff = 90 if filing.form in utils.forms['quarterly'] else 365
+
+        # Convert to datetime and calculate day differences
+        df = df.copy()  # Explicit copy to avoid the warning
+        df.loc[:, 'start'] = pd.to_datetime(df['period_start'])
+        df.loc[:, 'end'] = pd.to_datetime(df['period_end'])
+        df.loc[:, 'days'] = (df['end'] - df['start']).dt.days.fillna(0)
+
+        # Find the period closest to target days_diff
+        df['abs_diff'] = (df['days'] - days_diff).abs()
+        # First get the counts of each abs_diff value
+        value_counts = df['abs_diff'].value_counts()
+        # Filter for counts > 10 and get the minimum abs_diff
+        min_diff = value_counts[value_counts > 10].index.min()
+
+        df = df[df['abs_diff'] == int(min_diff)]
+        df.drop(columns=['abs_diff', 'start','end', 'days', 'period_start','period_end'],inplace=True)
+        df.rename(columns={'numeric_value': filing.period_of_report},inplace=True)
+        df['concept'] = df['concept'].str.replace(':', '_')
+        return df
+
+    return pd.DataFrame(data=None)

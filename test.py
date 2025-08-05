@@ -31,7 +31,7 @@ set_identity('milosfxc@gmail.com')
 
 
 if __name__ == "__main__":
-    df = pd.DataFrame(data=None)
-    if df.empty:
-        print(df.columns)
+    df = {}
+    for k,v in df:
+        print(k)
 

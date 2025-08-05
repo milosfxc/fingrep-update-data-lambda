@@ -17,7 +17,7 @@ balance_sheet_gaap = {
                  'us-gaap:TimeDepositMaturitiesAfterNextRollingTwelveMonths',
                  'us-gaap:TimeDepositMaturitiesRollingYearThree',
                  'us-gaap:DepositsMoneyMarketDepositsAndNegotiableOrderOfWithdrawalNOW',
-                 'us-gaap:DepositsMoneyMarketDeposits', 'us-gaap:Deposits'},
+                 'us-gaap:DepositsMoneyMarketDeposits', 'us-gaap:Deposits', 'us-gaap:DepositsAssetsCurrent'},
     'cash_and_short_term_investments': {'us-gaap:CashCashEquivalentsAndShortTermInvestments'},
     'cash_and_cash_equivalents': {'us-gaap:FederalFundsSoldAndSecuritiesPurchasedUnderAgreementsToResell',
                                   'us-gaap:DueFromBanks', 'us-gaap:SecuritiesPurchasedUnderAgreementsToResell',
