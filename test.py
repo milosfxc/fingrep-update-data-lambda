@@ -12,6 +12,8 @@ import re
 
 from pandas.core.interchange.dataframe_protocol import DataFrame
 
+import XBRLTagMapper
+import db_ops
 import edgar_service
 import edgar_service_v2
 import fingrep_service
@@ -31,7 +33,6 @@ set_identity('milosfxc@gmail.com')
 
 
 if __name__ == "__main__":
-    df = {}
-    for k,v in df:
-        print(k)
+    x = {'t': None, 'y': None}
+    print(set(x.keys()))
 

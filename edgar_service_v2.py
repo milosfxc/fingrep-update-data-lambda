@@ -1,11 +1,8 @@
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, date
 from typing import Optional, Dict
-
 import edgar
 import numpy as np
 import pandas as pd
-from sqlalchemy.dialects.mssql.information_schema import columns
-from sqlalchemy.util import ellipses_string
 
 import XBRLTagMapper
 import db_ops
@@ -14,20 +11,20 @@ from config import logger
 import utils
 
 
-def get_filings_by_company(ticker: str) -> pd.DataFrame:
+def get_filings_by_company(ticker: str, filing_date:str) -> pd.DataFrame:
     """
     Functions returns dataframe of all filings by company.
     """
     forms = list(utils.forms['annual'].union(utils.forms['quarterly']))
-    company_filings = edgar.Company(ticker).get_filings(form=forms, filing_date='2020-01-01:').to_pandas()
+    company_filings = edgar.Company(ticker).get_filings(form=forms, filing_date=f"{filing_date}:").to_pandas()
     if not company_filings.empty:
         return company_filings[['accession_number', 'reportDate','form', 'isXBRL']]
     else:
         return pd.DataFrame(data=None)
 
-def get_company_fundamentals(ticker: str, share_id: int):
-    df_filings = get_filings_by_company(ticker)
-    if df_filings.empty or df_filings.size == 5:
+def get_company_fundamentals(ticker: str, share_id: int, filing_date:str):
+    df_filings = get_filings_by_company(ticker,filing_date)
+    if df_filings.empty:
         logger.warning(f"Filings for ticker {ticker} where missing or df_filings doesn't have required all required columns. Columns list: {df_filings.columns}")
         return
     # Sort by date in ascending order
@@ -35,9 +32,21 @@ def get_company_fundamentals(ticker: str, share_id: int):
     df_filings.sort_values(by='reportDate',ascending=True,inplace=True)
     # Fetch filings
     for index, row in df_filings.iterrows():
-        statements = get_filing_details(str(row['accession_number']), is_xbrl=int(row['isXBRL'].item()), share_id=share_id)
+        statements = get_filing_details(row['accession_number'], is_xbrl=row['isXBRL'], share_id=share_id)
+
         for k, v in statements.items():
             db_ops.upsert_statement_v2(v, utils.camel_to_snake(k), ['share_id', 'report_type', 'date'])
+
+        # Q4 Statements calculation
+        if row['form'] in utils.forms['annual']:
+            try:
+                q_statements = get_q4_statements(statements, share_id, row['reportDate'].date())
+                for k, v in q_statements.items():
+                    db_ops.upsert_statement_v2(v, utils.camel_to_snake(k), ['share_id', 'report_type', 'date'])
+            except Exception as e:
+                logger.warning(f"Error for Q4 statements insertion for ticker {ticker}. Filing date of annual statement {e.with_traceback()}")
+
+
 
 def get_filing_details(accession_number:str, is_xbrl:int, share_id: int) -> Dict[str,dict]:
     if  is_xbrl == 1:
@@ -103,7 +112,7 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int) -> Dict
         return {} # todo yfinance
 
 def get_statement(stmt_name: str, df_stmt: pd.DataFrame, other_data: dict, df_instant: pd.DataFrame, df_period: pd.DataFrame, period_end: str) -> dict[str,float]:
-    stmt_tags = XBRLTagMapper.xbrl_tags[other_data['acc_standard']][stmt_name]
+    stmt_tags = XBRLTagMapper.xbrl_tags[other_data['acc_standard']][stmt_name].copy()
     df_period = df_period[df_period['statement_type'] != 'CashFlowStatement'] if stmt_name == 'IncomeStatement' else df_period[df_period['statement_type'] != 'IncomeStatement']
     df_tags = df_instant if stmt_name == 'BalanceSheet' else df_period
     # Replace _ with:
@@ -316,8 +325,8 @@ def validate_balance_sheet(bs_stmt: dict[str,float]) -> dict[str,float] | None:
     if non_current_liabilities and non_current_liabilities_total:
         bs_stmt['other_non_current_liabilities'] = non_current_liabilities - non_current_liabilities_total
 
-    # Converts any numpy data types to Python native data types
-    return {k: v.item() if isinstance(v, np.generic) else v for k, v in bs_stmt.items()}
+    # Converts any numpy data types to Python native data types and None to zero
+    return {k: 0 if v is None else v.item() if isinstance(v, np.generic) else v for k, v in bs_stmt.items()}
 
 def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, float]) -> dict[str,float] | None:
     # Revenue
@@ -415,8 +424,8 @@ def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, floa
 
     # Remove keys
     inc_stmt.pop('operating_expenses_all')
-    # Converts any numpy data types to Python native data types
-    return {k: v.item() if isinstance(v, np.generic) else v for k, v in inc_stmt.items()}
+    # Converts any numpy data types to Python native data types and None to zero
+    return {k: 0 if v is None else v.item() if isinstance(v, np.generic) else v for k, v in inc_stmt.items()}
 
 def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_stmt: dict[str,float], acc_standard: str) -> dict[str,float] | None:
     # CAPEX calculation
@@ -480,8 +489,8 @@ def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_
         cf_stmt['other_financing_activities'] = (financing_cash_flow - (cf_stmt['dividends_paid'] or 0)
                                                  - (cf_stmt['net_equity_issuance'] or 0) - (cf_stmt['net_debt_issuance'] or 0))
 
-    # Converts any numpy data types to Python native data types
-    return {k: v.item() if isinstance(v, np.generic) else v for k, v in cf_stmt.items()}
+    # Converts any numpy data types to Python native data types and None to zero
+    return {k: 0 if v is None else v.item() if isinstance(v, np.generic) else v for k, v in cf_stmt.items()}
 
 
 
@@ -556,3 +565,85 @@ def get_statement_by_xbrl_query(filing: edgar.Filing, stmt_name: str) -> pd.Data
         return df
 
     return pd.DataFrame(data=None)
+
+
+def get_q4_statements(a_statements:dict,share_id:int, report_period: date) -> dict:
+    # Q1 report date must be within 330 days
+    start_date = (report_period - timedelta(days=330))
+    # Balance Sheet already displays correct Q4 data
+    a_bs = a_statements.pop('BalanceSheet')
+    q_statements ={'BalanceSheet': a_bs}
+    # Other data
+    fiscal_period_id  = a_bs['fiscal_period_id'] + 4
+    calendar_period_id = a_bs['calendar_period_id'] + 4
+    filing_date = a_bs['filing_date']
+    report_date = a_bs['date']
+    currency_id = a_bs['currency_id']
+    q_statements['BalanceSheet']['fiscal_period_id'] = fiscal_period_id
+    q_statements['BalanceSheet']['calendar_period_id'] = calendar_period_id
+    q_statements['BalanceSheet']['date'] = report_date
+    q_statements['BalanceSheet']['filing_date'] = filing_date
+    q_statements['BalanceSheet']['currency_id'] = currency_id
+    q_statements['BalanceSheet']['report_type'] = 'q'
+
+    # Income and Cashflow Statement calculation
+    for key, value in a_statements.items():
+        # Sum Q1, Q2 and Q3 data
+        non_sum_columns = {'operating_expenses_all', 'eps', 'diluted_eps', 'start_cash_balance','end_cash_balance', 'filing_date', 'share_id',
+                           'calendar_period_id', 'date', 'report_type', 'currency_id', 'fiscal_period_id'}
+        sum_columns = set(value.keys()).difference(non_sum_columns)
+        sum_q1_q2_q3 = db_ops.query_3_quarter_sums(share_id, sum_columns, utils.camel_to_snake(key), start_date, report_period)
+        if sum_q1_q2_q3:
+            a_stmt = a_statements[key]
+            q4_stmt = {k: a_stmt[k] - sum_q1_q2_q3[k] for k in sum_q1_q2_q3}
+            if key == 'IncomeStatement':
+                # Average shares basic
+                avg_shares_basic_q_sum = sum_q1_q2_q3['avg_shares_basic']
+                avg_shares_basic_a = a_stmt['avg_shares_basic']
+                # Average diluted shares
+                avg_shares_diluted_q_sum = sum_q1_q2_q3['avg_shares_diluted']
+                avg_shares_diluted_a = a_stmt['avg_shares_diluted']
+
+                # Average shares calculation
+                # Basic
+                if avg_shares_basic_q_sum and avg_shares_basic_a:
+                    q4_stmt['avg_shares_basic'] = 4 * avg_shares_basic_a - avg_shares_basic_q_sum
+                else:
+                    q4_stmt['avg_shares_basic'] = avg_shares_basic_a  if avg_shares_basic_a else avg_shares_basic_q_sum/3 if avg_shares_basic_q_sum else 0
+                # Diluted
+                if avg_shares_diluted_q_sum and avg_shares_diluted_a:
+                    q4_stmt['avg_shares_diluted'] = 4 * avg_shares_diluted_a - avg_shares_diluted_q_sum
+                else:
+                    q4_stmt['avg_shares_diluted'] = avg_shares_diluted_a  if avg_shares_diluted_a else avg_shares_diluted_q_sum/3 if avg_shares_diluted_q_sum else 0
+                # EPS calculation
+                # EPS basic
+                if (net_income := q4_stmt['net_income']) and (avg_shares_basic := q4_stmt['avg_shares_basic']):
+                    q4_stmt['eps'] = net_income / avg_shares_basic
+                else:
+                    q4_stmt['eps'] = 0
+                # EPS diluted - No data for net income adjusted for preferred shares
+                q4_stmt['diluted_eps'] = 0
+            elif key == 'CashFlowStatement':
+                if q4_stmt['change_in_cash'] and a_stmt['end_cash_balance']:
+                    q4_stmt['end_cash_balance'] = a_stmt['end_cash_balance']
+                    q4_stmt['start_cash_balance'] = q4_stmt['end_cash_balance'] - q4_stmt['change_in_cash']
+                else:
+                    q4_stmt['start_cash_balance'] = 0
+
+
+            # Other data
+            q4_stmt['calendar_period_id'] = calendar_period_id
+            q4_stmt['fiscal_period_id'] = fiscal_period_id
+            q4_stmt['report_type'] = 'q'
+            q4_stmt['date'] = report_date
+            q4_stmt['filing_date'] = filing_date
+            q4_stmt['currency_id'] = currency_id
+            q4_stmt['share_id'] = share_id
+
+            print(pd.DataFrame.from_dict(q4_stmt,orient='index'))
+            # Add statement to returning dict
+            q_statements[key] = q4_stmt
+        else:
+            print(key)
+
+    return q_statements

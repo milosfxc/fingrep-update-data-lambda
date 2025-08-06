@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 from typing import Optional
@@ -280,6 +281,45 @@ def upsert_statement_v2(stmt_dict: dict, table_name: str, conflict_columns: list
     except psycopg2.DatabaseError as e:
         logger.error(f"insert_statement_v2 failed: {e}")
         raise
+
+def query_3_quarter_sums(share_id: int, stmt_columns: set, table_name: str, start_date:datetime.date, end_date:datetime.date):
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                # Build the column sum expressions
+                sum_expressions = [f"SUM({col}) AS {col}" for col in stmt_columns]
+
+                query = f"""
+                    WITH last_3 AS (
+                        SELECT 
+                            COUNT(*) AS row_count,
+                            {', '.join(sum_expressions)}
+                        FROM {table_name}
+                        WHERE share_id = %s
+                          AND date BETWEEN %s AND %s
+                          AND report_type = 'q'
+                    )
+                    SELECT {', '.join(stmt_columns)}
+                    FROM last_3 
+                    WHERE row_count = 3
+                """
+                cur.execute(query, (share_id, start_date, end_date))
+                result = cur.fetchone()
+
+                if result is None:
+                    return None
+
+                # Convert to dictionary with float values
+                return {
+                    col: float(value) if value is not None else 0.0
+                    for col, value in zip(stmt_columns, result)
+                }
+
+    except psycopg2.DatabaseError as e:
+        logger.error(f"insert_statement_v2 failed: {e}")
+        raise
+
 
 
 def insert_new_ticker(shares, shares_info):

@@ -12,6 +12,7 @@ import requests
 import config
 import db_ops
 import edgar_service
+import edgar_service_v2
 import finviz
 import polygon
 import utils
@@ -317,6 +318,7 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
     get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
     # Fundamental data and trade info
     cik = shares_info_data.get('cik')
+    edgar_service_v2.get_company_fundamentals('MSFT',1,config.filing_start_date)
     if config.insert_fundamentals and cik is not None and ticker_id is not None and shares_data.get('share_type_id') not in(6, 8):
         get_and_insert_trading_info(cik=cik, share_id=ticker_id, date=date(2019, 12, 31))
         get_and_insert_fundamentals(share_id=ticker_id, ticker=ticker, cik=cik)
