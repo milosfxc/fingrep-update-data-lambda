@@ -1,24 +1,32 @@
 from datetime import timedelta, datetime, date
-from typing import Optional, Dict
+from typing import Optional, Dict, Union
 import edgar
 import numpy as np
 import pandas as pd
 
 import XBRLTagMapper
 import db_ops
-import fundamentals
 from config import logger
 import utils
 
 
-def get_filings_by_company(ticker: str, filing_date:str) -> pd.DataFrame:
+def get_filings_by_company(ticker: str, cutoff_date:str) -> pd.DataFrame:
     """
     Functions returns dataframe of all filings by company.
+    :param ticker:
+    :param cutoff_date: Filing's report date must be equal or bigger than cut-off date.
+    :return:
     """
+    # Filters for the query below
     forms = list(utils.forms['annual'].union(utils.forms['quarterly']))
-    company_filings = edgar.Company(ticker).get_filings(form=forms, filing_date=f"{filing_date}:").to_pandas()
-    if not company_filings.empty:
-        return company_filings[['accession_number', 'reportDate','form', 'isXBRL']]
+    cutoff_date = pd.to_datetime(cutoff_date)
+    df_filings = (edgar.Company(ticker).get_filings().to_pandas()
+                  .assign(reportDate=lambda x: pd.to_datetime(x['reportDate']))
+                  .query('reportDate >= @cutoff_date and form in @forms')
+                  .sort_values('reportDate', ascending=True)
+                  .reset_index(drop=True))
+    if not df_filings.empty:
+        return df_filings[['accession_number', 'reportDate','form', 'isXBRL']]
     else:
         return pd.DataFrame(data=None)
 
@@ -27,9 +35,6 @@ def get_company_fundamentals(ticker: str, share_id: int, filing_date:str):
     if df_filings.empty:
         logger.warning(f"Filings for ticker {ticker} where missing or df_filings doesn't have required all required columns. Columns list: {df_filings.columns}")
         return
-    # Sort by date in ascending order
-    df_filings['reportDate'] = pd.to_datetime(df_filings['reportDate'], errors='coerce')
-    df_filings.sort_values(by='reportDate',ascending=True,inplace=True)
     # Fetch filings
     for index, row in df_filings.iterrows():
         statements = get_filing_details(row['accession_number'], is_xbrl=row['isXBRL'], share_id=share_id)
@@ -90,10 +95,6 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int) -> Dict
             'df_period': df_period.to_dict()
         }
         db_ops.insert_filing(filing.accession_number, archive)
-        # Income statement and cashflow statement period compatibility
-        if other_data.get('cf_period_start') != other_data.get('period_start'):
-            statements.pop('CashFlowStatement')
-
         # # XBRL Mappings
         # xbrl_map = dict()
         # # Load data from pickle
@@ -102,6 +103,14 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int) -> Dict
         #         xbrl_map = pickle.load(f)
         for stmt in statements.keys():
             statements[stmt] = get_statement(stmt, statements[stmt], other_data, df_instant_end, df_period, filing.period_of_report)
+
+        # Income statement and cashflow statement period compatibility
+        # todo check how cf_period_start is calculated
+        if (cf_period_start := other_data.get('cf_period_start')) != (period_start := other_data.get('period_start')):
+            cf_stmt = get_quarterly_cash_flow_statement(statements.pop('CashFlowStatement'),share_id, cf_period_start, period_start)
+            if cf_stmt:
+                statements['CashFlowStatement'] = cf_stmt
+
         # Data validation
         statements['BalanceSheet'] = validate_balance_sheet(statements['BalanceSheet'])
         statements['IncomeStatement'] = validate_income_statement(inc_stmt=statements['IncomeStatement'],cf_stmt=statements.get('CashFlowStatement'))
@@ -181,6 +190,7 @@ def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf) -> dict | 
         ans['report_type'] = 'a'
     elif filing.form in utils.forms['quarterly']:
         ans['report_type'] = 'q'
+
     # Numeric column values
     values_inc = pd.to_numeric(df_inc[filing.period_of_report], errors='coerce').dropna()
     values_cf = pd.to_numeric(df_cf[filing.period_of_report], errors='coerce').dropna()
@@ -247,7 +257,7 @@ def validate_balance_sheet(bs_stmt: dict[str,float]) -> dict[str,float] | None:
     assets = assets if assets > 0 else None
     bs_stmt.pop('liabilities_and_equity')
     property_plant_equipment_net = bs_stmt.get('property_plant_equipment_net') or 0
-    operating_lease = bs_stmt.get('operating_lease') or 0
+    operating_lease = bs_stmt.pop('operating_lease') or 0
     current_assets = bs_stmt.get('current_assets')
     non_current_assets = bs_stmt.get('non_current_assets')
     liabilities = bs_stmt.get('liabilities')
@@ -300,7 +310,7 @@ def validate_balance_sheet(bs_stmt: dict[str,float]) -> dict[str,float] | None:
             bs_stmt['cash_and_short_term_investments'] = cash_and_cash_equivalents + short_term_investments
     # PPE
     if operating_lease:
-        bs_stmt['property_plant_equipment_net'] = property_plant_equipment_net + bs_stmt.pop('operating_lease')
+        bs_stmt['property_plant_equipment_net'] = property_plant_equipment_net + operating_lease
     # payables_and_expenses
     payables_and_expenses = bs_stmt.get('payables_and_expenses')
     if not payables_and_expenses:
@@ -452,7 +462,7 @@ def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_
     free_cash_flow = None
     operating_cash_flow = cf_stmt.get('operating_cash_flow')
     if operating_cash_flow and capital_expenditure:
-        free_cash_flow = operating_cash_flow + operating_cash_flow
+        free_cash_flow = operating_cash_flow + capital_expenditure
         cf_stmt['free_cash_flow'] = free_cash_flow
 
     # Cash end
@@ -574,11 +584,12 @@ def get_q4_statements(a_statements:dict,share_id:int, report_period: date) -> di
     a_bs = a_statements.pop('BalanceSheet')
     q_statements ={'BalanceSheet': a_bs}
     # Other data
-    fiscal_period_id  = a_bs['fiscal_period_id'] + 4
-    calendar_period_id = a_bs['calendar_period_id'] + 4
+
     filing_date = a_bs['filing_date']
     report_date = a_bs['date']
     currency_id = a_bs['currency_id']
+    fiscal_period_id  = a_bs['fiscal_period_id'] + 4
+    calendar_period_id = utils.report_periods.get(get_calendar_period(report_date,'10-Q'))
     q_statements['BalanceSheet']['fiscal_period_id'] = fiscal_period_id
     q_statements['BalanceSheet']['calendar_period_id'] = calendar_period_id
     q_statements['BalanceSheet']['date'] = report_date
@@ -640,10 +651,31 @@ def get_q4_statements(a_statements:dict,share_id:int, report_period: date) -> di
             q4_stmt['currency_id'] = currency_id
             q4_stmt['share_id'] = share_id
 
-            print(pd.DataFrame.from_dict(q4_stmt,orient='index'))
             # Add statement to returning dict
             q_statements[key] = q4_stmt
-        else:
-            print(key)
 
     return q_statements
+
+
+def get_quarterly_cash_flow_statement(cur_cf:dict, share_id, period_start: str, period_end: str) -> Optional[dict[str,Union[int,float,None]]]:
+    prev_cf = db_ops.query_previous_cash_flow_statement(share_id,period_start,period_end)
+    if not prev_cf: return None
+    other_data = {'date', 'report_type', 'share_id', 'fiscal_period_id', 'calendar_period_id', 'currency_id', 'filing_date'}
+    excluded_columns = {'start_cash_balance', 'end_cash_balance'}
+    calc_columns = set(prev_cf.keys()).difference(excluded_columns)
+    # Calculate difference
+    calc_cf = dict()
+    for k in calc_columns:
+        if k in other_data:
+            calc_cf[k] = cur_cf[k]
+            continue
+        prev_val, cur_val = prev_cf[k], cur_cf[k]
+        if prev_val is not None and cur_val is not None:
+            calc_cf[k] = float(cur_val) - float(prev_val)
+        elif cur_val is not None:
+            calc_cf[k] = float(cur_val)
+        else:
+            calc_cf[k] = 0
+
+
+    return calc_cf if calc_cf else None

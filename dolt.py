@@ -6,7 +6,7 @@ import edgar
 import pandas as pd
 import yfinance as yf
 from PIL.XbmImagePlugin import XbmImageFile
-from edgar import get_filings, Company, XBRL
+from edgar import get_filings, Company, XBRL, Filing
 from edgar.xbrl.stitching import XBRLS
 from sympy.logic.algorithms.dpll import pl_true_int_repr
 
@@ -81,15 +81,16 @@ if __name__ == '__main__':
 
     # filing = db_ops.get_filings_by_accession_numbers(['0000950170-25-034660'])
     # print(pd.DataFrame(filing['0000950170-25-034660']['df_instant_prev_end']))
-    filing = Company('MARA').latest('10-Q')
+    # filing = Company('AOUT').latest('10-K')
+    edgar_service_v2.get_company_fundamentals('MARA',1,'2020-01-01')
     # print(edgar_service_v2.get_statement_by_xbrl_query(filing,'CashFlowStatement'))
     # print(filing.xbrl().statements.cashflow_statement().to_dataframe())
-    statements = edgar_service_v2.get_filing_details(filing.accession_number, 1, 2)
-    for k,v in statements.items():
-        #db_ops.upsert_statement_v2(v, utils.camel_to_snake(k), ['share_id','date','report_type'])
-        print(pd.DataFrame.from_dict(data=v,orient='index'))
+    # statements = edgar_service_v2.get_filing_details(filing.accession_number, 1, 3)
+    # for k,v in statements.items():
+    #     db_ops.upsert_statement_v2(v, utils.camel_to_snake(k), ['share_id','date','report_type'])
+    #     print(pd.DataFrame.from_dict(data=v,orient='index'))
 
-    edgar_service_v2.get_company_fundamentals('AAPL',2)
+    # edgar_service_v2.get_company_fundamentals('AAPL',2)
 
     # Use case of calculation schema
     # tags = filing.xbrl().statements.balance_sheet().to_dataframe()['concept'].tolist()

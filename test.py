@@ -1,6 +1,9 @@
 import datetime
+import os
 import re
+from typing import Union
 
+import numpy as np
 import yfinance
 from PIL.XbmImagePlugin import XbmImageFile
 from edgar import get_filings, set_identity, get_by_accession_number, Company
@@ -30,9 +33,5 @@ pd.set_option('display.width', None)  # To allow the console to use the full wid
 set_identity('milosfxc@gmail.com')
 
 
-
-
 if __name__ == "__main__":
-    x = {'t': None, 'y': None}
-    print(set(x.keys()))
-
+    print(utils.report_periods.get('2019'))

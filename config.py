@@ -10,7 +10,7 @@ insert_fundamentals = False # Insert fundamentals for new tickers
 update_fundamentals = False # Update fundamentals for existing tickers
 fundamentals_period_ending = '2019-12-31'
 filing_start_date = '2024-07-01'
-LIMIT = 2
+LIMIT = 1
 db_location = DBLocation.LOCAL
 
 # database config

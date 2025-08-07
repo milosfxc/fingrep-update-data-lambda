@@ -216,19 +216,18 @@ non_current_liabilities_list = ['long_term_debt']
 
 forms = {
     'annual': {
-        '10-K', '10-K/A',  # U.S. domestic annual reports
-        '20-F', '20-F/A',  # Foreign private issuer annual reports (non-Canadian)
-        '40-F', '40-F/A',  # Canadian issuer annual reports (MJDS filings)
-        '10-KT', '20-FT'   # Transition reports (rare, but annual-like)
+        '10-K',            # U.S. domestic annual reports
+        '20-F',            # Foreign private issuer annual reports (non-Canadian)
+        '40-F',            # Canadian issuer annual reports (MJDS filings)
     },
     'quarterly': {
-        '10-Q', '10-Q/A',  # U.S. domestic quarterly reports
-        '6-K'              # Foreign issuer current reports (often quarterly updates)
+        '10-Q',     # U.S. domestic quarterly reports
+        '6-K'       # Foreign issuer current reports (often quarterly updates)
     },
     'other': {
-        '8-K',             # Current events (e.g., mergers, leadership changes)
-        'DEF 14A',         # Proxy statements
-        'S-1', 'F-1'       # Registration statements (IPOs)
+        '8-K',      # Current events (e.g., mergers, leadership changes)
+        'DEF 14A',  # Proxy statements
+        'S-1', 'F-1'# Registration statements (IPOs)
     }
 }
 

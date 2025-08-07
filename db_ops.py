@@ -1,7 +1,7 @@
 import datetime
 import json
 import logging
-from typing import Optional
+from typing import Optional, Union
 
 from edgar.formatting import accession_number_text
 from psycopg2.extras import DictCursor, execute_values
@@ -275,11 +275,21 @@ def upsert_statement_v2(stmt_dict: dict, table_name: str, conflict_columns: list
                     DO UPDATE SET {update_set}
                 """
 
+                # Print query for manual testing
+                values = list(stmt_dict.values())
+                debug_query = query
+                for v in values:
+                    val = f"'{v}'" if isinstance(v, str) else str(v)
+                    debug_query = debug_query.replace('%s', val, 1)
+
+
                 # Execute with parameterized values
                 cur.execute(query, list(stmt_dict.values()))
                 conn.commit()
     except psycopg2.DatabaseError as e:
         logger.error(f"insert_statement_v2 failed: {e}")
+        logger.error(debug_query)
+        print(pd.DataFrame.from_dict(stmt_dict,"index"))
         raise
 
 def query_3_quarter_sums(share_id: int, stmt_columns: set, table_name: str, start_date:datetime.date, end_date:datetime.date):
@@ -513,3 +523,36 @@ def get_filings_by_accession_numbers(accession_numbers: list[str]) -> dict[str,d
                 WHERE accession_number = ANY(%s);
             """, (accession_numbers,))
             return {row[0]: row[1] for row in cur.fetchall()}
+
+
+def query_previous_cash_flow_statement(share_id: int, start_date:str, end_date:str) -> Optional[dict[str,Union[int,float,None]]]:
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                query = """
+                    SELECT * FROM cash_flow_statement 
+                    WHERE share_id = %s 
+                    AND report_type = 'q' 
+                    AND date > %s 
+                    AND date < %s 
+                    ORDER BY date DESC 
+                    LIMIT 1;
+                """
+
+                cur.execute(query, (share_id, start_date, end_date))
+                result = cur.fetchone()
+
+                if result:
+                    # Get column names from cursor description
+                    columns = [desc[0] for desc in cur.description]
+                    # Convert result tuple to dictionary with proper types
+                    return {
+                        col: val if val is not None else None
+                        for col, val in zip(columns, result)
+                    }
+                return None
+
+    except psycopg2.DatabaseError as e:
+        logger.error(f"insert_statement_v2 failed: {e}")
+        raise

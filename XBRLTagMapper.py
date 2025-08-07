@@ -873,6 +873,7 @@ cash_flow_gaap = {
                             'us-gaap:ProceedsFromLoanOriginations1',
                             'us-gaap:ProceedsFromLeasePaymentSalesTypeAndDirectFinancingLeasesInvestingActivity',
                             'us-gaap:OperatingLeasePaymentsUse'},
+    'other_investing_activities': None,
     # Financing cash flow
     'financing_cash_flow': {'us-gaap:NetCashProvidedByUsedInFinancingActivities',
                             'us-gaap:NetCashProvidedByUsedInFinancingActivitiesContinuingOperationsAbstract',
@@ -951,6 +952,7 @@ cash_flow_gaap = {
                      'us-gaap:ProceedsFromIssuanceOfMediumTermNotes', 'us-gaap:RepaymentsOfMediumTermNotes',
                      'us-gaap:FinanceLeasePrincipalPayments',
                      'us-gaap:ProceedsFromPaymentsForInSecuritiesSoldUnderAgreementsToRepurchase'},
+    'other_financing_activities': None,
     # Additional fields
     'free_cash_flow': None,  # Calculated
     'start_cash_balance': {'us-gaap:CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents',
