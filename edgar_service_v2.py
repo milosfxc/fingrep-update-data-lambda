@@ -26,12 +26,13 @@ def get_filings_by_company(ticker: str, cutoff_date:str) -> pd.DataFrame:
                   .sort_values('reportDate', ascending=True)
                   .reset_index(drop=True))
     if not df_filings.empty:
-        return df_filings[['accession_number', 'reportDate','form', 'isXBRL']]
+        return df_filings[['accession_number', 'reportDate','form', 'isXBRL', 'acceptanceDateTime']]
     else:
+        logger.warning(f"Couldn't obtain a list of filings for ticker {ticker}")
         return pd.DataFrame(data=None)
 
-def get_company_fundamentals(ticker: str, share_id: int, filing_date:str):
-    df_filings = get_filings_by_company(ticker,filing_date)
+def get_company_fundamentals(ticker: str, share_id: int, cutoff_date:str):
+    df_filings = get_filings_by_company(ticker, cutoff_date)
     if df_filings.empty:
         logger.warning(f"Filings for ticker {ticker} where missing or df_filings doesn't have required all required columns. Columns list: {df_filings.columns}")
         return
@@ -252,10 +253,9 @@ def check_sum_combinations(values: list[float]):
 def validate_balance_sheet(bs_stmt: dict[str,float]) -> dict[str,float] | None:
 
     assets = bs_stmt.get('assets') or 0
-    liab_and_equity = bs_stmt.get('liabilities_and_equity') or 0
+    liab_and_equity = bs_stmt.pop('liabilities_and_equity') or 0
     assets = max(assets, liab_and_equity)
     assets = assets if assets > 0 else None
-    bs_stmt.pop('liabilities_and_equity')
     property_plant_equipment_net = bs_stmt.get('property_plant_equipment_net') or 0
     operating_lease = bs_stmt.pop('operating_lease') or 0
     current_assets = bs_stmt.get('current_assets')
