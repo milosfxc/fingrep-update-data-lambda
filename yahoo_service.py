@@ -1,6 +1,6 @@
 import datetime
 import re
-from distutils.command.install import value
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -10,87 +10,122 @@ import config
 import db_ops
 import edgar_service_v2
 import utils
+from utils import get_utc_date
 from config import logger
 
 
-def request_fundamentals(ticker: str):
+def request_fundamentals(ticker: str) -> Optional[dict]:
     try:
-        ticker = yf.Ticker(ticker.replace('.', '-'))
-        financials = dict()
-        currency = ticker.info.get('financialCurrency')
+        # Check if data is already request today
+        if archived_data := db_ops.get_filings_by_filing_id(ticker, get_utc_date(0, True)):
+            return archived_data
+        # Fetch data
+        yf_data = yf.Ticker(ticker.replace('.', '-'))
+        fundamentals = dict()
+        currency = yf_data.info.get('financialCurrency')
         if currency:
             currency = re.search(r"[A-Z]{3}", currency).group()
         else:
             currency = 'USD'
-            country = ticker.info.get('country', '').strip()
+            country = yf_data.info.get('country', '').strip()
             if country != 'United States':
                 logger.warning(
-                    f"Non-US ticker {ticker} (country: {country}) has no currency specified. \nDefaulting to USD. \nPlease verify currency manually.")
+                    f"Non-US ticker {yf_data} (country: {country}) has no currency specified. \nDefaulting to USD. \nPlease verify currency manually.")
 
 
-        financials['Currency'] = currency
-        financials['BalanceSheet'] = ticker.balance_sheet
-        financials['IncomeStatement'] = ticker.income_stmt
-        financials['CashFlowStatement'] = ticker.cash_flow
-        financials['BalanceSheetQ'] = ticker.quarterly_balance_sheet
-        financials['IncomeStatementQ'] = ticker.quarterly_income_stmt
-        financials['CashFlowStatementQ'] = ticker.quarterly_cash_flow
+        fundamentals['Currency'] = currency
+        fundamentals['BalanceSheet'] = yf_data.balance_sheet
+        fundamentals['IncomeStatement'] = yf_data.income_stmt
+        fundamentals['CashFlowStatement'] = yf_data.cash_flow
+        fundamentals['BalanceSheetQ'] = yf_data.quarterly_balance_sheet
+        fundamentals['IncomeStatementQ'] = yf_data.quarterly_income_stmt
+        fundamentals['CashFlowStatementQ'] = yf_data.quarterly_cash_flow
 
-        for stmt in statements.keys():
-            if financials[stmt] is None or financials[stmt].empty:
-                financials.pop(stmt)
+        for stmt in statements_mapper.keys():
+            if fundamentals[stmt] is None or fundamentals[stmt].empty:
+                fundamentals.pop(stmt)
+            else:
+                fundamentals[stmt] = fundamentals[stmt].replace({np.nan: None})
+                print(fundamentals[stmt].to_dict())
 
-        return financials
+        # Check if it's not archived already and archive data
+        if not archived_data:
+            data = {
+                k: v.rename(columns=lambda c: str(c)).to_dict() if isinstance(v, pd.DataFrame) else v
+                for k, v in fundamentals.items()
+            }
+            db_ops.insert_filing(ticker, data)
+
+        return fundamentals
 
     except Exception as e:
         logger.error(f"yfinance API request error for ticker {ticker}: {e}")
         return None
 
 
-def get_company_fundamentals(ticker:str,share_id, report_date:str = None):
+def get_company_fundamentals(ticker:str,share_id, report_date:pd.Timestamp = None, requested_statement:str = None):
     yf_data = request_fundamentals(ticker)
-    currency_id = db_ops.get_cached_foreign_keys()['currencies'][yf_data.pop('Currency')]
     if yf_data:
-        stmt_dict = {}
+        ans = {}
         df_filings = edgar_service_v2.get_filings_by_company(ticker, config.report_start_date)
-        for k, v in yf_data.items():
-            stmt_positions = statements[k]
-            v.index = v.index.str.lower()
-            v = v.replace(np.nan, 0)
-            dates_dict = v.to_dict()
-            ans_date_dict = {}
-            for date in v.columns:
+        currency_id = db_ops.get_cached_foreign_keys()['currencies'][yf_data.pop('Currency')]
+        # Iterate over quarterly and annual statements
+        for stmt_name, df_stmt in yf_data.items():
+            # Filter by statement
+            if requested_statement and not stmt_name.startswith(requested_statement): continue
+            # Fingrep statements
+            stmt_positions_mapper = statements_mapper[stmt_name]
+            # Converting yf position names to lower case
+            df_stmt.index = df_stmt.index.str.lower()
+            df_stmt = df_stmt.replace(np.nan, 0)
+            # Dates dict groups statements by report date
+            dates_dict = df_stmt.to_dict()
+            for date in df_stmt.columns:
+                # Filter by report date
+                if abs((date - report_date).days) > 20: continue
                 # Identification columns
-                calendar_period = edgar_service_v2.get_calendar_period(date.strftime('%Y-%m-%d'), '10-Q' if k.endswith('Q') else '10-K')
-                positions_dict = dates_dict[date]
-
-                ans_positions_dict = {'share_id': share_id,
-                                      'date': date,
-                                      'currency_id': currency_id,
-                                      'report_type': 'q' if k.endswith('Q') else 'a',
-                                      'calendar_period_id': utils.report_periods.get(calendar_period),
-                                      'filing_date': find_filing_date(df_filings,date)
-                                      }
-                find_filing_date(df_filings,date)
-                for db_pos, calc_positions in stmt_positions.items():
-                    sum_pos = 0
+                calendar_period = edgar_service_v2.get_calendar_period(date.strftime('%Y-%m-%d'), '10-Q' if stmt_name.endswith('Q') else '10-K')
+                yf_statement = dates_dict[date]
+                stmt_dict = {'share_id': share_id,
+                             'date': date,
+                             'currency_id': currency_id,
+                             'report_type': 'q' if stmt_name.endswith('Q') else 'a',
+                             'calendar_period_id': utils.report_periods.get(calendar_period),
+                             'filing_date': find_filing_date(df_filings,date, ticker)
+                             }
+                for db_pos, calc_positions in stmt_positions_mapper.items():
                     if calc_positions is None: continue
+                    sum_pos = 0 * config.scale_factor
                     for pos in calc_positions:
-                        pos = positions_dict.get(pos)
+                        pos = yf_statement.get(pos)
                         sum_pos +=  pos if pos else 0
-                    ans_positions_dict[db_pos] = sum_pos
+                    stmt_dict[db_pos] = sum_pos
                 # Check that statement has at least 70% of columns filled
-                if sum(1 for v in ans_positions_dict.values() if v is None or v == 0)/len(ans_positions_dict) < 0.3:
-                    ans_date_dict[date] = ans_positions_dict
-            stmt_dict[k] = ans_date_dict
-        return stmt_dict
+                if sum(1 for v in stmt_dict.values() if v is None or v == 0)/len(stmt_dict) < 0.3:
+                    if date in ans:
+                        ans[date][stmt_name] = stmt_dict
+                    else:
+                        ans[date] = {stmt_name:stmt_dict}
+            # Insert data into database
+            if ans:
+                sorted_dict = dict(sorted(ans.items()))
+                for date in sorted_dict:
+                    stmts_dict = sorted_dict[date]
+                    for key in ['IncomeStatement', 'CashFlowStatement', 'BalanceSheet', 'IncomeStatementQ', 'CashFlowStatementQ', 'BalanceSheetQ']:
+                        if key in stmts_dict:
+                            table_name = key[:-1] if key.endswith('Q') else key
+                            db_ops.upsert_statement_v2(stmts_dict[key], utils.camel_to_snake(table_name),['share_id', 'report_type', 'date'])
+            else:
+                logger.warning(f"{stmt_name} data for ticker {ticker} successfully requested via yf, but nothing to insert.")
     else:
-        return None
+        logger.warning(f"Couldn't request yf fundamentals for ticker {ticker}")
 
 
-def find_filing_date(df_filings: pd.DataFrame, yf_report_date: pd.Timestamp) -> datetime.datetime | None:
 
-    if df_filings.empty:
+def find_filing_date(df_filings: pd.DataFrame, yf_report_date: pd.Timestamp, ticker: str) -> datetime.datetime | None:
+
+    if getattr(df_filings, "empty", True):
+        logger.warning(f"Couldn't request a list of all filings for ticker {ticker}")
         return None
 
     # Calculate absolute differences between reportDate and yf_report_date
@@ -101,6 +136,7 @@ def find_filing_date(df_filings: pd.DataFrame, yf_report_date: pd.Timestamp) -> 
 
     # Check if the minimum difference is within 20 days
     if min_diff > pd.Timedelta(days=20):
+        logger.debug(f"Returning None filig_date for ticker {ticker} because min_diff > 20 days")
         return None
 
     # Get the row with the minimum time difference
@@ -213,7 +249,7 @@ cash_flow_statement = {'operating_cash_flow': ['operating cash flow'],
                           'end_cash_balance': ['end cash position']
                           }
 
-statements = {
+statements_mapper = {
     'BalanceSheet': balance_sheet,
     'IncomeStatement': income_statement,
     'CashFlowStatement': cash_flow_statement,

@@ -14,6 +14,8 @@ fundamentals_period_ending = '2019-12-31'
 report_start_date = '2024-07-01'
 LIMIT = 1
 db_location = DBLocation.LOCAL
+scale_factor = 10000
+
 
 # database config
 HOST=DBLocation.REMOTE

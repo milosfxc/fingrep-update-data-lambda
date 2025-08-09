@@ -289,7 +289,7 @@ def upsert_statement_v2(stmt_dict: dict, table_name: str, conflict_columns: list
     except psycopg2.DatabaseError as e:
         logger.error(f"insert_statement_v2 failed: {e}")
         logger.error(debug_query)
-        print(pd.DataFrame.from_dict(stmt_dict,"index"))
+        logger.error(pd.DataFrame.from_dict(stmt_dict,"index"))
         raise
 
 def query_3_quarter_sums(share_id: int, stmt_columns: set, table_name: str, start_date:datetime.date, end_date:datetime.date):
@@ -503,26 +503,54 @@ def get_filings_db_connection():
         conn.close()
 
 
-def insert_filing(accession_number, filing: dict):
+def insert_filing(filing_id, filing: dict):
+    """
+    Function stores edgar and yahoo filings into filings database.
+    :param filing_id: Ticker or Accession Number
+    :param filing: Dict
+    """
+    try:
+        with get_filings_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO filings (filing_id, data, insert_date)
+                    VALUES (%s, %s, CURRENT_DATE)
+                    ON CONFLICT (filing_id) DO NOTHING;
+                """,(filing_id, json.dumps(filing,default=str)))
+            conn.commit()
+    except Exception as e:
+        logger.warning(f"Error occurred during insertion for ticker or accession number {filing_id}: \n{e}")
 
-    with get_filings_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO filings (accession_number, data)
-                VALUES (%s, %s)
-                ON CONFLICT (accession_number) DO NOTHING;
-            """,(accession_number, json.dumps(filing)))
-        conn.commit()
 
-def get_filings_by_accession_numbers(accession_numbers: list[str]) -> dict[str,dict]:
-    with get_filings_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT accession_number, data 
-                FROM filings 
-                WHERE accession_number = ANY(%s);
-            """, (accession_numbers,))
-            return {row[0]: row[1] for row in cur.fetchall()}
+def get_filings_by_filing_id(filing_id: str, insert_date:str = None) -> dict | None:
+    """
+    Functions retrieves data from filings database.
+    :param filing_id: Ticker or Accession Number
+    :param insert_date: Optional argument to filter by insertion date
+    :return: Dict or None
+    """
+    try:
+        with get_filings_db_connection() as conn:
+            with conn.cursor() as cur:
+                query = """
+                    SELECT filing_id, data 
+                    FROM filings 
+                    WHERE filing_id = %s
+                """
+                params = [filing_id]
+
+                if insert_date:
+                    query += " AND DATE(insert_date) = %s"
+                    params.append(insert_date)
+
+                cur.execute(query, params)
+                if results := cur.fetchall():
+                    return {row[0]: row[1] for row in results}
+                return None
+
+    except Exception as e:
+        logger.warning(f"Error occurred during data retrieval for ticker or accession number {filing_id}: \n{e}")
+        return None
 
 
 def query_previous_cash_flow_statement(share_id: int, start_date:str, end_date:str) -> Optional[dict[str,Union[int,float,None]]]:

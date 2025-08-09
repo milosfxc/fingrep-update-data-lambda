@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta, datetime, date
 from typing import Optional, Dict, Union
 import edgar
@@ -5,6 +6,7 @@ import numpy as np
 import pandas as pd
 
 import XBRLTagMapper
+import config
 import db_ops
 from config import logger
 import utils
@@ -31,36 +33,16 @@ def get_filings_by_company(ticker: str, cutoff_date:str) -> pd.DataFrame:
         logger.warning(f"Couldn't obtain a list of filings for ticker {ticker}")
         return pd.DataFrame(data=None)
 
-def get_company_fundamentals(ticker: str, share_id: int, cutoff_date:str):
-    df_filings = get_filings_by_company(ticker, cutoff_date)
-    if df_filings.empty:
-        logger.warning(f"Filings for ticker {ticker} where missing or df_filings doesn't have required all required columns. Columns list: {df_filings.columns}")
-        return
-    # Fetch filings
-    for index, row in df_filings.iterrows():
-        statements = get_filing_details(row['accession_number'], is_xbrl=row['isXBRL'], share_id=share_id)
-
-        for k, v in statements.items():
-            db_ops.upsert_statement_v2(v, utils.camel_to_snake(k), ['share_id', 'report_type', 'date'])
-
-        # Q4 Statements calculation
-        if row['form'] in utils.forms['annual']:
-            try:
-                q_statements = get_q4_statements(statements, share_id, row['reportDate'].date())
-                for k, v in q_statements.items():
-                    db_ops.upsert_statement_v2(v, utils.camel_to_snake(k), ['share_id', 'report_type', 'date'])
-            except Exception as e:
-                logger.warning(f"Error for Q4 statements insertion for ticker {ticker}. Filing date of annual statement {e.with_traceback()}")
 
 
-
-def get_filing_details(accession_number:str, is_xbrl:int, share_id: int) -> Dict[str,dict]:
+def get_filing_details(accession_number:str, is_xbrl:int, share_id: int) -> Dict[str,dict] | None:
     if  is_xbrl == 1:
         filing = edgar.get_by_accession_number(accession_number=accession_number)
+        # Ratio triggers require this order IS -> CFS -> BS
         statements = {
-            'BalanceSheet': filing.obj().financials.balance_sheet().to_dataframe().replace(['',np.nan],None),
             'IncomeStatement': filing.obj().financials.income_statement().to_dataframe().replace(['',np.nan],None),
-            'CashFlowStatement': filing.obj().financials.cashflow_statement().to_dataframe().replace(['',np.nan],None)
+            'CashFlowStatement': filing.obj().financials.cashflow_statement().to_dataframe().replace(['',np.nan],None),
+            'BalanceSheet': filing.obj().financials.balance_sheet().to_dataframe().replace(['', np.nan], None)
         }
 
         # Rename columns to match period end date
@@ -82,11 +64,13 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int) -> Dict
         df_instant_end = filing.xbrl().query().by_dimension(None).by_instant_date(filing.period_of_report).to_dataframe('concept', 'numeric_value', 'statement_type').replace(['',np.nan],None)
         df_period = filing.xbrl().query().by_dimension(None).by_date_range(other_data['period_start'], filing.period_of_report).to_dataframe('concept', 'numeric_value', 'statement_type').replace(['',np.nan],None)
         # Archive filing
+
         archive = {
             'period_start': other_data['period_start'],
             'period_end': filing.period_of_report,
             'cf_period_start': other_data['cf_period_start'],
             'acc_standard': other_data['acc_standard'],
+            'entity_info': {k: v.strftime('%Y-%m-%d') if isinstance(v, (date,datetime)) else v for k,v in filing.xbrl().entity_info.items()},
             'currency': other_data['currency'],
             'form': filing.form,
             'cik': filing.cik,
@@ -106,7 +90,6 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int) -> Dict
             statements[stmt] = get_statement(stmt, statements[stmt], other_data, df_instant_end, df_period, filing.period_of_report)
 
         # Income statement and cashflow statement period compatibility
-        # todo check how cf_period_start is calculated
         if (cf_period_start := other_data.get('cf_period_start')) != (period_start := other_data.get('period_start')):
             cf_stmt = get_quarterly_cash_flow_statement(statements.pop('CashFlowStatement'),share_id, cf_period_start, period_start)
             if cf_stmt:
@@ -119,7 +102,8 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int) -> Dict
             statements['CashFlowStatement'] = validate_cashflow_statement(df_instant_prev_end,df_instant_end,df_period,statements['CashFlowStatement'], other_data['acc_standard'])
         return statements
     else:
-        return {} # todo yfinance
+        return None
+
 
 def get_statement(stmt_name: str, df_stmt: pd.DataFrame, other_data: dict, df_instant: pd.DataFrame, df_period: pd.DataFrame, period_end: str) -> dict[str,float]:
     stmt_tags = XBRLTagMapper.xbrl_tags[other_data['acc_standard']][stmt_name].copy()
@@ -134,7 +118,7 @@ def get_statement(stmt_name: str, df_stmt: pd.DataFrame, other_data: dict, df_in
         ans['revenue'] = get_position_value_sum_or_max(df_stmt,df_tags,stmt_tags.pop('revenue'),period_end)
         if not ans['revenue']:
             revenue_series = df_stmt.loc[df_stmt['label'].str.contains('revenue', case=False, na=False) & df_stmt[period_end].notna(), period_end]
-            ans['revenue'] = revenue_series.max() if not revenue_series.empty else None
+            ans['revenue'] = revenue_series.max() * config.scale_factor if not revenue_series.empty else None
         # Net Income
         ans['net_income'] = get_position_value_sum_or_max(df_stmt,df_tags,stmt_tags.pop('net_income'),period_end)
     # Iterate over statement positions
@@ -166,7 +150,7 @@ def get_position_value_sum_or_sum(df_stmt: pd.DataFrame, df_tags: pd.DataFrame, 
             return None
     max_value, sum_value, sum_combo = max(values), sum(values),check_sum_combinations(values)
     pos_value = max_value if sum_value - max_value == max_value else sum_combo if sum_combo else sum_value
-    return pos_value if pos_value != 0 else None
+    return pos_value * config.scale_factor if pos_value != 0 else None
 
 def get_position_value_sum_or_max(df_stmt: pd.DataFrame, df_tags: pd.DataFrame, xbrl_tags: set, period_end: str) -> float | None:
     df_stmt = df_stmt[df_stmt['concept'].isin(xbrl_tags)]
@@ -181,7 +165,7 @@ def get_position_value_sum_or_max(df_stmt: pd.DataFrame, df_tags: pd.DataFrame, 
             return None
     max_value, sum_value = max(values), sum(values)
     pos_value = max_value if sum_value - max_value == max_value else max_value
-    return pos_value if pos_value != 0 else None
+    return pos_value * config.scale_factor if pos_value != 0 else None
 
 
 def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf) -> dict | None:
@@ -439,11 +423,10 @@ def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, floa
 
 def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_stmt: dict[str,float], acc_standard: str) -> dict[str,float] | None:
     # CAPEX calculation
-    capital_expenditure = None
     df_ppe = df_period[df_period['concept'].isin(XBRLTagMapper.xbrl_tags[acc_standard]['CashFlowStatement']['net_purchase_sale_ppe'])]
     capex_values = pd.to_numeric(df_ppe['numeric_value'], errors='coerce')
     capex_sum = capex_values[capex_values < 0].sum()
-    capital_expenditure = capex_sum if capex_sum else None
+    capital_expenditure = capex_sum * config.scale_factor if capex_sum else None
     cf_stmt['capital_expenditure'] = capital_expenditure
 
     # # Debt issuance and repayment calculation
@@ -459,7 +442,6 @@ def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_
     #     cf_stmt['debt_repayment'] = debt_repayment
 
     # Free Cash Flow
-    free_cash_flow = None
     operating_cash_flow = cf_stmt.get('operating_cash_flow')
     if operating_cash_flow and capital_expenditure:
         free_cash_flow = operating_cash_flow + capital_expenditure
@@ -469,10 +451,10 @@ def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_
     df_cash_end = df_instant_end[df_instant_end['statement_type'].isin(['CashFlowStatement','BalanceSheet'])]
     df_cash_end = df_cash_end[df_cash_end['concept'].isin(XBRLTagMapper.xbrl_tags[acc_standard]['CashFlowStatement']['end_cash_balance'])]
     end_cash_balance = df_cash_end['numeric_value'].max()
+    end_cash_balance = end_cash_balance * config.scale_factor if not pd.isna(end_cash_balance) else None
     if end_cash_balance:
         cf_stmt['end_cash_balance'] = end_cash_balance
     # Cash start
-    start_cash_balance = None
     net_change = cf_stmt.get('change_in_cash')
     if net_change and end_cash_balance:
         start_cash_balance = end_cash_balance - net_change
@@ -480,6 +462,7 @@ def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_
         df_cash_start = df_instant_start[df_instant_start['statement_type'].isin(['CashFlowStatement', 'BalanceSheet'])]
         df_cash_start = df_cash_start[df_cash_start['concept'].isin(XBRLTagMapper.xbrl_tags[acc_standard]['CashFlowStatement']['start_cash_balance'])]
         start_cash_balance = df_cash_start['numeric_value'].max()
+        start_cash_balance = start_cash_balance * config.scale_factor if not pd.isna(start_cash_balance) else None
     if start_cash_balance:
         cf_stmt['start_cash_balance'] = start_cash_balance
     # Cash change
