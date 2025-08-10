@@ -13,9 +13,9 @@ def get_company_fundamentals(ticker: str, share_id: int, cutoff_date:str):
     for index, row in df_filings.iterrows():
         statements = get_filing_details(row['accession_number'], is_xbrl=row['isXBRL'], share_id=share_id)
         if statements:
-            for k, v in ['IncomeStatement', 'CashFlowStatement', 'BalanceSheet']:
+            for k in ['IncomeStatement', 'CashFlowStatement', 'BalanceSheet']: # Must be this order for the Ratios trigger function
                 if k in statements:
-                    db_ops.upsert_statement_v2(v, camel_to_snake(k), ['share_id', 'report_type', 'date'])
+                    db_ops.upsert_statement_v2(statements[k], camel_to_snake(k), ['share_id', 'report_type', 'date'])
 
             # Q4 Statements calculation
             if row['form'] in forms['annual']:
@@ -26,6 +26,7 @@ def get_company_fundamentals(ticker: str, share_id: int, cutoff_date:str):
                 except Exception as e:
                     logger.warning(f"Error for Q4 statements insertion for ticker {ticker}. Filing date of annual statement {e.with_traceback()}")
         else:
+            print('Yahoo...')
             # Yahoo alternative
             if statements is None:
                 yahoo_service.get_company_fundamentals(ticker, share_id, row['reportDate'])

@@ -5,6 +5,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 import yfinance as yf
+from torch import PRIVATE_OPS
 
 import config
 import db_ops
@@ -13,12 +14,14 @@ import utils
 from utils import get_utc_date
 from config import logger
 
+# Shared variables
+fundamentals_dict = dict()
 
 def request_fundamentals(ticker: str) -> Optional[dict]:
     try:
-        # Check if data is already request today
-        if archived_data := db_ops.get_filings_by_filing_id(ticker, get_utc_date(0, True)):
-            return archived_data
+        # Check if data is already requested
+        if fundamentals := fundamentals_dict.get(ticker):
+            return fundamentals
         # Fetch data
         yf_data = yf.Ticker(ticker.replace('.', '-'))
         fundamentals = dict()
@@ -45,16 +48,9 @@ def request_fundamentals(ticker: str) -> Optional[dict]:
             if fundamentals[stmt] is None or fundamentals[stmt].empty:
                 fundamentals.pop(stmt)
             else:
-                fundamentals[stmt] = fundamentals[stmt].replace({np.nan: None})
-                print(fundamentals[stmt].to_dict())
-
-        # Check if it's not archived already and archive data
-        if not archived_data:
-            data = {
-                k: v.rename(columns=lambda c: str(c)).to_dict() if isinstance(v, pd.DataFrame) else v
-                for k, v in fundamentals.items()
-            }
-            db_ops.insert_filing(ticker, data)
+                fundamentals[stmt] = fundamentals[stmt]
+        # Store requested data as copy to prevent modifications
+        fundamentals_dict[ticker] = fundamentals.copy()
 
         return fundamentals
 
@@ -66,6 +62,7 @@ def request_fundamentals(ticker: str) -> Optional[dict]:
 def get_company_fundamentals(ticker:str,share_id, report_date:pd.Timestamp = None, requested_statement:str = None):
     yf_data = request_fundamentals(ticker)
     if yf_data:
+
         ans = {}
         df_filings = edgar_service_v2.get_filings_by_company(ticker, config.report_start_date)
         currency_id = db_ops.get_cached_foreign_keys()['currencies'][yf_data.pop('Currency')]
@@ -77,12 +74,11 @@ def get_company_fundamentals(ticker:str,share_id, report_date:pd.Timestamp = Non
             stmt_positions_mapper = statements_mapper[stmt_name]
             # Converting yf position names to lower case
             df_stmt.index = df_stmt.index.str.lower()
-            df_stmt = df_stmt.replace(np.nan, 0)
             # Dates dict groups statements by report date
             dates_dict = df_stmt.to_dict()
             for date in df_stmt.columns:
                 # Filter by report date
-                if abs((date - report_date).days) > 20: continue
+                if report_date and abs((date - report_date).days) > 20: continue
                 # Identification columns
                 calendar_period = edgar_service_v2.get_calendar_period(date.strftime('%Y-%m-%d'), '10-Q' if stmt_name.endswith('Q') else '10-K')
                 yf_statement = dates_dict[date]
@@ -101,7 +97,13 @@ def get_company_fundamentals(ticker:str,share_id, report_date:pd.Timestamp = Non
                         sum_pos +=  pos if pos else 0
                     stmt_dict[db_pos] = sum_pos
                 # Check that statement has at least 70% of columns filled
-                if sum(1 for v in stmt_dict.values() if v is None or v == 0)/len(stmt_dict) < 0.3:
+                non_empty_columns = 0
+                for key, value in stmt_dict.items():
+                    if (key not in {'share_id', 'date', 'currency_id', 'report_type', 'calendar_period_id', 'filing_date'}
+                            and value is not None and value != 0 and not (isinstance(value, float) and value != value)):
+                        non_empty_columns += 1
+                # Filter accepts statements with at least 4 non-identification columns
+                if non_empty_columns > 3:
                     if date in ans:
                         ans[date][stmt_name] = stmt_dict
                     else:

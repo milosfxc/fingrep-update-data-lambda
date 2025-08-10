@@ -33,6 +33,22 @@ def get_filings_by_company(ticker: str, cutoff_date:str) -> pd.DataFrame:
         logger.warning(f"Couldn't obtain a list of filings for ticker {ticker}")
         return pd.DataFrame(data=None)
 
+def get_latest_filings(filing_date:str) -> pd.DataFrame:
+    """
+    Functions returns dataframe of all filings by company.
+    :param filing_date: Filing start date
+    :return: Dataframe
+    """
+    # Filters for the query below
+    forms = list(utils.forms['annual'].union(utils.forms['quarterly']))
+    df_filings = (edgar.get_filings(filing_date=filing_date).to_pandas()
+                  .query('form in @forms'))
+    if not df_filings.empty:
+        return df_filings
+    else:
+        logger.warning("Couldn't obtain a list of latest filings")
+        return pd.DataFrame(data=None)
+
 
 
 def get_filing_details(accession_number:str, is_xbrl:int, share_id: int) -> Dict[str,dict] | None:
@@ -486,7 +502,6 @@ def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_
     return {k: 0 if v is None else v.item() if isinstance(v, np.generic) else v for k, v in cf_stmt.items()}
 
 
-
 def get_calendar_period(date_str: str, form: str) -> str | None:
     """
     Returns the calendar period (YYYY for annual forms, YYYYQ1-YYYYQ4 for quarterly)
@@ -497,11 +512,15 @@ def get_calendar_period(date_str: str, form: str) -> str | None:
         if form.upper() in utils.forms['annual']:
             return str(date.year)
         # Quarter calculation
-        quarter = (date.month - 1) // 3 + 1
-        return f"{date.year}Q{quarter}"
+        quarter = (date.month - 2) // 3 + 1  # Added date.month - 2 instead of date.month - 1 because I want to have a buffer period of one month.
+        if quarter == 0:                     # This way '2024-06-01' will be counted as Q2 instead of Q3/
+            return f"{date.year - 1}Q{4}"
+        else:
+            return f"{date.year}Q{quarter}"
     except (ValueError, TypeError):
         pass
     return None
+
 
 
 def get_fiscal_period(entity_info:dict, form:str) -> str | None:

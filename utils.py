@@ -1,3 +1,4 @@
+import math
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Union
@@ -238,3 +239,12 @@ def camel_to_snake(name) -> str:
     return name.lower()
 
 
+def replace_dict_nan_with_none(obj):
+    if isinstance(obj, dict):
+        return {k: replace_dict_nan_with_none(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [replace_dict_nan_with_none(v) for v in obj]
+    elif isinstance(obj, float) and math.isnan(obj):
+        return None
+    else:
+        return obj

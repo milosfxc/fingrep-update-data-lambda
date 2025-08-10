@@ -1,12 +1,14 @@
 import datetime
 import json
 import logging
+import traceback
 from typing import Optional, Union
 
 from edgar.formatting import accession_number_text
 from psycopg2.extras import DictCursor, execute_values
 import pandas as pd
 
+import utils
 from config import DB_NAME, DB_USER, LOCAL_DB_HOST, DB_PORT, DB_PASSWORD
 import config
 from ConnType import DBLocation
@@ -254,6 +256,8 @@ def upsert_statement_v2(stmt_dict: dict, table_name: str, conflict_columns: list
         conflict_columns: List of columns that make up the composite key for conflict detection
     """
     try:
+        # Convert dict values from NaN to None
+        stmt_dict = utils.replace_dict_nan_with_none(stmt_dict)
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 # Prepare columns and values
@@ -510,6 +514,8 @@ def insert_filing(filing_id, filing: dict):
     :param filing: Dict
     """
     try:
+        # Convert dict NaN values to None
+        filing = utils.replace_dict_nan_with_none(filing)
         with get_filings_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
@@ -519,7 +525,10 @@ def insert_filing(filing_id, filing: dict):
                 """,(filing_id, json.dumps(filing,default=str)))
             conn.commit()
     except Exception as e:
-        logger.warning(f"Error occurred during insertion for ticker or accession number {filing_id}: \n{e}")
+        tb = traceback.extract_tb(e.__traceback__)
+        file_path, line_no, func_name, text = tb[-1]
+        logger.error(f"{file_path}:{line_no} - Error occurred during insertion for ticker or accession number {filing_id}: \n{e}")
+
 
 
 def get_filings_by_filing_id(filing_id: str, insert_date:str = None) -> dict | None:
@@ -533,7 +542,7 @@ def get_filings_by_filing_id(filing_id: str, insert_date:str = None) -> dict | N
         with get_filings_db_connection() as conn:
             with conn.cursor() as cur:
                 query = """
-                    SELECT filing_id, data 
+                    SELECT data 
                     FROM filings 
                     WHERE filing_id = %s
                 """
@@ -544,12 +553,18 @@ def get_filings_by_filing_id(filing_id: str, insert_date:str = None) -> dict | N
                     params.append(insert_date)
 
                 cur.execute(query, params)
-                if results := cur.fetchall():
-                    return {row[0]: row[1] for row in results}
+                if result := cur.fetchone():
+                    data = result[0]
+                    if isinstance(data, str):
+                        return json.loads(data)
+                    else:
+                        return data
                 return None
 
     except Exception as e:
-        logger.warning(f"Error occurred during data retrieval for ticker or accession number {filing_id}: \n{e}")
+        tb = traceback.extract_tb(e.__traceback__)
+        file_path, line_no, func_name, text = tb[-1]
+        logger.warning(f"{file_path}:{line_no} - Error occurred during data retrieval for ticker or accession number {filing_id}: \n{e}")
         return None
 
 
