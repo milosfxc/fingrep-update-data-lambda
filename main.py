@@ -9,7 +9,7 @@ from SSHTunnelManager import SSHTunnelManager
 from db_ops import get_existing_tickers, get_banned_tickers
 from config import logger, update_fundamentals
 from utils import get_utc_date
-
+from fundamentals_service import update_fundamentals
 
 def get_stock_data():
     # Get existing tickers, banned tickers and new daily data
@@ -65,7 +65,7 @@ def get_stock_data():
 
     # Update fundamentals
     if update_fundamentals:
-        fingrep_service.update_fundamentals()
+        update_fundamentals()
 
 
 

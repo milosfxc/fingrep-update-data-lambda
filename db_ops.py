@@ -2,10 +2,11 @@ import datetime
 import json
 import logging
 import traceback
-from typing import Optional, Union
+from typing import Optional, Union, List, Dict
 
 from edgar.formatting import accession_number_text
-from psycopg2.extras import DictCursor, execute_values
+from psycopg2 import sql
+from psycopg2.extras import DictCursor, execute_values, execute_batch
 import pandas as pd
 
 import utils
@@ -136,7 +137,7 @@ def get_foreign_keys():
                 # Countries
                 cur.execute('SELECT name, id FROM countries;')
                 ans = {'countries': {}, 'sectors': {}, 'industries': {}, 'share_types': {}, 'exchanges': {},
-                       'currencies': {}}
+                       'currencies': {}, 'ticker_and_share_id_by_cik': {}}
                 for record in cur:
                     ans['countries'][record['name']] = record['id']
                 # Sectors
@@ -159,6 +160,10 @@ def get_foreign_keys():
                 cur.execute('SELECT symbol, id FROM currencies;')
                 for record in cur:
                     ans['currencies'][record['symbol']] = record['id']
+                # Ticker and share_id by CIK
+                cur.execute('SELECT s.id, s.ticker, i.cik FROM shares s JOIN shares_info i ON s.id = i.share_id WHERE i.cik > 0')
+                for record in cur:
+                    ans['ticker_and_share_id_by_cik'][record['cik']] = {'share_id': record['id'], 'ticker': record['ticker']}
                 foreign_keys_cache = ans
                 return foreign_keys_cache
     except psycopg2.DatabaseError as error:
@@ -246,7 +251,7 @@ def upsert_dataframe_v2(df: pd.DataFrame, table_name: str):
         logger.error(f"upsert_dataframe_v2: {e}")
 
 
-def upsert_statement_v2(stmt_dict: dict, table_name: str, conflict_columns: list):
+def upsert_statement_v2(stmt_dict: dict, table_name: str, conflict_columns: list) -> bool:
     """
     Insert or update a row in PostgreSQL table (UPSERT).
 
@@ -290,11 +295,12 @@ def upsert_statement_v2(stmt_dict: dict, table_name: str, conflict_columns: list
                 # Execute with parameterized values
                 cur.execute(query, list(stmt_dict.values()))
                 conn.commit()
+                return True
     except psycopg2.DatabaseError as e:
         logger.error(f"insert_statement_v2 failed: {e}")
         logger.error(debug_query)
         logger.error(pd.DataFrame.from_dict(stmt_dict,"index"))
-        raise
+        return False
 
 def query_3_quarter_sums(share_id: int, stmt_columns: set, table_name: str, start_date:datetime.date, end_date:datetime.date):
 
@@ -415,60 +421,58 @@ def get_ids_by_cik(cik_list: list) -> pd.DataFrame:
         return pd.DataFrame(columns=['share_id', 'cik'])
 
 
-# Latest fillings
-def get_latest_filings_by_max_filing_date():
-    sql_select = """SELECT * FROM latest_filings WHERE filing_date = (SELECT MAX(filing_date) FROM latest_filings)"""
-    try:
-        with get_db_connection() as conn:
-            with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
-                cur.execute(sql_select)
-                result = cur.fetchall()
-                return [dict(row) for row in result] if result else None
-    except psycopg2.DatabaseError as e:
-        logger.error(f"get_latest_filings_by_max_filing_date: {e}")
-        return None
+def upsert_latest_filings(filings: list[dict]) -> bool:
+    if not filings:
+        return True
 
+    query = """
+        INSERT INTO latest_filings (
+            accession_number,
+            cik,
+            share_id,
+            filing_date,
+            form,
+            inserted,
+            attempt_date
+        ) VALUES (
+            %(accession_number)s,
+            %(cik)s,
+            %(share_id)s,
+            %(filing_date)s,
+            %(form)s,
+            %(inserted)s,
+            %(attempt_date)s
+        )
+        ON CONFLICT (accession_number)
+        DO UPDATE SET
+            cik = EXCLUDED.cik,
+            share_id = EXCLUDED.share_id,
+            filing_date = EXCLUDED.filing_date,
+            form = EXCLUDED.form,
+            inserted = EXCLUDED.inserted,
+            attempt_date = EXCLUDED.attempt_date;
+    """
 
-def upsert_latest_filings(df: pd.DataFrame, upsert_fully_inserted_and_attempt_date: bool = False):
-    # Replace NaN with None
-    df = df.astype(object).where(pd.notnull(df), None)
-
-    # Prepare the query
-    if not upsert_fully_inserted_and_attempt_date:
-        upsert_query = f"""
-            INSERT INTO latest_filings ({', '.join(df.columns)}) 
-            VALUES %s
-            ON CONFLICT (accession_number, cik) DO UPDATE 
-            SET partially_inserted = EXCLUDED.partially_inserted;
-        """
-    else:
-        upsert_query = f"""
-            INSERT INTO latest_filings ({', '.join(df.columns)}) 
-            VALUES %s
-            ON CONFLICT (accession_number, cik) DO UPDATE 
-            SET fully_inserted = EXCLUDED.fully_inserted, 
-            full_insert_attempt_date = EXCLUDED.full_insert_attempt_date;
-        """
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                # Convert to list of tuples
-                data = list(df.itertuples(index=False, name=None))
-                execute_values(cur, upsert_query, data)
-                conn.commit()
-                return True
+                execute_batch(cur, query, filings, page_size=100)
+            conn.commit()
+        return True
+
     except psycopg2.DatabaseError as e:
         logger.error(f"upsert_latest_filings: {e}")
+        if 'conn' in locals():
+            conn.rollback()
         return False
 
 
-def get_filings_for_full_insert():
-    sql_select = """SELECT sh.id, sh.ticker, lf.cik, lf.accession_number, lf.filing_date FROM latest_filings lf INNER JOIN shares_info si ON lf.cik = si.cik 
+def get_latest_filings_for_insert():
+    sql_select = """SELECT sh.id AS share_id, sh.ticker, lf.cik, lf.accession_number, lf.filing_date, lf.form FROM latest_filings lf INNER JOIN shares_info si ON lf.cik = si.cik 
     INNER JOIN shares sh ON sh.id = si.share_id 
-    WHERE fully_inserted = FALSE 
-    AND lf.filing_date < NOW() - INTERVAL '4 DAYS'
-    AND lf.filing_date < (DATE_TRUNC('week', CURRENT_DATE) - INTERVAL '1 day')::DATE
-    AND ((lf.full_insert_attempt_date BETWEEN NOW() - INTERVAL '30 DAYS' AND NOW() - INTERVAL '7 DAYS') OR lf.full_insert_attempt_date IS NULL)
+    WHERE inserted = FALSE 
+    AND lf.filing_date < NOW() - INTERVAL '5 DAYS'
+    AND ((lf.attempt_date BETWEEN NOW() - INTERVAL '30 DAYS' AND NOW() - INTERVAL '7 DAYS') OR lf.attempt_date IS NULL)
     """
 
     try:
@@ -483,11 +487,11 @@ def get_filings_for_full_insert():
                 return pd.DataFrame()
     except psycopg2.DatabaseError as e:
         logger.error(f"get_filings_older_than_four_days: {e}")
-        return None
+        return pd.DataFrame(data=None)
 
 
 def delete_fillings_older_than_month():
-    sql_delete = """DELETE FROM latest_filings WHERE filing_date < NOW() - INTERVAL '1 MONTH' AND fully_inserted = TRUE"""
+    sql_delete = """DELETE FROM latest_filings WHERE filing_date < NOW() - INTERVAL '1 MONTH' AND inserted = TRUE"""
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:

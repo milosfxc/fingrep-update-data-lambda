@@ -32,3 +32,7 @@ https://financialmodelingprep.com/api/v3/symbol/NASDAQ?apikey=KAKTnsmvIxPYvpwuza
     * Use existing to extract all available data
     * Use DeepSeek to get xbrl mappings
 * return dataframe for insertion
+
+
+# Replace NaN with None
+df = df.astype(object).where(pd.notnull(df), None)

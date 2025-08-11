@@ -1,9 +1,13 @@
 import json
 from datetime import timedelta, datetime, date
 from typing import Optional, Dict, Union
+from unittest.mock import inplace
+
 import edgar
 import numpy as np
 import pandas as pd
+from edgar import Filing
+from sqlalchemy.dialects.mssql.information_schema import columns
 
 import XBRLTagMapper
 import config
@@ -20,40 +24,41 @@ def get_filings_by_company(ticker: str, cutoff_date:str) -> pd.DataFrame:
     :return:
     """
     # Filters for the query below
-    forms = list(utils.forms['annual'].union(utils.forms['quarterly']))
+    forms = ['10-K','10-Q','20-F']
     cutoff_date = pd.to_datetime(cutoff_date)
     df_filings = (edgar.Company(ticker).get_filings().to_pandas()
                   .assign(reportDate=lambda x: pd.to_datetime(x['reportDate']))
                   .query('reportDate >= @cutoff_date and form in @forms')
                   .sort_values('reportDate', ascending=True)
                   .reset_index(drop=True))
-    if not df_filings.empty:
+    if not df_filings.empty and {'accession_number', 'reportDate','form', 'isXBRL', 'acceptanceDateTime'}.issubset(set(df_filings.columns)):
         return df_filings[['accession_number', 'reportDate','form', 'isXBRL', 'acceptanceDateTime']]
     else:
-        logger.warning(f"Couldn't obtain a list of filings for ticker {ticker}")
+        logger.warning(f"Couldn't obtain a list of filings for ticker {ticker}. Dataframe df_filings:\n{df_filings}")
         return pd.DataFrame(data=None)
 
 def get_latest_filings(filing_date:str) -> pd.DataFrame:
     """
-    Functions returns dataframe of all filings by company.
+    Functions returns a dataframe of all filings by company.
     :param filing_date: Filing start date
     :return: Dataframe
     """
+
     # Filters for the query below
     forms = list(utils.forms['annual'].union(utils.forms['quarterly']))
-    df_filings = (edgar.get_filings(filing_date=filing_date).to_pandas()
+    df_filings = (edgar.get_filings(filing_date=filing_date, amendments=False).to_pandas()
                   .query('form in @forms'))
-    if not df_filings.empty:
+    if not df_filings.empty and {'form', 'cik', 'filing_date', 'accession_number'}.issubset(set(df_filings.columns)):
         return df_filings
     else:
-        logger.warning("Couldn't obtain a list of latest filings")
+        logger.warning(f"Couldn't obtain a list of latest filings or list didn't had all required columns. Dataframe df_filings: \n{df_filings}")
         return pd.DataFrame(data=None)
 
 
 
-def get_filing_details(accession_number:str, is_xbrl:int, share_id: int) -> Dict[str,dict] | None:
+def get_filing_details(accession_number:str, is_xbrl:int, share_id: int, filing:Filing = None) -> Dict[str,dict] | None:
     if  is_xbrl == 1:
-        filing = edgar.get_by_accession_number(accession_number=accession_number)
+        filing = edgar.get_by_accession_number(accession_number=accession_number) if filing is None else filing
         # Ratio triggers require this order IS -> CFS -> BS
         statements = {
             'IncomeStatement': filing.obj().financials.income_statement().to_dataframe().replace(['',np.nan],None),

@@ -59,7 +59,7 @@ def request_fundamentals(ticker: str) -> Optional[dict]:
         return None
 
 
-def get_company_fundamentals(ticker:str,share_id, report_date:pd.Timestamp = None, requested_statement:str = None):
+def get_company_fundamentals(ticker:str, share_id, nearby_report_date:pd.Timestamp = None, requested_statement:str = None):
     yf_data = request_fundamentals(ticker)
     if yf_data:
 
@@ -78,7 +78,7 @@ def get_company_fundamentals(ticker:str,share_id, report_date:pd.Timestamp = Non
             dates_dict = df_stmt.to_dict()
             for date in df_stmt.columns:
                 # Filter by report date
-                if report_date and abs((date - report_date).days) > 20: continue
+                if nearby_report_date and abs((date - nearby_report_date).days) > 31: continue
                 # Identification columns
                 calendar_period = edgar_service_v2.get_calendar_period(date.strftime('%Y-%m-%d'), '10-Q' if stmt_name.endswith('Q') else '10-K')
                 yf_statement = dates_dict[date]
@@ -116,11 +116,15 @@ def get_company_fundamentals(ticker:str,share_id, report_date:pd.Timestamp = Non
                     for key in ['IncomeStatement', 'CashFlowStatement', 'BalanceSheet', 'IncomeStatementQ', 'CashFlowStatementQ', 'BalanceSheetQ']:
                         if key in stmts_dict:
                             table_name = key[:-1] if key.endswith('Q') else key
-                            db_ops.upsert_statement_v2(stmts_dict[key], utils.camel_to_snake(table_name),['share_id', 'report_type', 'date'])
+                            if not db_ops.upsert_statement_v2(stmts_dict[key], utils.camel_to_snake(table_name),['share_id', 'report_type', 'date']):
+                                return False
             else:
                 logger.warning(f"{stmt_name} data for ticker {ticker} successfully requested via yf, but nothing to insert.")
+                return False
+        return True
     else:
         logger.warning(f"Couldn't request yf fundamentals for ticker {ticker}")
+        return False
 
 
 

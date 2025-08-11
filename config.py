@@ -5,13 +5,12 @@ from rich.diagnose import report
 from ConnType import DBLocation
 
 # stock market data config
-DAYS = 1
+DAYS = 5
 YEARS = 1
 mb_historical = False # false updates market breadth for the current day, true updates for the last 100 days
-insert_fundamentals = False # Insert fundamentals for new tickers
-update_fundamentals = False # Update fundamentals for existing tickers
-fundamentals_period_ending = '2019-12-31'
-report_start_date = '2024-07-01'
+insert_fundamentals = True # Insert fundamentals for new tickers
+update_fundamentals = True # Update fundamentals for existing tickers
+report_start_date = '2020-01-01'
 LIMIT = 1
 db_location = DBLocation.LOCAL
 scale_factor = 10000

@@ -45,16 +45,16 @@ FOR EACH ROW
 EXECUTE FUNCTION handle_fiscal_and_calendar_period_conflict_income_statement();
 
 --CASHFLOW STATEMENT
-CREATE OR REPLACE FUNCTION handle_fiscal_and_calendar_period_conflict_cash_flow()
+CREATE OR REPLACE FUNCTION handle_fiscal_and_calendar_period_conflict_cash_flow_statement()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM cash_flow WHERE fiscal_period_id = NEW.fiscal_period_id AND share_id = NEW.share_id)
-	AND NOT EXISTS (SELECT 1 FROM cash_flow WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type)
+    IF EXISTS (SELECT 1 FROM cash_flow_statement WHERE fiscal_period_id = NEW.fiscal_period_id AND share_id = NEW.share_id)
+	AND NOT EXISTS (SELECT 1 FROM cash_flow_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type)
 	THEN
         NEW.fiscal_period_id := NULL;
     END IF;
-	IF EXISTS (SELECT 1 FROM cash_flow WHERE calendar_period_id = NEW.calendar_period_id AND share_id = NEW.share_id)
-	AND NOT EXISTS (SELECT 1 FROM cash_flow WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type)
+	IF EXISTS (SELECT 1 FROM cash_flow_statement WHERE calendar_period_id = NEW.calendar_period_id AND share_id = NEW.share_id)
+	AND NOT EXISTS (SELECT 1 FROM cash_flow_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type)
 	THEN
         NEW.calendar_period_id := NULL;
     END IF;
@@ -62,7 +62,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER check_fiscal_and_calendar_conflict_cash_flow
-BEFORE INSERT ON cash_flow
+CREATE TRIGGER check_fiscal_and_calendar_conflict_cash_flow_statement
+BEFORE INSERT ON cash_flow_statement
 FOR EACH ROW
-EXECUTE FUNCTION handle_fiscal_and_calendar_period_conflict_cash_flow();
+EXECUTE FUNCTION handle_fiscal_and_calendar_period_conflict_cash_flow_statement();
