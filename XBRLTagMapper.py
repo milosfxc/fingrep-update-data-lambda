@@ -1,4 +1,3 @@
-from utils import income_statement
 
 balance_sheet_gaap = {
     'assets': {'us-gaap:Assets'},

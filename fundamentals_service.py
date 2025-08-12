@@ -1,15 +1,12 @@
 import datetime
-from datetime import timezone
-
 import edgar
-import pandas as pd
-
 import edgar_service_v2
 import yahoo_service
 from edgar_service_v2 import get_filings_by_company, get_q4_statements, get_filing_details
 from utils import camel_to_snake,forms,get_utc_date
 from config import logger
 import db_ops
+
 
 def get_company_fundamentals(ticker: str, share_id: int, cutoff_date:str):
     df_filings = get_filings_by_company(ticker, cutoff_date)
@@ -44,12 +41,13 @@ def update_fundamentals():
     # Daily update
     df_filings = edgar_service_v2.get_latest_filings(get_utc_date(days=5,as_str=True))
     ticker_and_share_id_by_cik = db_ops.get_foreign_keys()['ticker_and_share_id_by_cik']
+    processed_filings = db_ops.get_accession_numbers()
     filings = []
     for index, row in df_filings.iterrows():
-        if row['cik'] in ticker_and_share_id_by_cik:
+        if row['cik'] in ticker_and_share_id_by_cik and row['accession_number'] not in processed_filings: # todo add check edgar_api.get_ticker_by_cik if cik changes than it must be matched by ticker
             row_dict = row.to_dict()
             row_dict.update(ticker_and_share_id_by_cik[row['cik']])
-            row_dict['inserted'] = False# update_company_fundamentals(row_dict['ticker'],row_dict['share_id'],row_dict['form'],row_dict['accession_number'])
+            row_dict['inserted'] = update_company_fundamentals(row_dict['ticker'],row_dict['share_id'],row_dict['form'],row_dict['accession_number'])
             row_dict['attempt_date'] = None
             filings.append(row_dict)
     # Update latest filings
@@ -64,6 +62,7 @@ def update_fundamentals():
         latest_filings.append(row_dict)
     # Update latest filings retries
     db_ops.upsert_latest_filings(latest_filings)
+
 
 def update_company_fundamentals(ticker: str, share_id: int, form: str, accession_number: str) -> bool:
     try:

@@ -501,74 +501,21 @@ def delete_fillings_older_than_month():
         logger.error(f"delete_old_fillings: {e}")
 
 
-# Filings table
-@contextmanager
-def get_filings_db_connection():
-    conn = psycopg2.connect(database='filings', user=DB_USER, host=LOCAL_DB_HOST, port=DB_PORT, password=DB_PASSWORD)
-    try:
-        yield conn
-    finally:
-        conn.close()
 
-
-def insert_filing(filing_id, filing: dict):
-    """
-    Function stores edgar and yahoo filings into filings database.
-    :param filing_id: Ticker or Accession Number
-    :param filing: Dict
-    """
+def get_accession_numbers() -> set[str] | None:
     try:
-        # Convert dict NaN values to None
-        filing = utils.replace_dict_nan_with_none(filing)
-        with get_filings_db_connection() as conn:
+        with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO filings (filing_id, data, insert_date)
-                    VALUES (%s, %s, CURRENT_DATE)
-                    ON CONFLICT (filing_id) DO NOTHING;
-                """,(filing_id, json.dumps(filing,default=str)))
-            conn.commit()
+                query = 'SELECT accession_number FROM latest_filings'
+                cur.execute(query)
+                if rows := cur.fetchall():
+                    return {row[0] for row in rows}
+                else:
+                    return None
     except Exception as e:
         tb = traceback.extract_tb(e.__traceback__)
         file_path, line_no, func_name, text = tb[-1]
-        logger.error(f"{file_path}:{line_no} - Error occurred during insertion for ticker or accession number {filing_id}: \n{e}")
-
-
-
-def get_filings_by_filing_id(filing_id: str, insert_date:str = None) -> dict | None:
-    """
-    Functions retrieves data from filings database.
-    :param filing_id: Ticker or Accession Number
-    :param insert_date: Optional argument to filter by insertion date
-    :return: Dict or None
-    """
-    try:
-        with get_filings_db_connection() as conn:
-            with conn.cursor() as cur:
-                query = """
-                    SELECT data 
-                    FROM filings 
-                    WHERE filing_id = %s
-                """
-                params = [filing_id]
-
-                if insert_date:
-                    query += " AND DATE(insert_date) = %s"
-                    params.append(insert_date)
-
-                cur.execute(query, params)
-                if result := cur.fetchone():
-                    data = result[0]
-                    if isinstance(data, str):
-                        return json.loads(data)
-                    else:
-                        return data
-                return None
-
-    except Exception as e:
-        tb = traceback.extract_tb(e.__traceback__)
-        file_path, line_no, func_name, text = tb[-1]
-        logger.warning(f"{file_path}:{line_no} - Error occurred during data retrieval for ticker or accession number {filing_id}: \n{e}")
+        logger.warning(f"{file_path}:{line_no} - Error occurred during data retrieval from latest_filings table: \n{e}")
         return None
 
 
@@ -603,3 +550,76 @@ def query_previous_cash_flow_statement(share_id: int, start_date:str, end_date:s
     except psycopg2.DatabaseError as e:
         logger.error(f"insert_statement_v2 failed: {e}")
         raise
+
+
+# EDGAR Database
+@contextmanager
+def get_edgar_db_connection():
+    conn = psycopg2.connect(database='edgar', user=DB_USER, host=LOCAL_DB_HOST, port=DB_PORT, password=DB_PASSWORD)
+    try:
+        yield conn
+    finally:
+        conn.close()
+
+
+def insert_filing(filing_id, filing: dict):
+    """
+    Function stores edgar and yahoo filings into filings database.
+    :param filing_id: Ticker or Accession Number
+    :param filing: Dict
+    """
+    try:
+        # Convert dict NaN values to None
+        filing = utils.replace_dict_nan_with_none(filing)
+        with get_edgar_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    INSERT INTO filings (filing_id, data, insert_date)
+                    VALUES (%s, %s, CURRENT_DATE)
+                    ON CONFLICT (filing_id) DO NOTHING;
+                """,(filing_id, json.dumps(filing,default=str)))
+            conn.commit()
+    except Exception as e:
+        tb = traceback.extract_tb(e.__traceback__)
+        file_path, line_no, func_name, text = tb[-1]
+        logger.error(f"{file_path}:{line_no} - Error occurred during insertion for ticker or accession number {filing_id}: \n{e}")
+
+
+
+def get_filings_by_filing_id(filing_id: str, insert_date:str = None) -> dict | None:
+    """
+    Functions retrieves data from filings database.
+    :param filing_id: Ticker or Accession Number
+    :param insert_date: Optional argument to filter by insertion date
+    :return: Dict or None
+    """
+    try:
+        with get_edgar_db_connection() as conn:
+            with conn.cursor() as cur:
+                query = """
+                    SELECT data 
+                    FROM filings 
+                    WHERE filing_id = %s
+                """
+                params = [filing_id]
+
+                if insert_date:
+                    query += " AND DATE(insert_date) = %s"
+                    params.append(insert_date)
+
+                cur.execute(query, params)
+                if result := cur.fetchone():
+                    data = result[0]
+                    if isinstance(data, str):
+                        return json.loads(data)
+                    else:
+                        return data
+                return None
+
+    except Exception as e:
+        tb = traceback.extract_tb(e.__traceback__)
+        file_path, line_no, func_name, text = tb[-1]
+        logger.warning(f"{file_path}:{line_no} - Error occurred during data retrieval for ticker or accession number {filing_id}: \n{e}")
+        return None
+
+

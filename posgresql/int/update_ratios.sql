@@ -30,11 +30,11 @@ DECLARE
     --EXISTING
     _price d_timeframe.close%type;
     _eps income_statement.eps%type;
-    _avg_sh_out income_statement.avg_shares_outstanding%type;
-    _sh_out trade_info.common_shares_outstanding%type;
+    _avg_sh_out income_statement.avg_shares_basic%type;
+    _sh_out balance_sheet.common_shares_outstanding%type;
     _revenue income_statement.revenue%type;
-    _ocf cash_flow.operating_cash_flow%type;
-    _fcf cash_flow.free_cash_flow%type;
+    _ocf cash_flow_statement.operating_cash_flow%type;
+    _fcf cash_flow_statement.free_cash_flow%type;
 	_prev_revenue income_statement.revenue%type;
     _ebitda income_statement.ebitda%type;
 	_prev_ebitda income_statement.ebitda%type;
@@ -42,7 +42,7 @@ DECLARE
     _prev_net_income income_statement.net_income%type;
     _gross_profit income_statement.gross_profit%type;
     _ebit income_statement.ebit%type;
-    _dividends_paid cash_flow.dividends_paid%type;
+    _dividends_paid cash_flow_statement.dividends_paid%type;
     --HELPER
     _sales_per_sh BIGINT;
     _ocfps BIGINT;
@@ -59,21 +59,18 @@ BEGIN
 SELECT CASE WHEN close > 0 THEN close ELSE NULL END  INTO _price FROM d_timeframe WHERE share_id = NEW.share_id AND date <= NEW.date ORDER BY date DESC LIMIT 1;
 
 --AVERAGE SHARE OUTSTANDING ANNUAL AND QUARTERLY
-SELECT avg_shares_outstanding INTO _avg_sh_out FROM income_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type;
+SELECT avg_shares_basic INTO _avg_sh_out FROM income_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type;
 
---SHARES OUTSTANDING
-SELECT common_shares_outstanding INTO _sh_out FROM trade_info WHERE share_id = NEW.share_id AND date = NEW.date;
 
 --SHARES OUTSTANDING ON DATE
 IF NEW.common_shares_outstanding > 0 THEN
     _sh_out := NEW.common_shares_outstanding;
-ELSIF _sh_out IS NULL OR _sh_out <= 0 THEN
-    IF _avg_sh_out > 0 THEN
-        _sh_out := _avg_sh_out;
-    ELSE
-        RETURN;
-    END IF;
+ELSIF _avg_sh_out > 0 THEN
+    _sh_out := _avg_sh_out;
+ELSE
+    RETURN NEW;
 END IF;
+
 
 --SHARES OUTSTANDING FOR PERIOD
 IF _avg_sh_out IS NULL OR _avg_sh_out <= 0 THEN
@@ -84,7 +81,7 @@ END IF;
 SELECT eps INTO _eps FROM income_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type;
 
 --PE
-IF _price IS NOT NULL AND _eps <> 0 THEN
+IF _eps <> 0 THEN
 	_pe := _price * _magn / _eps;
 END IF;
 
@@ -95,12 +92,12 @@ SELECT revenue INTO _revenue FROM income_statement WHERE share_id = NEW.share_id
 _sales_per_sh := _revenue * _magn / _avg_sh_out;
 
 --PRICE TO SALES PER SHARE
-IF _price > 0 AND _sales_per_sh <> 0 THEN
+IF _sales_per_sh <> 0 THEN
     _ps := _price * _magn / _sales_per_sh;
 END IF;
 
---BOOK VALUE PER COMMON SHARE
-_bvps := NEW.common_stock_equity * _magn / _sh_out;
+--BOOK VALUE PER SHARE
+_bvps := NEW.shareholders_equity * _magn / _sh_out;
 
 --PRICE TO BOOK
 IF _bvps <> 0 THEN
@@ -108,24 +105,24 @@ IF _bvps <> 0 THEN
 END IF;
 
 --OPERATING CASH FLOW
-SELECT operating_cash_flow INTO _ocf FROM cash_flow WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type;
+SELECT operating_cash_flow INTO _ocf FROM cash_flow_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type;
 
 --OPERATING CASH FLOW PER SHARE
 _ocfps := _ocf * _magn::numeric / _avg_sh_out;
 
 --PCF
-IF _price > 0 AND _ocfps <> 0 THEN
+IF _ocfps <> 0 THEN
 	_pcf := _price * _magn / _ocfps;
 END IF;
 
 --FREE CASH FLOW
-SELECT free_cash_flow INTO _fcf FROM cash_flow WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type;
+SELECT free_cash_flow INTO _fcf FROM cash_flow_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type;
 
 --FREE CASH FLOW PER SHARE
 _fcfps := _fcf * _magn::numeric / _avg_sh_out;
 
 --PRICE TO FREE CASH FLOW PER SHARE
-IF _price > 0 AND _fcfps <> 0 THEN
+IF _fcfps <> 0 THEN
     _pfcf := _price * _magn / _fcfps;
 END IF;
 
@@ -134,9 +131,7 @@ END IF;
 */
 
 --MARKET CAP
-IF _price > 0 THEN
-    _m_cap := _price::numeric * _sh_out;
-END IF;
+_m_cap := _price::numeric * _sh_out;
 
 --PREVIOUS PERIOD EPS
 SELECT eps INTO _previous_eps FROM income_statement WHERE share_id = NEW.share_id AND date < NEW.date AND report_type = NEW.report_type ORDER BY date DESC LIMIT 1;
@@ -248,7 +243,7 @@ END IF;
 
 
 --DIVIDENDS PAID
-SELECT dividends_paid INTO _dividends_paid FROM cash_flow WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type;
+SELECT dividends_paid INTO _dividends_paid FROM cash_flow_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type;
 
 
 --DIVIDEND YIELD
@@ -292,7 +287,8 @@ INSERT INTO ratios (
     dividend_payout_ratio,
     report_type,
     filing_date,
-    report_period_id
+    calendar_period_id,
+    fiscal_period_id
 )
 VALUES (
     NEW.share_id,
@@ -323,7 +319,8 @@ VALUES (
     _dividend_payout_ratio,
     NEW.report_type,
     NEW.filing_date,
-    NEW.report_period_id
+    NEW.calendar_period_id,
+    NEW.fiscal_period_id
 )
 ON CONFLICT (share_id, date) DO UPDATE SET
     pe = EXCLUDED.pe,
@@ -352,18 +349,8 @@ ON CONFLICT (share_id, date) DO UPDATE SET
     dividend_payout_ratio = EXCLUDED.dividend_payout_ratio,
     report_type = EXCLUDED.report_type,
     filing_date = EXCLUDED.filing_date,
-    report_period_id = EXCLUDED.report_period_id;
-
-INSERT INTO trade_info (
-    share_id,
-    date,
-    weighted_avg_shares_outstanding
-    ) VALUES (
-    NEW.share_id,
-    NEW.date,
-    _avg_sh_out
-    ) ON CONFLICT (share_id, date) DO UPDATE SET
-    weighted_avg_shares_outstanding = EXCLUDED.weighted_avg_shares_outstanding;
+    calendar_period_id = EXCLUDED.calendar_period_id,
+    fiscal_period_id = EXCLUDED.fiscal_period_id;
 
 RETURN NEW;
 END;

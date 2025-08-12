@@ -94,7 +94,7 @@ def get_company_fundamentals(ticker:str, share_id, nearby_report_date:pd.Timesta
                     sum_pos = 0 * config.scale_factor
                     for pos in calc_positions:
                         pos = yf_statement.get(pos)
-                        sum_pos +=  pos if pos else 0
+                        sum_pos +=  pos if pos else 0 # todo else 0 instead of None
                     stmt_dict[db_pos] = sum_pos
                 # Check that statement has at least 70% of columns filled
                 non_empty_columns = 0
@@ -141,8 +141,8 @@ def find_filing_date(df_filings: pd.DataFrame, yf_report_date: pd.Timestamp, tic
     min_diff = df_filings['time_diff'].min()
 
     # Check if the minimum difference is within 20 days
-    if min_diff > pd.Timedelta(days=20):
-        logger.debug(f"Returning None filig_date for ticker {ticker} because min_diff > 20 days")
+    if min_diff > pd.Timedelta(days=31):
+        logger.debug(f"Returning None filing date for ticker {ticker} because min_diff > 31 days")
         return None
 
     # Get the row with the minimum time difference

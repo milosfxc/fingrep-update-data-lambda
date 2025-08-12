@@ -12,31 +12,15 @@ from fundamentals_service import get_company_fundamentals
 import polygon
 import utils
 from db_ops import upsert_dataframe, foreign_keys_cache
-from edgar_service import get_trading_info
+from edgar_api import get_trading_info
 from ta_utils import rsi_tv_new_tickers, rsi_tv_existing_tickers
-from utils import mandatory_columns, get_utc_date
+from utils import get_utc_date
 
 pd.set_option('display.max_rows', None)  # Show all rows
 pd.set_option('display.max_columns', None)  # Show all columns
 pd.set_option('display.width', None)  # To allow the console to use the full width
 pd.set_option("future.no_silent_downcasting", True)
 from config import logger
-
-
-def get_and_insert_trading_info(cik: str, share_id: int, date: datetime.date):
-    method_name = inspect.currentframe().f_code.co_name
-
-    try:
-        df = get_trading_info(cik=cik, date=date)
-        if df is not None:
-            df.reset_index(inplace=True)
-            df.rename(columns={'end': 'date'}, inplace=True)
-            df.loc[:, ['share_id']] = share_id
-            upsert_dataframe(df, 'trade_info')
-    except Exception as e:
-        logger.error(
-            f"{method_name}: Error occurred while trying to rename and reindex data frame for upsert into database for CIK {cik} "
-            f"and share ID {share_id}: {e}")
 
 
 def call_and_update_market_breadth(date):
@@ -127,29 +111,26 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
     # Fundamental data and trade info
     cik = shares_info_data.get('cik')
     if config.insert_fundamentals and cik is not None and ticker_id is not None and shares_data.get('share_type_id') not in(6, 8):
-        get_and_insert_trading_info(cik=cik, share_id=ticker_id, date=date(2019, 12, 31))
         get_company_fundamentals(ticker, ticker_id, config.report_start_date)
 
 
 # Separates data for shares and share_info tables
 def extract_ticker_details_v3(ticker_details, finviz_data):
-    if foreign_keys_cache is None:
-        db_ops.get_foreign_keys()
 
     ticker_data = {
         'ticker': ticker_details.get('ticker'),
         'cik': ticker_details.get('cik'),
         'name': utils.remove_stock_suffix(ticker_details.get('name')),
-        'exchange_id': db_ops.foreign_keys_cache['exchanges'].get(ticker_details.get('primary_exchange')),
+        'exchange_id': db_ops.get_cached_foreign_keys()['exchanges'].get(ticker_details.get('primary_exchange')),
         'homepage_url': ticker_details.get('homepage_url'),
         'ipo_date': ticker_details.get('list_date'),
-        'share_type_id': db_ops.foreign_keys_cache['share_types'].get(ticker_details.get('type')),
+        'share_type_id': db_ops.get_cached_foreign_keys()['share_types'].get(ticker_details.get('type')),
         'composite_figi': ticker_details.get('composite_figi'),
         'shares_outstanding': ticker_details.get('share_class_shares_outstanding'),
         'weighted_shares_outstanding': ticker_details.get('weighted_shares_outstanding'),
-        'sector_id': db_ops.foreign_keys_cache['sectors'].get(finviz_data.get('sector')),
-        'industry_id': db_ops.foreign_keys_cache['industries'].get(finviz_data.get('industry')),
-        'country_id': db_ops.foreign_keys_cache['countries'].get(finviz_data.get('country'))
+        'sector_id': db_ops.get_cached_foreign_keys()['sectors'].get(finviz_data.get('sector')),
+        'industry_id': db_ops.get_cached_foreign_keys()['industries'].get(finviz_data.get('industry')),
+        'country_id': db_ops.get_cached_foreign_keys()['countries'].get(finviz_data.get('country'))
     }
 
     shares = {key: value for key, value in ticker_data.items() if

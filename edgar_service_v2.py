@@ -1,14 +1,9 @@
-import json
 from datetime import timedelta, datetime, date
 from typing import Optional, Dict, Union
-from unittest.mock import inplace
-
 import edgar
 import numpy as np
 import pandas as pd
 from edgar import Filing
-from sqlalchemy.dialects.mssql.information_schema import columns
-
 import XBRLTagMapper
 import config
 import db_ops
@@ -158,6 +153,7 @@ def get_statement(stmt_name: str, df_stmt: pd.DataFrame, other_data: dict, df_in
     ans['share_id'] = other_data['share_id']
     return ans
 
+
 def get_position_value_sum_or_sum(df_stmt: pd.DataFrame, df_tags: pd.DataFrame, xbrl_tags: set, period_end: str) -> float | None:
     df_stmt = df_stmt[df_stmt['concept'].isin(xbrl_tags)]
     values = pd.to_numeric(df_stmt[period_end], errors='coerce').dropna().tolist()
@@ -172,6 +168,7 @@ def get_position_value_sum_or_sum(df_stmt: pd.DataFrame, df_tags: pd.DataFrame, 
     max_value, sum_value, sum_combo = max(values), sum(values),check_sum_combinations(values)
     pos_value = max_value if sum_value - max_value == max_value else sum_combo if sum_combo else sum_value
     return pos_value * config.scale_factor if pos_value != 0 else None
+
 
 def get_position_value_sum_or_max(df_stmt: pd.DataFrame, df_tags: pd.DataFrame, xbrl_tags: set, period_end: str) -> float | None:
     df_stmt = df_stmt[df_stmt['concept'].isin(xbrl_tags)]
@@ -341,7 +338,8 @@ def validate_balance_sheet(bs_stmt: dict[str,float]) -> dict[str,float] | None:
         bs_stmt['other_non_current_liabilities'] = non_current_liabilities - non_current_liabilities_total
 
     # Converts any numpy data types to Python native data types and None to zero
-    return {k: 0 if v is None else v.item() if isinstance(v, np.generic) else v for k, v in bs_stmt.items()}
+    return {k: v.item() if isinstance(v, np.generic) else v for k, v in bs_stmt.items()}
+
 
 def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, float]) -> dict[str,float] | None:
     # Revenue
@@ -355,20 +353,20 @@ def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, floa
     # – Income Tax
     # = Net# Income
     revenue = inc_stmt['revenue']
-    cost_of_revenue = abs(inc_stmt['cost_of_revenue'] or 0)
+    cost_of_revenue = abs(inc_stmt['cost_of_revenue']) if inc_stmt['cost_of_revenue'] else None
     gross_profit = inc_stmt['gross_profit']
     operating_income = inc_stmt['operating_income']
-    operating_expenses = abs(inc_stmt['operating_expenses'] or 0)
-    selling_general_and_administrative_expense = abs(inc_stmt['selling_general_and_administrative_expense'] or 0)
-    research_and_development_expenses = abs(inc_stmt['research_and_development_expenses'] or 0)
+    operating_expenses = abs(inc_stmt['operating_expenses']) if inc_stmt['operating_expenses'] else None
+    selling_general_and_administrative_expense = abs(inc_stmt['selling_general_and_administrative_expense']) if inc_stmt['selling_general_and_administrative_expense'] else None
+    research_and_development_expenses = abs(inc_stmt['research_and_development_expenses']) if inc_stmt['research_and_development_expenses'] else None
     net_non_operating_income = inc_stmt['net_non_operating_income']
     ebt = inc_stmt['ebt']
     interest_income = inc_stmt['interest_income']
     interest_expense = abs(inc_stmt['interest_expense'] or 0)
     net_interest = inc_stmt['net_interest']
     da = abs(cf_stmt['operating_da'] or 0) if cf_stmt else None
-    net_income_including_non_controlling_interests = inc_stmt.get('net_income_including_non_controlling_interests')
-    net_income_non_controlling_interests = inc_stmt.get('net_income_non_controlling_interests') or 0
+    net_income_including_non_controlling_interests = inc_stmt['net_income_including_non_controlling_interests']
+    net_income_non_controlling_interests = inc_stmt['net_income_non_controlling_interests']
     net_income = inc_stmt.get('net_income')
     other_operating_expenses, expenses, ebit, ebitda = None, None, None, None
     if revenue:
@@ -388,7 +386,9 @@ def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, floa
     elif operating_expenses and gross_profit:
         operating_income = gross_profit - operating_expenses
     if operating_expenses:
-        other_operating_expenses = operating_expenses - selling_general_and_administrative_expense - research_and_development_expenses
+        # Redeclaring the same variables to prevent None to be 0 in database
+        sga, rd = selling_general_and_administrative_expense or 0, research_and_development_expenses or 0
+        other_operating_expenses = operating_expenses - abs(sga) - abs(rd)
         # todo find a way to display correct values if other_operating_expenses are negative
     interest_flag = True
     if not interest_expense:
@@ -434,13 +434,13 @@ def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, floa
     inc_stmt['deprecation_and_amortization'] = da
     inc_stmt['ebit'] = ebit
     inc_stmt['ebitda'] = ebitda
-    inc_stmt['net_income_including_non_controlling_interests'] = net_income_including_non_controlling_interests if net_income_including_non_controlling_interests else None
-    inc_stmt['net_income_non_controlling_interests'] = net_income_non_controlling_interests if net_income_non_controlling_interests else None
+    inc_stmt['net_income_including_non_controlling_interests'] = net_income_including_non_controlling_interests
+    inc_stmt['net_income_non_controlling_interests'] = net_income_non_controlling_interests
 
     # Remove keys
     inc_stmt.pop('operating_expenses_all')
     # Converts any numpy data types to Python native data types and None to zero
-    return {k: 0 if v is None else v.item() if isinstance(v, np.generic) else v for k, v in inc_stmt.items()}
+    return {k: v.item() if isinstance(v, np.generic) else v for k, v in inc_stmt.items()}
 
 def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_stmt: dict[str,float], acc_standard: str) -> dict[str,float] | None:
     # CAPEX calculation
@@ -504,7 +504,7 @@ def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_
                                                  - (cf_stmt['net_equity_issuance'] or 0) - (cf_stmt['net_debt_issuance'] or 0))
 
     # Converts any numpy data types to Python native data types and None to zero
-    return {k: 0 if v is None else v.item() if isinstance(v, np.generic) else v for k, v in cf_stmt.items()}
+    return {k: v.item() if isinstance(v, np.generic) else v for k, v in cf_stmt.items()}
 
 
 def get_calendar_period(date_str: str, form: str) -> str | None:
@@ -613,7 +613,13 @@ def get_q4_statements(a_statements:dict,share_id:int, report_period: date) -> di
         sum_q1_q2_q3 = db_ops.query_3_quarter_sums(share_id, sum_columns, utils.camel_to_snake(key), start_date, report_period)
         if sum_q1_q2_q3:
             a_stmt = a_statements[key]
-            q4_stmt = {k: a_stmt[k] - sum_q1_q2_q3[k] for k in sum_q1_q2_q3}
+            q4_stmt = dict()
+            for k in sum_q1_q2_q3: # Calculate difference between A and sum of 3 quarters
+                a, q_sum = a_stmt[k], sum_q1_q2_q3[k]
+                if a is not None and q_sum is not None:
+                    q4_stmt[k] = a - q_sum
+                else:
+                    q4_stmt[k] = a
             if key == 'IncomeStatement':
                 # Average shares basic
                 avg_shares_basic_q_sum = sum_q1_q2_q3['avg_shares_basic']
@@ -683,6 +689,5 @@ def get_quarterly_cash_flow_statement(cur_cf:dict, share_id, period_start: str, 
             calc_cf[k] = float(cur_val)
         else:
             calc_cf[k] = 0
-
 
     return calc_cf if calc_cf else None
