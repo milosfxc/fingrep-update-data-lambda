@@ -166,7 +166,6 @@ balance_sheet = {'assets': ['total assets'],
                     'inventory': ['inventory'],
                     'other_current_assets': ['other current assets'],
                     'non_current_assets': ['total non current assets'],
-                    'investments': None,
                     'real_estate': ['investment properties'],
                     'property_plant_equipment_net': ['net ppe'],
                     'goodwill': ['goodwill'],
@@ -192,10 +191,11 @@ balance_sheet = {'assets': ['total assets'],
                     'retained_earnings': ['retained earnings'],
                     'treasury_shares': ['treasury stock'],
                     'accumulated_other_comprehensive_income_loss': ['gains losses not affecting retained earnings'],
-                    'common_shares_outstanding': ['ordinary shares number'],
-                    'preferred_shares_outstanding': None,
+                    'investments': None,
                     'debt': ['total debt'],
-                    'net_debt': ['net debt']
+                    'net_debt': ['net debt'],
+                    'common_shares_outstanding': ['ordinary shares number'],
+                    'preferred_shares_outstanding': None
                     }
 
 income_statement = {'revenue': ['total revenue'],

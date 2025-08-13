@@ -9,6 +9,8 @@ DECLARE
     _pb ratios.pb%type;
     _pcf ratios.pcf%type;
     _pfcf ratios.pfcf%type;
+    _ev ratios.ev%type;
+    _ev_ebitda ratios.ev_ebitda%type;
     _m_cap ratios.m_cap%type;
     _eps_yoy ratios.eps_yoy%type;
     _revenue_yoy ratios.revenue_yoy%type;
@@ -77,6 +79,9 @@ IF _avg_sh_out IS NULL OR _avg_sh_out <= 0 THEN
     _avg_sh_out := _sh_out;
 END IF;
 
+--MARKET CAP
+_m_cap := _price::numeric * _sh_out;
+
 --EPS
 SELECT eps INTO _eps FROM income_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type;
 
@@ -126,12 +131,19 @@ IF _fcfps <> 0 THEN
     _pfcf := _price * _magn / _fcfps;
 END IF;
 
+--ENTERPRISE VALUE
+IF NEW.cash_and_short_term_investments > 0 AND NEW.debt > 0 AND _m_cap > 0 THEN
+    _ev := _m_cap - NEW.cash_and_short_term_investments + NEW.debt;
+END IF;
+
+--EV/EBITDA
+IF _ev > 0 AND NEW.ebitda > 0 THEN
+    _ev_ebitda := _ev / NEW.ebitda;
+END IF;
+
 /*
     YOY RATIOS
 */
-
---MARKET CAP
-_m_cap := _price::numeric * _sh_out;
 
 --PREVIOUS PERIOD EPS
 SELECT eps INTO _previous_eps FROM income_statement WHERE share_id = NEW.share_id AND date < NEW.date AND report_type = NEW.report_type ORDER BY date DESC LIMIT 1;
@@ -267,6 +279,8 @@ INSERT INTO ratios (
     pb,
     pcf,
     pfcf,
+    ev,
+    ev_ebitda,
     m_cap,
     eps_yoy,
     revenue_yoy,
@@ -299,6 +313,8 @@ VALUES (
     _pb,
     _pcf,
     _pfcf,
+    _ev,
+    _ev_ebitda,
     _m_cap,
     _eps_yoy,
     _revenue_yoy,
@@ -329,6 +345,8 @@ ON CONFLICT (share_id, date) DO UPDATE SET
     pb = EXCLUDED.pb,
     pcf = EXCLUDED.pcf,
     pfcf = EXCLUDED.pfcf,
+    ev = EXCLUDED.ev,
+    ev_ebitda = EXCLUDED.ev_ebitda,
     m_cap = EXCLUDED.m_cap,
     eps_yoy = EXCLUDED.eps_yoy,
     revenue_yoy = EXCLUDED.revenue_yoy,

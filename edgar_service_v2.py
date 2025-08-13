@@ -309,7 +309,8 @@ def validate_balance_sheet(bs_stmt: dict[str,float]) -> dict[str,float] | None:
         cash_and_cash_equivalents = bs_stmt.get('cash_and_cash_equivalents') or 0
         short_term_investments = bs_stmt.get('short_term_investments') or 0
         if cash_and_cash_equivalents or short_term_investments:
-            bs_stmt['cash_and_short_term_investments'] = cash_and_cash_equivalents + short_term_investments
+            cash_and_short_term_investments = cash_and_cash_equivalents + short_term_investments
+            bs_stmt['cash_and_short_term_investments'] = cash_and_short_term_investments
     # PPE
     if operating_lease:
         bs_stmt['property_plant_equipment_net'] = property_plant_equipment_net + operating_lease
