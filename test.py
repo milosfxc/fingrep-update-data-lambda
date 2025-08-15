@@ -15,6 +15,7 @@ import pandas as pd
 import config
 import db_ops
 import fundamentals_service
+import yahoo_service
 
 # Set pandas to display all rows and columns
 pd.set_option('display.max_rows', None)  # Show all rows
@@ -32,4 +33,4 @@ def get_upsert():
         raise
 
 if __name__ == "__main__":
-    fundamentals_service.get_company_fundamentals('SMCI',1, config.report_start_date)
+    fundamentals_service.get_company_fundamentals('ADGM',14, config.report_start_date)

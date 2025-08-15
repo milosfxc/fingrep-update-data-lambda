@@ -9,7 +9,7 @@ DECLARE
     _pb ratios.pb%type;
     _pcf ratios.pcf%type;
     _pfcf ratios.pfcf%type;
-    _ev ratios.ev%type;
+    _ev balance_sheet.ev%type;
     _ev_ebitda ratios.ev_ebitda%type;
     _m_cap ratios.m_cap%type;
     _eps_yoy ratios.eps_yoy%type;
@@ -69,7 +69,9 @@ IF NEW.common_shares_outstanding > 0 THEN
     _sh_out := NEW.common_shares_outstanding;
 ELSIF _avg_sh_out > 0 THEN
     _sh_out := _avg_sh_out;
+    NEW.common_shares_outstanding := _sh_out;
 ELSE
+    RAISE EXCEPTION 'Missing avg_shares_basic for share_id: % and report_type %', NEW.share_id, NEW.report_type;
     RETURN NEW;
 END IF;
 
@@ -131,16 +133,6 @@ IF _fcfps <> 0 THEN
     _pfcf := _price * _magn / _fcfps;
 END IF;
 
---ENTERPRISE VALUE
-IF NEW.cash_and_short_term_investments > 0 AND NEW.debt > 0 AND _m_cap > 0 THEN
-    _ev := _m_cap - NEW.cash_and_short_term_investments + NEW.debt;
-END IF;
-
---EV/EBITDA
-IF _ev > 0 AND NEW.ebitda > 0 THEN
-    _ev_ebitda := _ev / NEW.ebitda;
-END IF;
-
 /*
     YOY RATIOS
 */
@@ -168,6 +160,17 @@ SELECT ebitda INTO _prev_ebitda FROM income_statement WHERE share_id = NEW.share
 --EBITDA YOY
 IF _ebitda > 0 AND _prev_ebitda > 0 THEN
 	_ebitda_yoy := ((_ebitda::numeric * _magn / _prev_ebitda) - 10000) * 100;
+END IF;
+
+--ENTERPRISE VALUE
+IF NEW.cash_and_short_term_investments >= 0 AND NEW.debt >= 0 AND _m_cap > 0 THEN
+    _ev := _m_cap - NEW.cash_and_short_term_investments + NEW.debt;
+    NEW.ev := _ev;
+END IF;
+
+--EV/EBITDA
+IF _ev > 0 AND _ebitda > 0 THEN
+    _ev_ebitda := _ev * _magn / _ebitda::numeric;
 END IF;
 
 --NET INCOME AND PREVIOUS YEAR NET INCOME
@@ -279,7 +282,6 @@ INSERT INTO ratios (
     pb,
     pcf,
     pfcf,
-    ev,
     ev_ebitda,
     m_cap,
     eps_yoy,
@@ -313,7 +315,6 @@ VALUES (
     _pb,
     _pcf,
     _pfcf,
-    _ev,
     _ev_ebitda,
     _m_cap,
     _eps_yoy,
@@ -338,14 +339,13 @@ VALUES (
     NEW.calendar_period_id,
     NEW.fiscal_period_id
 )
-ON CONFLICT (share_id, date) DO UPDATE SET
+ON CONFLICT (share_id, date, report_type) DO UPDATE SET
     pe = EXCLUDED.pe,
     ps = EXCLUDED.ps,
     bvps = EXCLUDED.bvps,
     pb = EXCLUDED.pb,
     pcf = EXCLUDED.pcf,
     pfcf = EXCLUDED.pfcf,
-    ev = EXCLUDED.ev,
     ev_ebitda = EXCLUDED.ev_ebitda,
     m_cap = EXCLUDED.m_cap,
     eps_yoy = EXCLUDED.eps_yoy,

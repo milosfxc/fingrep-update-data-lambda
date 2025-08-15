@@ -46,7 +46,7 @@ def get_latest_filings(filing_date:str) -> pd.DataFrame:
     if not df_filings.empty and {'form', 'cik', 'filing_date', 'accession_number'}.issubset(set(df_filings.columns)):
         return df_filings
     else:
-        logger.warning(f"Couldn't obtain a list of latest filings or list didn't had all required columns. Dataframe df_filings: \n{df_filings}")
+        logger.warning(f"Couldn't obtain a list of latest filings or list didn't had all required columns for filing_date {filing_date}. Dataframe df_filings: \n{df_filings}")
         return pd.DataFrame(data=None)
 
 
@@ -60,7 +60,6 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int, filing:
             'CashFlowStatement': filing.obj().financials.cashflow_statement().to_dataframe().replace(['',np.nan],None),
             'BalanceSheet': filing.obj().financials.balance_sheet().to_dataframe().replace(['', np.nan], None)
         }
-
         # Rename columns to match period end date
         for key,stmt in statements.items():
             if len(stmt.columns) > 2 and filing.period_of_report in stmt.columns[2] and {'concept', 'label'}.issubset(stmt.columns):
@@ -73,6 +72,7 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int, filing:
                     return {}
         # Other data
         other_data = get_other_data(filing, statements['IncomeStatement'], statements['CashFlowStatement'])
+        if not other_data: return None
         other_data['share_id'] = share_id
         # Dataframes for XBRL query
         previous_end_date = (datetime.strptime(other_data['period_start'], '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
@@ -130,6 +130,9 @@ def get_statement(stmt_name: str, df_stmt: pd.DataFrame, other_data: dict, df_in
     ans = {}
     # Income statement special positions
     if stmt_name == 'IncomeStatement':
+        # revenue_series = df_stmt.loc[ todo check this error str >= float
+        # df_stmt['label'].str.contains('revenue', case=False, na=False) & df_stmt[period_end].notna(), period_end]
+        # ans['revenue'] = revenue_series.max() * config.scale_factor if not revenue_series.empty else None
         # Revenue
         ans['revenue'] = get_position_value_sum_or_max(df_stmt,df_tags,stmt_tags.pop('revenue'),period_end)
         if not ans['revenue']:
@@ -233,7 +236,8 @@ def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf) -> dict | 
                   .to_dataframe('concept', 'period_start', 'period_end').drop_duplicates())
         if len(df_pos) == 1 and df_pos.loc[0, 'period_end'] == filing.period_of_report:
             ans['cf_period_start'] = df_pos.loc[0, 'period_start']
-
+    # todo Check if you can reduce conditions for None, maybe I don't need all ans keys.
+    logger.warning(f"Function get_other_data has returned None although it has collected this data:\n {ans}.")
     return None
 
 
@@ -448,7 +452,7 @@ def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_
     df_ppe = df_period[df_period['concept'].isin(XBRLTagMapper.xbrl_tags[acc_standard]['CashFlowStatement']['net_purchase_sale_ppe'])]
     capex_values = pd.to_numeric(df_ppe['numeric_value'], errors='coerce')
     capex_sum = capex_values[capex_values < 0].sum()
-    capital_expenditure = capex_sum * config.scale_factor if capex_sum else None
+    capital_expenditure = capex_sum * config.scale_factor if capex_sum else 0
     cf_stmt['capital_expenditure'] = capital_expenditure
 
     # # Debt issuance and repayment calculation
@@ -465,7 +469,7 @@ def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_
 
     # Free Cash Flow
     operating_cash_flow = cf_stmt.get('operating_cash_flow')
-    if operating_cash_flow and capital_expenditure:
+    if operating_cash_flow:
         free_cash_flow = operating_cash_flow + capital_expenditure
         cf_stmt['free_cash_flow'] = free_cash_flow
 
@@ -575,7 +579,8 @@ def get_statement_by_xbrl_query(filing: edgar.Filing, stmt_name: str) -> pd.Data
         value_counts = df['abs_diff'].value_counts()
         # Filter for counts > 10 and get the minimum abs_diff
         min_diff = value_counts[value_counts > 10].index.min()
-
+        # Check if min_diff is float nan to prevent convert float NaN to integer
+        if pd.isna(min_diff): return pd.DataFrame(data=None)
         df = df[df['abs_diff'] == int(min_diff)]
         df.drop(columns=['abs_diff', 'start','end', 'days', 'period_start','period_end'],inplace=True)
         df.rename(columns={'numeric_value': filing.period_of_report},inplace=True)

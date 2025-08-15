@@ -21,7 +21,7 @@ def request_fundamentals(ticker: str) -> Optional[dict]:
     try:
         # Check if data is already requested
         if fundamentals := fundamentals_dict.get(ticker):
-            return fundamentals
+            return fundamentals.copy()
         # Fetch data
         yf_data = yf.Ticker(ticker.replace('.', '-'))
         fundamentals = dict()

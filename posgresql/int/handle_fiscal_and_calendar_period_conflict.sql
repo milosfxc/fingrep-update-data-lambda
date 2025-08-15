@@ -66,3 +66,4 @@ CREATE TRIGGER check_fiscal_and_calendar_conflict_cash_flow_statement
 BEFORE INSERT ON cash_flow_statement
 FOR EACH ROW
 EXECUTE FUNCTION handle_fiscal_and_calendar_period_conflict_cash_flow_statement();
+

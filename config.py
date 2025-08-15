@@ -6,11 +6,11 @@ from ConnType import DBLocation
 
 # stock market data config
 DAYS = 1
-YEARS = 1
+YEARS = 2
 mb_historical = True # false updates market breadth for the current day, true updates for the last 100 days
 insert_fundamentals = True # Insert fundamentals for new tickers
 update_fundamentals = True # Update fundamentals for existing tickers
-report_start_date = '2020-01-01'
+report_start_date = '2022-12-31'
 LIMIT = 2
 db_location = DBLocation.LOCAL
 scale_factor = 10000
