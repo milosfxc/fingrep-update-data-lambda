@@ -11,6 +11,7 @@ from edgar import get_filings, set_identity, get_by_accession_number, Company
 from datetime import timedelta, timezone
 
 import pandas as pd
+from edgar.xbrl.standardization import standardize_statement
 
 import config
 import db_ops
@@ -24,13 +25,11 @@ pd.set_option('display.width', None)  # To allow the console to use the full wid
 
 set_identity('milosfxc@gmail.com')
 # set_5 = set(yahoo_service.request_fundamentals('MARA')['cash_flow'].index.tolist())
-def get_upsert():
-    try:
-        x = {1:2}
-        x['b']
-    except Exception as e:
-        print(e.with_traceback())
-        raise
+
 
 if __name__ == "__main__":
-    fundamentals_service.get_company_fundamentals('ADGM',14, config.report_start_date)
+    fundamentals_service.get_company_fundamentals('HIT',6, config.report_start_date)
+    # df = get_by_accession_number('0001213900-25-024561').xbrl().query().by_concept('us-gaap:CommonShares').to_dataframe()
+    # df = get_by_accession_number('0001213900-25-024561').obj().financials.income_statement().to_dataframe().replace(['',np.nan],None)
+    # df = get_by_accession_number('0001045810-25-000209').xbrl().query().by_concept('us-gaap:Revenue').by_instant_date('2025-07-27').to_dataframe()
+    # print(df)

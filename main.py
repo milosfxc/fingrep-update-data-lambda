@@ -1,3 +1,7 @@
+import logging
+import sys
+
+from config import logger, update_fundamentals
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 from sshtunnel import BaseSSHTunnelForwarderError
@@ -7,9 +11,9 @@ import fingrep_service
 from ConnType import DBLocation
 from SSHTunnelManager import SSHTunnelManager
 from db_ops import get_existing_tickers, get_banned_tickers
-from config import logger, update_fundamentals
 from utils import get_utc_date
 from fundamentals_service import update_fundamentals
+
 
 def get_stock_data():
     # Get existing tickers, banned tickers and new daily data
@@ -70,6 +74,7 @@ def get_stock_data():
 
 
 if __name__ == "__main__":
+
     if config.db_location == DBLocation.REMOTE:
         try:
             with SSHTunnelManager():

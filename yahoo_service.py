@@ -2,16 +2,13 @@ import datetime
 import re
 from typing import Optional
 
-import numpy as np
 import pandas as pd
 import yfinance as yf
-from torch import PRIVATE_OPS
 
 import config
 import db_ops
 import edgar_service_v2
 import utils
-from utils import get_utc_date
 from config import logger
 
 # Shared variables
@@ -108,16 +105,22 @@ def get_company_fundamentals(ticker:str, share_id, nearby_report_date:pd.Timesta
                         ans[date][stmt_name] = stmt_dict
                     else:
                         ans[date] = {stmt_name:stmt_dict}
-            # Insert data into database
+            # Validate and insert data into database
             if ans:
                 sorted_dict = dict(sorted(ans.items()))
                 for date in sorted_dict:
                     stmts_dict = sorted_dict[date]
                     for key in ['IncomeStatement', 'CashFlowStatement', 'BalanceSheet', 'IncomeStatementQ', 'CashFlowStatementQ', 'BalanceSheetQ']:
-                        if key in stmts_dict:
-                            table_name = key[:-1] if key.endswith('Q') else key
-                            if not db_ops.upsert_statement_v2(stmts_dict[key], utils.camel_to_snake(table_name),['share_id', 'report_type', 'date']):
-                                return False
+                        if key not in stmts_dict or not stmts_dict[key]: continue
+                        # Validate Balance Sheet and CashFlow Statement
+                        if key.startswith('B'):
+                            stmts_dict[key] = reconcile_balance_sheet(stmts_dict[key])
+                        elif key.startswith('C'):
+                            stmts_dict[key] = reconcile_cash_flow_statement(stmts_dict[key])
+                        # Upsert statement
+                        table_name = key[:-1] if key.endswith('Q') else key
+                        if not db_ops.upsert_statement_v2(stmts_dict[key], utils.camel_to_snake(table_name),['share_id', 'report_type', 'date']):
+                            return False
             else:
                 logger.warning(f"{stmt_name} data for ticker {ticker} successfully requested via yf, but nothing to insert.")
                 return False
@@ -154,6 +157,27 @@ def find_filing_date(df_filings: pd.DataFrame, yf_report_date: pd.Timestamp, tic
     return acceptance_dt
 
 
+def reconcile_balance_sheet(bs_dict) -> dict:
+    if current_assets := bs_dict['current_assets']:
+        bs_dict['other_current_assets'] = current_assets - bs_dict['cash_and_short_term_investments'] or 0 - bs_dict['deposits'] or 0 - bs_dict['net_receivables'] or 0 - bs_dict['inventory'] or 0
+    if non_current_assets := bs_dict['non_current_assets']:
+        bs_dict['other_non_current_assets'] = (non_current_assets - bs_dict['real_estate'] or 0 - bs_dict['property_plant_equipment_net'] or 0 - bs_dict['goodwill'] or 0
+                                               - bs_dict['intangible_assets'] or 0 - bs_dict['long_term_investments'] or 0 - bs_dict['non_current_deferred_assets'] or 0)
+    if current_liabilities := bs_dict['current_liabilities']:
+        bs_dict['other_current_liabilities'] = current_liabilities - bs_dict['payables_and_expenses'] or 0 - bs_dict['short_term_debt'] or 0
+    if non_current_liabilities := bs_dict['non_current_liabilities']:
+        bs_dict['other_non_current_liabilities'] = non_current_liabilities - bs_dict['long_term_debt'] or 0
+
+    return bs_dict
+
+def reconcile_cash_flow_statement(cf_dict) -> dict:
+    if operating_cf := cf_dict['operating_cash_flow']:
+        cf_dict['other_operating_activities'] = operating_cf - cf_dict['operating_net_income'] or 0 - cf_dict['operating_da'] or 0 - cf_dict['deferred_income_tax'] or 0 - cf_dict['share_based_compensation'] or 0 - cf_dict['change_working_capital'] or 0
+    if investing_cf := cf_dict['investing_cash_flow']:
+        cf_dict['other_investing_activities'] = investing_cf - cf_dict['capital_expenditure'] or 0 - cf_dict['net_purchase_sale_ppe'] or 0 - cf_dict['net_business_acquisitions'] or 0 - cf_dict['net_purchase_sale_investments'] or 0 - cf_dict['net_loan_lease_activity'] or 0
+    if financing_cf := cf_dict['financing_cash_flow']:
+        cf_dict['other_financing_activities'] = financing_cf - cf_dict['net_debt_issuance'] or 0 - cf_dict['net_equity_issuance'] or 0 - cf_dict['dividends_paid'] or 0
+    return cf_dict
 
 
 balance_sheet = {'assets': ['total assets'],
