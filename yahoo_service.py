@@ -158,7 +158,7 @@ def find_filing_date(df_filings: pd.DataFrame, yf_report_date: pd.Timestamp, tic
 
 def reconcile_balance_sheet(bs_dict) -> dict:
     if current_assets := bs_dict['current_assets']:
-        bs_dict['other_current_assets'] = current_assets - bs_dict['cash_and_short_term_investments'] or 0 - bs_dict['deposits'] or 0 - bs_dict['net_receivables'] or 0 - bs_dict['inventory'] or 0
+        bs_dict['other_current_assets'] = current_assets - bs_dict['cash_and_short_term_investments'] or 0 - bs_dict['net_receivables'] or 0 - bs_dict['inventory'] or 0
     if non_current_assets := bs_dict['non_current_assets']:
         bs_dict['other_non_current_assets'] = (non_current_assets - bs_dict['real_estate'] or 0 - bs_dict['property_plant_equipment_net'] or 0 - bs_dict['goodwill'] or 0
                                                - bs_dict['intangible_assets'] or 0 - bs_dict['long_term_investments'] or 0 - bs_dict['non_current_deferred_assets'] or 0)

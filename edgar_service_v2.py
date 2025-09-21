@@ -233,8 +233,8 @@ def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf) -> dict | 
         if all(key in ans for key in ['currency', 'period_start', 'cf_period_start']):
             return ans
         df_pos = (filing.xbrl().query().by_statement_type('CashFlowStatement').by_dimension(None).by_value(float(value))
-                  .to_dataframe('concept', 'period_start', 'period_end').drop_duplicates())
-        if len(df_pos) == 1 and df_pos.loc[0, 'period_end'] == filing.period_of_report:
+                  .to_dataframe('period_start', 'period_end').drop_duplicates())
+        if len(df_pos) == 1 and {'period_start', 'period_end'}.issubset(df_pos.columns) and df_pos.loc[0, 'period_end'] == filing.period_of_report:
             ans['cf_period_start'] = df_pos.loc[0, 'period_start']
     # todo Check if you can reduce conditions for None, maybe I don't need all ans keys.
     logger.warning(f"Function get_other_data has returned None although it has collected this data:\n {ans}.")

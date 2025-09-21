@@ -1,24 +1,23 @@
 import os
-
-
 from ConnType import DBLocation
+
+
 # stock market data config
-DAYS = 1 # Offset from current date
-YEARS = 5 # OHLCV data
+days = 2 # Offset from current date
+years = 5 # OHLCV data
 mb_historical = True # false updates market breadth for the current day, true updates for the last 100 days
 insert_fundamentals = True # Insert fundamentals for new tickers
-update_fundamentals = True # Update fundamentals for existing tickers
+update_fundamentals = False # Update fundamentals for existing tickers
 report_start_date = '2020-12-31'
-LIMIT = 10 # insertion limit
-MULTI_THREADED = True
-THREADS_NUMBER = 20
-THREAD_DELAY = 0.3 # Time delay between submitting a task
-db_location = DBLocation.LOCAL
+limit = 50 # insertion limit
+multi_threaded = False
+threads_number = 20
+thread_delay = 0.3 # Time delay between submitting a task
 scale_factor = 10000
 # database config
-HOST=DBLocation.REMOTE
-LOCAL_BIND_PORT=None
+db_location = DBLocation.LOCAL
 remote_connection_pool = None
+LOCAL_BIND_PORT=None
 BASTION_IP = os.getenv("FINGREP_BASTION_IP")
 BASTION_PORT = int(os.getenv("FINGREP_BASTION_PORT"))
 BASTION_USER = os.getenv("FINGREP_BASTION_USER")
@@ -42,10 +41,10 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 # Suppress edgar.httpclient logger
 edgar_logger = logging.getLogger('edgar')
-edgar_logger.setLevel(logging.WARNING)  # Suppress INFO logs
+edgar_logger.setLevel(logging.ERROR)
 # Suppress httpx logger
 httpx_logger = logging.getLogger('httpx')
-httpx_logger.setLevel(logging.WARNING)  # Suppress INFO logs
+httpx_logger.setLevel(logging.WARNING)
 # Suppress httpxthrottlecache logger
 httpxthrottlecache_logger = logging.getLogger('httpxthrottlecache')
 httpxthrottlecache_logger.setLevel(logging.WARNING)

@@ -41,7 +41,7 @@ def get_grouped_daily_bars(date_str: str) -> pd.DataFrame:
         # Removes rows that contain at least one NaN OHLC value
         tickers_with_nan = df.loc[df[['o', 'h', 'l', 'c']].isna().any(axis=1), 'T'].tolist()
         if tickers_with_nan:
-            logger.warning(f": The following tickers had at least one NaN OHLC value on the date {get_utc_date(days=config.DAYS)}: ",
+            logger.warning(f": The following tickers had at least one NaN OHLC value on the date {get_utc_date(days=config.days)}: ",
                            tickers_with_nan)
         # Volume column conversion to integer
         df['v'] = df['v'].astype(int)
@@ -107,7 +107,7 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
         return
     ticker_id = db_ops.insert_new_ticker(shares_data, shares_info_data)
     # Starter plan required for 2+ years historical data
-    date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * config.YEARS)
+    date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * config.years)
     get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
     # Fundamental data and trade info
     cik = shares_info_data.get('cik')
@@ -146,7 +146,7 @@ def update_rsi_existing_tickers():
     df_last_100.sort_values(by='date', ascending=True, inplace=True)
     df_last_100['rsi'] = df_last_100.groupby('share_id', as_index=False).apply(
         lambda group: rsi_tv_existing_tickers(group), include_groups=False).reset_index(level=0, drop=True)
-    utc_now = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=config.DAYS)
+    utc_now = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=config.days)
     df_last_100 = df_last_100.query("date == @utc_now")
     df_last_100 = df_last_100.drop(columns=['close', 'high', 'low'])
     df_last_100.dropna(subset=['rsi'], inplace=True)
@@ -169,7 +169,7 @@ def get_splits():
 
 def get_prev_grouped_daily_bars():
     for i in range(1,10):
-        prev_date = get_utc_date(days=config.DAYS + i, as_str=False)
+        prev_date = get_utc_date(days=config.days + i, as_str=False)
         if prev_date.weekday() in (5, 6):
             continue
         df = get_grouped_daily_bars(date_str=prev_date.strftime("%Y-%m-%d"))

@@ -53,7 +53,7 @@ def get_stock_data():
     # Get existing tickers, banned tickers and new daily data
     existing_tickers = get_existing_tickers()
     banned_tickers = get_banned_tickers()
-    df_grouped_daily = fingrep_service.get_grouped_daily_bars(date_str=get_utc_date(config.DAYS))
+    df_grouped_daily = fingrep_service.get_grouped_daily_bars(date_str=get_utc_date(config.days))
     # Data frame for existing tickers
     df_grouped_daily['id'] = df_grouped_daily['T'].map(existing_tickers)
     df_grouped_daily_existing = df_grouped_daily.dropna(subset=['id'])
@@ -67,23 +67,23 @@ def get_stock_data():
     foreign_keys_db = db_ops.get_foreign_keys()
     finviz_df = pd.read_csv('data/finviz_sic.csv')
     # Get new tickers in threaded environment
-    if config.MULTI_THREADED:
-        with ThreadPoolExecutor(max_workers=config.THREADS_NUMBER) as executor:
+    if config.multi_threaded:
+        with ThreadPoolExecutor(max_workers=config.threads_number) as executor:
             futures = []
-            for i, new_ticker in enumerate(tickers_list[:config.LIMIT]):
+            for i, new_ticker in enumerate(tickers_list[:config.limit]):
                 future = executor.submit(fingrep_service.get_new_ticker_data_and_insert,new_ticker, finviz_df)
                 futures.append(future)
-                time.sleep(config.THREAD_DELAY)
+                time.sleep(config.thread_delay)
             # Wait for all tasks to complete
             for i, future in enumerate(concurrent.futures.as_completed(futures)):
                 try:
                     future.result()  # This waits for completion and re-raises exceptions
-                    print(f"Completed {i + 1}/{config.LIMIT}")
+                    print(f"Completed {i + 1}/{config.limit}")
                 except Exception as e:
                     print(f"Task {i + 1} failed: {e}")
     else:
         for new_ticker in tickers_list:
-            if counter == config.LIMIT:
+            if counter == config.limit:
                 break
             fingrep_service.get_new_ticker_data_and_insert(new_ticker, finviz_df)
             print(counter)
@@ -93,7 +93,7 @@ def get_stock_data():
 
     # Update market breadth
     if not config.mb_historical:
-        db_ops.update_market_breadth(get_utc_date(days=config.DAYS))
+        db_ops.update_market_breadth(get_utc_date(days=config.days))
     else:
         for i in range(100, 0, -1):
             date_str = datetime.utcnow() - timedelta(days=i)
@@ -108,7 +108,7 @@ def get_stock_data():
         for ticker in common_tickers:
             ticker_id = existing_tickers[ticker]
             if db_ops.delete_aggregate_bars(ticker_id):
-                date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * config.YEARS)
+                date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * config.years)
                 fingrep_service.get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
             else:
                 logger.error(f"Couldn't delete and reinsert ticker {ticker} for stock split.")

@@ -66,7 +66,7 @@ def request_all_tickers(date: str):
 @retry(exceptions=requests.RequestException, tries=3, delay=2, backoff=2)
 def request_aggregate_daily_bars(ticker, date_from, limit):
     global retry_counter
-    url = (f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{date_from}/{get_utc_date(days=config.DAYS)}"
+    url = (f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{date_from}/{get_utc_date(days=config.days)}"
            f"?adjusted=true&sort=asc&limit={limit}")
     params = {
         "apiKey": os.getenv("POLYGON_API_KEY")
@@ -125,7 +125,7 @@ def request_ticker_details_v3(ticker):
 def request_splits():
     global retry_counter
 
-    url = (f"https://api.polygon.io/v3/reference/splits?execution_date={get_utc_date(days=config.DAYS)}"
+    url = (f"https://api.polygon.io/v3/reference/splits?execution_date={get_utc_date(days=config.days)}"
            f"&reverse_split=true&limit=25")
 
     params = {
