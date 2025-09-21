@@ -1,3 +1,4 @@
+import concurrent
 import datetime
 import edgar
 import edgar_service_v2
@@ -6,7 +7,6 @@ from edgar_service_v2 import get_filings_by_company, get_q4_statements, get_fili
 from utils import camel_to_snake,forms,get_utc_date
 from config import logger
 import db_ops
-
 
 def get_company_fundamentals(ticker: str, share_id: int, cutoff_date:str):
     df_filings = get_filings_by_company(ticker, cutoff_date)
@@ -31,10 +31,11 @@ def get_company_fundamentals(ticker: str, share_id: int, cutoff_date:str):
                         for k, v in q_statements.items():
                             db_ops.upsert_statement_v2(v, camel_to_snake(k), ['share_id', 'report_type', 'date'])
                     except Exception as e:
-                        logger.warning(f"Error preparing for insert Q4 statements for new ticker {ticker}. \n{e.with_traceback()}")
+                        logger.error(f"Error preparing for insert Q4 statements for new ticker {ticker}. \n{e.with_traceback()}")
             else:
                 # Yahoo alternative
                 yahoo_service.get_company_fundamentals(ticker=ticker, share_id=share_id, nearby_report_date=row['reportDate'])
+
 
 
 def update_fundamentals():

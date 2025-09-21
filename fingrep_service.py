@@ -1,4 +1,5 @@
 import sys
+import time
 from datetime import datetime,date, timezone, timedelta
 import inspect
 
@@ -112,7 +113,6 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
     cik = shares_info_data.get('cik')
     if config.insert_fundamentals and cik is not None and ticker_id is not None and shares_data.get('share_type_id') not in(6, 8):
         get_company_fundamentals(ticker, ticker_id, config.report_start_date)
-
 
 # Separates data for shares and share_info tables
 def extract_ticker_details_v3(ticker_details, finviz_data):

@@ -17,8 +17,8 @@ fundamentals_dict = dict()
 def request_fundamentals(ticker: str) -> Optional[dict]:
     try:
         # Check if data is already requested
-        if fundamentals := fundamentals_dict.get(ticker):
-            return fundamentals.copy()
+        if ticker in fundamentals_dict:
+            return fundamentals_dict[ticker].copy()
         # Fetch data
         yf_data = yf.Ticker(ticker.replace('.', '-'))
         fundamentals = dict()
@@ -48,7 +48,6 @@ def request_fundamentals(ticker: str) -> Optional[dict]:
                 fundamentals[stmt] = fundamentals[stmt]
         # Store requested data as copy to prevent modifications
         fundamentals_dict[ticker] = fundamentals.copy()
-
         return fundamentals
 
     except Exception as e:
@@ -105,25 +104,25 @@ def get_company_fundamentals(ticker:str, share_id, nearby_report_date:pd.Timesta
                         ans[date][stmt_name] = stmt_dict
                     else:
                         ans[date] = {stmt_name:stmt_dict}
-            # Validate and insert data into database
-            if ans:
-                sorted_dict = dict(sorted(ans.items()))
-                for date in sorted_dict:
-                    stmts_dict = sorted_dict[date]
-                    for key in ['IncomeStatement', 'CashFlowStatement', 'BalanceSheet', 'IncomeStatementQ', 'CashFlowStatementQ', 'BalanceSheetQ']:
-                        if key not in stmts_dict or not stmts_dict[key]: continue
-                        # Validate Balance Sheet and CashFlow Statement
-                        if key.startswith('B'):
-                            stmts_dict[key] = reconcile_balance_sheet(stmts_dict[key])
-                        elif key.startswith('C'):
-                            stmts_dict[key] = reconcile_cash_flow_statement(stmts_dict[key])
-                        # Upsert statement
-                        table_name = key[:-1] if key.endswith('Q') else key
-                        if not db_ops.upsert_statement_v2(stmts_dict[key], utils.camel_to_snake(table_name),['share_id', 'report_type', 'date']):
-                            return False
-            else:
-                logger.warning(f"{stmt_name} data for ticker {ticker} successfully requested via yf, but nothing to insert.")
-                return False
+        # Validate and insert data into database
+        if ans:
+            sorted_dict = dict(sorted(ans.items()))
+            for date in sorted_dict:
+                stmts_dict = sorted_dict[date]
+                for key in ['IncomeStatement', 'CashFlowStatement', 'BalanceSheet', 'IncomeStatementQ', 'CashFlowStatementQ', 'BalanceSheetQ']:
+                    if key not in stmts_dict or not stmts_dict[key]: continue
+                    # Validate Balance Sheet and CashFlow Statement
+                    if key.startswith('B'):
+                        stmts_dict[key] = reconcile_balance_sheet(stmts_dict[key])
+                    elif key.startswith('C'):
+                        stmts_dict[key] = reconcile_cash_flow_statement(stmts_dict[key])
+                    # Upsert statement
+                    table_name = key[:-1] if key.endswith('Q') else key
+                    if not db_ops.upsert_statement_v2(stmts_dict[key], utils.camel_to_snake(table_name),['share_id', 'report_type', 'date']):
+                        return False
+        else:
+            logger.info(f"{stmt_name} data for ticker {ticker} successfully requested via yf, but nothing to insert.")
+            return False
         return True
     else:
         logger.warning(f"Couldn't request yf fundamentals for ticker {ticker}")

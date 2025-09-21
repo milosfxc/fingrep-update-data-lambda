@@ -360,7 +360,6 @@ def insert_new_ticker(shares, shares_info):
                 """.format(columns=', '.join(shares_info.keys()), placeholders=', '.join(['%s'] * len(shares_info)))
                 cur.execute(insert_shares_info_query, list(shares_info.values()))
                 conn.commit()
-                print(f"Returning id for inserted ticker: {shares_info['share_id']}")
                 return shares_info['share_id']
     except psycopg2.Error as e:
         # Rollback will happen automatically if an error occurs

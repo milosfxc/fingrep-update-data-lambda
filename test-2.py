@@ -16,11 +16,9 @@ import db_ops
 import edgar_api
 import edgar_service_v2
 import fingrep_service
-import fundamentals
 import polygon
 import utils
 import xbrl_utils
-from fundamentals import get_period_ending_by_accession_number
 from utils import get_utc_date
 
 # Set pandas to display all rows and columns

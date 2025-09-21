@@ -1,6 +1,5 @@
-import logging
-import sys
-
+import concurrent
+import time
 from config import logger, update_fundamentals
 import pandas as pd
 from datetime import datetime, timezone, timedelta
@@ -13,6 +12,41 @@ from SSHTunnelManager import SSHTunnelManager
 from db_ops import get_existing_tickers, get_banned_tickers
 from utils import get_utc_date
 from fundamentals_service import update_fundamentals
+from concurrent.futures import ThreadPoolExecutor
+import psutil
+
+
+def calculate_max_instances():
+    # Get system memory information
+    virtual_memory = psutil.virtual_memory()
+    total_memory = virtual_memory.total / 1024 / 1024  # Convert to MB
+    available_memory = virtual_memory.available / 1024 / 1024  # Convert to MB
+
+    print(f"System Memory Information:")
+    print(f"  Total RAM: {total_memory:.2f} MB")
+    print(f"  Available RAM: {available_memory:.2f} MB")
+
+    # Based on your profiling data
+    peak_memory_per_instance = 244.3  # MB (worst case)
+    avg_memory_per_instance = 200  # MB (typical case)
+
+    print(f"\nYour program memory usage:")
+    print(f"  Peak memory: {peak_memory_per_instance:.2f} MB")
+    print(f"  Average memory: {avg_memory_per_instance:.2f} MB")
+
+    # Calculate maximum instances (conservative - leave 25% memory free)
+    max_instances_peak = int((available_memory * 0.75) / peak_memory_per_instance)
+    max_instances_avg = int((available_memory * 0.75) / avg_memory_per_instance)
+
+    print(f"\nMaximum instances based on:")
+    print(f"  Peak memory: {max_instances_peak} instances")
+    print(f"  Average memory: {max_instances_avg} instances")
+
+    # Recommend the more conservative number
+    recommended_instances = min(max_instances_peak, max_instances_avg)
+    print(f"\nRecommended maximum: {recommended_instances} instances")
+
+    return recommended_instances
 
 
 def get_stock_data():
@@ -25,7 +59,6 @@ def get_stock_data():
     df_grouped_daily_existing = df_grouped_daily.dropna(subset=['id'])
     # Importing data for existing tickers
     fingrep_service.insert_grouped_daily_bars(df_grouped_daily_existing.copy())
-
     # Data frame for new tickers
     df_grouped_daily_new = df_grouped_daily[df_grouped_daily['id'].isna()]
     df_grouped_daily_new = df_grouped_daily_new[~df_grouped_daily_new['T'].isin(banned_tickers.keys())]
@@ -33,15 +66,28 @@ def get_stock_data():
     counter = 0
     foreign_keys_db = db_ops.get_foreign_keys()
     finviz_df = pd.read_csv('data/finviz_sic.csv')
-
-    for new_ticker in tickers_list:
-        if counter == config.LIMIT:
-            break
-        fingrep_service.get_new_ticker_data_and_insert(new_ticker, finviz_df)
-
-        print(counter)
-        counter += 1
-
+    # Get new tickers in threaded environment
+    if config.MULTI_THREADED:
+        with ThreadPoolExecutor(max_workers=config.THREADS_NUMBER) as executor:
+            futures = []
+            for i, new_ticker in enumerate(tickers_list[:config.LIMIT]):
+                future = executor.submit(fingrep_service.get_new_ticker_data_and_insert,new_ticker, finviz_df)
+                futures.append(future)
+                time.sleep(config.THREAD_DELAY)
+            # Wait for all tasks to complete
+            for i, future in enumerate(concurrent.futures.as_completed(futures)):
+                try:
+                    future.result()  # This waits for completion and re-raises exceptions
+                    print(f"Completed {i + 1}/{config.LIMIT}")
+                except Exception as e:
+                    print(f"Task {i + 1} failed: {e}")
+    else:
+        for new_ticker in tickers_list:
+            if counter == config.LIMIT:
+                break
+            fingrep_service.get_new_ticker_data_and_insert(new_ticker, finviz_df)
+            print(counter)
+            counter += 1
     # Update RSI for existing tickers
     fingrep_service.update_rsi_existing_tickers()
 
@@ -72,9 +118,8 @@ def get_stock_data():
         update_fundamentals()
 
 
-
 if __name__ == "__main__":
-
+    start_time = time.perf_counter()
     if config.db_location == DBLocation.REMOTE:
         try:
             with SSHTunnelManager():
@@ -84,3 +129,6 @@ if __name__ == "__main__":
             raise
     else:
         get_stock_data()
+    end_time = time.perf_counter()
+    execution_time = end_time - start_time
+    print(f"Execution time {execution_time} seconds.")

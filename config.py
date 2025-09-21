@@ -1,21 +1,20 @@
 import os
 
-from rich.diagnose import report
 
 from ConnType import DBLocation
-
 # stock market data config
 DAYS = 1 # Offset from current date
-YEARS = 2 # OHLCV data
+YEARS = 5 # OHLCV data
 mb_historical = True # false updates market breadth for the current day, true updates for the last 100 days
 insert_fundamentals = True # Insert fundamentals for new tickers
 update_fundamentals = True # Update fundamentals for existing tickers
-report_start_date = '2022-12-31'
-LIMIT = 2 # insertion limit
+report_start_date = '2020-12-31'
+LIMIT = 10 # insertion limit
+MULTI_THREADED = True
+THREADS_NUMBER = 20
+THREAD_DELAY = 0.3 # Time delay between submitting a task
 db_location = DBLocation.LOCAL
 scale_factor = 10000
-
-
 # database config
 HOST=DBLocation.REMOTE
 LOCAL_BIND_PORT=None
@@ -34,7 +33,7 @@ DB_PORT = 5432
 # logger
 import logging
 logger = logging.getLogger('fingrep')
-logger.setLevel(logging.WARNING)
+logger.setLevel(logging.ERROR)
 logger.propagate = False
 # Add handlers, formatters, etc.
 handler = logging.StreamHandler()

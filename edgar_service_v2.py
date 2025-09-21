@@ -1,9 +1,11 @@
+import time
 from datetime import timedelta, datetime, date
 from typing import Optional, Dict, Union
 import edgar
 import numpy as np
 import pandas as pd
 from edgar import Filing
+
 import XBRLTagMapper
 import config
 import db_ops
@@ -29,7 +31,7 @@ def get_filings_by_company(ticker: str, cutoff_date:str) -> pd.DataFrame:
     if not df_filings.empty and {'accession_number', 'reportDate','form', 'isXBRL', 'acceptanceDateTime'}.issubset(set(df_filings.columns)):
         return df_filings[['accession_number', 'reportDate','form', 'isXBRL', 'acceptanceDateTime']]
     else:
-        logger.warning(f"Couldn't obtain a list of filings for ticker {ticker}. Dataframe df_filings:\n{df_filings}")
+        logger.info(f"Couldn't obtain a list of filings for ticker {ticker}. Dataframe df_filings:\n{df_filings}")
         return pd.DataFrame(data=None)
 
 def get_latest_filings(filing_date:str) -> pd.DataFrame:
@@ -48,7 +50,6 @@ def get_latest_filings(filing_date:str) -> pd.DataFrame:
     else:
         logger.warning(f"Couldn't obtain a list of latest filings or list didn't had all required columns for filing_date {filing_date}. Dataframe df_filings: \n{df_filings}")
         return pd.DataFrame(data=None)
-
 
 
 def get_filing_details(accession_number:str, is_xbrl:int, share_id: int, filing:Filing = None) -> Dict[str,dict] | None:
@@ -80,7 +81,6 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int, filing:
         df_instant_end = filing.xbrl().query().by_dimension(None).by_instant_date(filing.period_of_report).to_dataframe('concept', 'numeric_value', 'statement_type').replace(['',np.nan],None)
         df_period = filing.xbrl().query().by_dimension(None).by_date_range(other_data['period_start'], filing.period_of_report).to_dataframe('concept', 'numeric_value', 'statement_type').replace(['',np.nan],None)
         # Archive filing
-
         archive = {
             'period_start': other_data['period_start'],
             'period_end': filing.period_of_report,
@@ -104,7 +104,6 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int, filing:
         #         xbrl_map = pickle.load(f)
         for stmt in statements.keys():
             statements[stmt] = get_statement(stmt, statements[stmt], other_data, df_instant_end, df_period, filing.period_of_report)
-
         # Income statement and cashflow statement period compatibility
         if (cf_period_start := other_data.get('cf_period_start')) != (period_start := other_data.get('period_start')):
             cf_stmt = get_quarterly_cash_flow_statement(statements.pop('CashFlowStatement'),share_id, cf_period_start, period_start)
@@ -211,7 +210,8 @@ def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf) -> dict | 
         else:
             ans['acc_standard'] = None
     # Currency and period start
-    for value in values_inc:
+
+    for value in values_inc[:3]:
         if all(key in ans for key in ['currency', 'period_start']):
             break
         df_pos = filing.xbrl().query().by_statement_type('IncomeStatement').by_dimension(None).by_value(
@@ -229,7 +229,7 @@ def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf) -> dict | 
     ans['fiscal_period'] = get_fiscal_period(entity_info,filing.form)
     ans['calendar_period'] = get_calendar_period(filing.period_of_report, filing.form)
     # Period start for cashflow
-    for value in values_cf:
+    for value in values_cf[:3]:
         if all(key in ans for key in ['currency', 'period_start', 'cf_period_start']):
             return ans
         df_pos = (filing.xbrl().query().by_statement_type('CashFlowStatement').by_dimension(None).by_value(float(value))

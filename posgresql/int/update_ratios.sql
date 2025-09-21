@@ -71,7 +71,7 @@ ELSIF _avg_sh_out > 0 THEN
     _sh_out := _avg_sh_out;
     NEW.common_shares_outstanding := _sh_out;
 ELSE
-    RAISE EXCEPTION 'Missing avg_shares_basic for share_id: % and report_type %', NEW.share_id, NEW.report_type;
+--    RAISE EXCEPTION 'Missing avg_shares_basic for share_id: % and report_type %', NEW.share_id, NEW.report_type;
     RETURN NEW;
 END IF;
 
