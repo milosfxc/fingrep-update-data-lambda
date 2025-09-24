@@ -45,6 +45,14 @@ if __name__ == "__main__":
     x1 = time.perf_counter()
     fundamentals_service.get_company_fundamentals('WEYS',60,config.report_start_date)
 
+    # df2 = edgar.get_by_accession_number('0001410578-22-000345').xbrl()
+    # df3 = edgar.get_by_accession_number('0001410578-23-000248').xbrl()
+    # print(df1.entity_info)
+    # print(df2.entity_info)
+    # print(df3.entity_info)
+    # print(df1.period_of_report)
+    # print(df2.period_of_report)
+    # print(df3.period_of_report)
 
 
     print(time.perf_counter() - x1)

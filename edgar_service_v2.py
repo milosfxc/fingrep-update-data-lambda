@@ -54,6 +54,7 @@ def get_latest_filings(filing_date:str) -> pd.DataFrame:
 
 def get_filing_details(accession_number:str, is_xbrl:int, share_id: int, filing:Filing = None) -> Dict[str,dict] | None:
     if  is_xbrl == 1:
+        print(f"For number: {accession_number}")
         filing = edgar.get_by_accession_number(accession_number=accession_number) if filing is None else filing
         # Ratio triggers require this order IS -> CFS -> BS
         statements = {
@@ -447,13 +448,17 @@ def validate_income_statement(inc_stmt: dict[str,float], cf_stmt: dict[str, floa
     # Converts any numpy data types to Python native data types and None to zero
     return {k: v.item() if isinstance(v, np.generic) else v for k, v in inc_stmt.items()}
 
-def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_stmt: dict[str,float], acc_standard: str) -> dict[str,float] | None:
+def validate_cashflow_statement(df_instant_start: pd.DataFrame, df_instant_end: pd.DataFrame, df_period: pd.DataFrame, cf_stmt: dict[str,float], acc_standard: str) -> dict[str,float] | None:
     # CAPEX calculation
-    df_ppe = df_period[df_period['concept'].isin(XBRLTagMapper.xbrl_tags[acc_standard]['CashFlowStatement']['net_purchase_sale_ppe'])]
-    capex_values = pd.to_numeric(df_ppe['numeric_value'], errors='coerce')
-    capex_sum = capex_values[capex_values < 0].sum()
-    capital_expenditure = capex_sum * config.scale_factor if capex_sum else 0
-    cf_stmt['capital_expenditure'] = capital_expenditure
+    capital_expenditure = None
+    if not df_period.empty and {'concept', 'numeric_value'}.issubset(df_period.columns):
+        df_ppe = df_period[df_period['concept'].isin(XBRLTagMapper.xbrl_tags[acc_standard]['CashFlowStatement']['net_purchase_sale_ppe'])]
+        capex_values = pd.to_numeric(df_ppe['numeric_value'], errors='coerce')
+        capex_sum = capex_values[capex_values < 0].sum()
+        capital_expenditure = capex_sum * config.scale_factor if capex_sum else 0
+        cf_stmt['capital_expenditure'] = capital_expenditure
+    else:
+        logger.warning('df_period empty or missing concept/numeric_value columns')
 
     # # Debt issuance and repayment calculation
     # df_debt = df_period[df_period['concept'].isin(XBRLTagMapper.xbrl_tags[acc_standard]['CashFlowStatement']['net_debt_issuance'])]
@@ -469,31 +474,35 @@ def validate_cashflow_statement(df_instant_start, df_instant_end, df_period, cf_
 
     # Free Cash Flow
     operating_cash_flow = cf_stmt.get('operating_cash_flow')
-    if operating_cash_flow:
+    if operating_cash_flow and capital_expenditure:
         free_cash_flow = operating_cash_flow + capital_expenditure
         cf_stmt['free_cash_flow'] = free_cash_flow
 
     # Cash end
-    df_cash_end = df_instant_end[df_instant_end['statement_type'].isin(['CashFlowStatement','BalanceSheet'])]
-    df_cash_end = df_cash_end[df_cash_end['concept'].isin(XBRLTagMapper.xbrl_tags[acc_standard]['CashFlowStatement']['end_cash_balance'])]
-    end_cash_balance = df_cash_end['numeric_value'].max()
-    end_cash_balance = end_cash_balance * config.scale_factor if not pd.isna(end_cash_balance) else None
-    if end_cash_balance:
-        cf_stmt['end_cash_balance'] = end_cash_balance
-    # Cash start
-    net_change = cf_stmt.get('change_in_cash')
-    if net_change and end_cash_balance:
-        start_cash_balance = end_cash_balance - net_change
+    required_columns = {'statement_type', 'concept', 'numeric_value'}
+    if not df_instant_start.empty and not df_instant_end.empty and required_columns.issubset(df_instant_start) and required_columns.issubset(df_instant_end):
+        df_cash_end = df_instant_end[df_instant_end['statement_type'].isin(['CashFlowStatement','BalanceSheet'])]
+        df_cash_end = df_cash_end[df_cash_end['concept'].isin(XBRLTagMapper.xbrl_tags[acc_standard]['CashFlowStatement']['end_cash_balance'])]
+        end_cash_balance = df_cash_end['numeric_value'].max()
+        end_cash_balance = end_cash_balance * config.scale_factor if not pd.isna(end_cash_balance) else None
+        if end_cash_balance:
+            cf_stmt['end_cash_balance'] = end_cash_balance
+        # Cash start
+        net_change = cf_stmt.get('change_in_cash')
+        if net_change and end_cash_balance:
+            start_cash_balance = end_cash_balance - net_change
+        else:
+            df_cash_start = df_instant_start[df_instant_start['statement_type'].isin(['CashFlowStatement', 'BalanceSheet'])]
+            df_cash_start = df_cash_start[df_cash_start['concept'].isin(XBRLTagMapper.xbrl_tags[acc_standard]['CashFlowStatement']['start_cash_balance'])]
+            start_cash_balance = df_cash_start['numeric_value'].max()
+            start_cash_balance = start_cash_balance * config.scale_factor if not pd.isna(start_cash_balance) else None
+        if start_cash_balance:
+            cf_stmt['start_cash_balance'] = start_cash_balance
+        # Cash change
+        if start_cash_balance and end_cash_balance and not net_change:
+            cf_stmt['change_in_cash'] = end_cash_balance - start_cash_balance
     else:
-        df_cash_start = df_instant_start[df_instant_start['statement_type'].isin(['CashFlowStatement', 'BalanceSheet'])]
-        df_cash_start = df_cash_start[df_cash_start['concept'].isin(XBRLTagMapper.xbrl_tags[acc_standard]['CashFlowStatement']['start_cash_balance'])]
-        start_cash_balance = df_cash_start['numeric_value'].max()
-        start_cash_balance = start_cash_balance * config.scale_factor if not pd.isna(start_cash_balance) else None
-    if start_cash_balance:
-        cf_stmt['start_cash_balance'] = start_cash_balance
-    # Cash change
-    if start_cash_balance and end_cash_balance and not net_change:
-        cf_stmt['change_in_cash'] = end_cash_balance - start_cash_balance
+        logger.warning('df_instant_start or df_instant_end empty or missing concept/numeric_value columns')
 
     # calculate other activities
     if operating_cash_flow:
@@ -542,6 +551,7 @@ def get_fiscal_period(entity_info:dict, form:str) -> str | None:
     """
     try:
         if form in utils.forms['annual']:
+            print(f"FISCAL {entity_info['fiscal_year']}")
             return entity_info['fiscal_year']
         else:
             return entity_info['fiscal_year'] + entity_info['fiscal_period'].upper()
