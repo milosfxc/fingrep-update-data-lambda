@@ -54,7 +54,6 @@ def get_latest_filings(filing_date:str) -> pd.DataFrame:
 
 def get_filing_details(accession_number:str, is_xbrl:int, share_id: int, filing:Filing = None) -> Dict[str,dict] | None:
     if  is_xbrl == 1:
-        print(f"For number: {accession_number}")
         filing = edgar.get_by_accession_number(accession_number=accession_number) if filing is None else filing
         # Ratio triggers require this order IS -> CFS -> BS
         statements = {
@@ -136,7 +135,7 @@ def get_statement(stmt_name: str, df_stmt: pd.DataFrame, other_data: dict, df_in
         # Revenue
         ans['revenue'] = get_position_value_sum_or_max(df_stmt,df_tags,stmt_tags.pop('revenue'),period_end)
         if not ans['revenue']:
-            revenue_series = df_stmt.loc[df_stmt['label'].str.contains('revenue', case=False, na=False) & df_stmt[period_end].notna(), period_end]
+            revenue_series = pd.to_numeric(df_stmt.loc[df_stmt['label'].str.contains('revenue', case=False, na=False) & df_stmt[period_end].notna(), period_end],errors='coerce')
             ans['revenue'] = revenue_series.max() * config.scale_factor if not revenue_series.empty else None
         # Net Income
         ans['net_income'] = get_position_value_sum_or_max(df_stmt,df_tags,stmt_tags.pop('net_income'),period_end)
@@ -551,7 +550,6 @@ def get_fiscal_period(entity_info:dict, form:str) -> str | None:
     """
     try:
         if form in utils.forms['annual']:
-            print(f"FISCAL {entity_info['fiscal_year']}")
             return entity_info['fiscal_year']
         else:
             return entity_info['fiscal_year'] + entity_info['fiscal_period'].upper()

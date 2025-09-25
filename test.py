@@ -43,8 +43,8 @@ def add(number: int) -> int:
 
 if __name__ == "__main__":
     x1 = time.perf_counter()
-    fundamentals_service.get_company_fundamentals('WEYS',60,config.report_start_date)
-
+    fundamentals_service.get_company_fundamentals('RVMD',148, config.report_start_date)
+    pd.to_numeric(None)
     # df2 = edgar.get_by_accession_number('0001410578-22-000345').xbrl()
     # df3 = edgar.get_by_accession_number('0001410578-23-000248').xbrl()
     # print(df1.entity_info)
@@ -56,7 +56,6 @@ if __name__ == "__main__":
 
 
     print(time.perf_counter() - x1)
-
     # Using ThreadPoolExecutor
     # with ThreadPoolExecutor(max_workers=2) as executor:
     #     results = []

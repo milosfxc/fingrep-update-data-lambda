@@ -91,3 +91,5 @@ def replace_dict_nan_with_none(obj):
     else:
         return obj
 
+def or_zero(val):
+    return val if val is not None else 0

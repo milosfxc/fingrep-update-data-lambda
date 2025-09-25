@@ -3,13 +3,13 @@ from ConnType import DBLocation
 
 
 # stock market data config
-days = 2 # Offset from current date
+days = 1 # Offset from current date
 years = 5 # OHLCV data
 mb_historical = True # false updates market breadth for the current day, true updates for the last 100 days
 insert_fundamentals = True # Insert fundamentals for new tickers
 update_fundamentals = False # Update fundamentals for existing tickers
 report_start_date = '2020-12-31'
-limit = 20 # insertion limit
+limit = 200 # insertion limit
 multi_threaded = False
 threads_number = 20
 thread_delay = 0.3 # Time delay between submitting a task

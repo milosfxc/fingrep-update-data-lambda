@@ -1,7 +1,7 @@
 import datetime
 import re
 from typing import Optional
-
+from utils import or_zero
 import pandas as pd
 import yfinance as yf
 
@@ -86,12 +86,14 @@ def get_company_fundamentals(ticker:str, share_id, nearby_report_date:pd.Timesta
                              'filing_date': find_filing_date(df_filings,date, ticker)
                              }
                 for db_pos, calc_positions in stmt_positions_mapper.items():
-                    if calc_positions is None: continue
-                    sum_pos = 0 * config.scale_factor
-                    for pos in calc_positions:
-                        pos = yf_statement.get(pos)
-                        sum_pos +=  pos if pos else 0 # todo else 0 instead of None
-                    stmt_dict[db_pos] = sum_pos
+                    if calc_positions is None:
+                        sum_pos = None
+                    else:
+                        sum_pos = 0
+                        for pos in calc_positions:
+                            pos = yf_statement.get(pos)
+                            sum_pos +=  pos if pos else 0
+                    stmt_dict[db_pos] = sum_pos * config.scale_factor if sum_pos else None
                 # Check that statement has at least 70% of columns filled
                 non_empty_columns = 0
                 for key, value in stmt_dict.items():
@@ -158,24 +160,24 @@ def find_filing_date(df_filings: pd.DataFrame, yf_report_date: pd.Timestamp, tic
 
 def reconcile_balance_sheet(bs_dict) -> dict:
     if current_assets := bs_dict['current_assets']:
-        bs_dict['other_current_assets'] = current_assets - bs_dict['cash_and_short_term_investments'] or 0 - bs_dict['net_receivables'] or 0 - bs_dict['inventory'] or 0
+        bs_dict['other_current_assets'] = current_assets - or_zero(bs_dict['cash_and_short_term_investments']) - or_zero(bs_dict['net_receivables']) - or_zero(bs_dict['inventory'])
     if non_current_assets := bs_dict['non_current_assets']:
-        bs_dict['other_non_current_assets'] = (non_current_assets - bs_dict['real_estate'] or 0 - bs_dict['property_plant_equipment_net'] or 0 - bs_dict['goodwill'] or 0
-                                               - bs_dict['intangible_assets'] or 0 - bs_dict['long_term_investments'] or 0 - bs_dict['non_current_deferred_assets'] or 0)
+        bs_dict['other_non_current_assets'] = (non_current_assets - or_zero(bs_dict['real_estate']) - or_zero(bs_dict['property_plant_equipment_net']) - or_zero(bs_dict['goodwill'])
+                                               - or_zero(bs_dict['intangible_assets']) - or_zero(bs_dict['long_term_investments']) - or_zero(bs_dict['non_current_deferred_assets']))
     if current_liabilities := bs_dict['current_liabilities']:
-        bs_dict['other_current_liabilities'] = current_liabilities - bs_dict['payables_and_expenses'] or 0 - bs_dict['short_term_debt'] or 0
+        bs_dict['other_current_liabilities'] = current_liabilities - or_zero(bs_dict['payables_and_expenses']) - or_zero(bs_dict['short_term_debt'])
     if non_current_liabilities := bs_dict['non_current_liabilities']:
-        bs_dict['other_non_current_liabilities'] = non_current_liabilities - bs_dict['long_term_debt'] or 0
+        bs_dict['other_non_current_liabilities'] = non_current_liabilities - or_zero(bs_dict['long_term_debt'])
 
     return bs_dict
 
 def reconcile_cash_flow_statement(cf_dict) -> dict:
     if operating_cf := cf_dict['operating_cash_flow']:
-        cf_dict['other_operating_activities'] = operating_cf - cf_dict['operating_net_income'] or 0 - cf_dict['operating_da'] or 0 - cf_dict['deferred_income_tax'] or 0 - cf_dict['share_based_compensation'] or 0 - cf_dict['change_working_capital'] or 0
+        cf_dict['other_operating_activities'] = operating_cf - or_zero(cf_dict['operating_net_income']) - or_zero(cf_dict['operating_da']) - or_zero(cf_dict['deferred_income_tax']) - or_zero(cf_dict['share_based_compensation']) - or_zero(cf_dict['change_working_capital'])
     if investing_cf := cf_dict['investing_cash_flow']:
-        cf_dict['other_investing_activities'] = investing_cf - cf_dict['capital_expenditure'] or 0 - cf_dict['net_purchase_sale_ppe'] or 0 - cf_dict['net_business_acquisitions'] or 0 - cf_dict['net_purchase_sale_investments'] or 0 - cf_dict['net_loan_lease_activity'] or 0
+        cf_dict['other_investing_activities'] = investing_cf - or_zero(cf_dict['capital_expenditure']) - or_zero(cf_dict['net_purchase_sale_ppe']) - or_zero(cf_dict['net_business_acquisitions']) - or_zero(cf_dict['net_purchase_sale_investments']) - or_zero(cf_dict['net_loan_lease_activity'])
     if financing_cf := cf_dict['financing_cash_flow']:
-        cf_dict['other_financing_activities'] = financing_cf - cf_dict['net_debt_issuance'] or 0 - cf_dict['net_equity_issuance'] or 0 - cf_dict['dividends_paid'] or 0
+        cf_dict['other_financing_activities'] = financing_cf - or_zero(cf_dict['net_debt_issuance']) - or_zero(cf_dict['net_equity_issuance']) - or_zero(cf_dict['dividends_paid'])
     return cf_dict
 
 
