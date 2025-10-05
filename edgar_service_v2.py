@@ -56,10 +56,11 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int, filing:
     if  is_xbrl == 1:
         filing = edgar.get_by_accession_number(accession_number=accession_number) if filing is None else filing
         # Ratio triggers require this order IS -> CFS -> BS
+        financials = filing.obj().financials
         statements = {
-            'IncomeStatement': filing.obj().financials.income_statement().to_dataframe().replace(['',np.nan],None),
-            'CashFlowStatement': filing.obj().financials.cashflow_statement().to_dataframe().replace(['',np.nan],None),
-            'BalanceSheet': filing.obj().financials.balance_sheet().to_dataframe().replace(['', np.nan], None)
+            'IncomeStatement': financials.income_statement().to_dataframe().replace(['',np.nan],None) if financials.income_statement() else pd.DataFrame(),
+            'CashFlowStatement': financials.cashflow_statement().to_dataframe().replace(['',np.nan],None) if financials.cashflow_statement() else pd.DataFrame(),
+            'BalanceSheet': financials.balance_sheet().to_dataframe().replace(['',np.nan],None) if financials.balance_sheet() else pd.DataFrame()
         }
         # Rename columns to match period end date
         for key,stmt in statements.items():

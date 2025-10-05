@@ -1,20 +1,18 @@
+import csv
 import datetime
+import io
 import json
 import logging
 import traceback
-from typing import Optional, Union, List, Dict
-
-from edgar.formatting import accession_number_text
-from psycopg2 import sql
+from typing import Optional, Union, List, Dict, Any
+import psycopg2
 from psycopg2.extras import DictCursor, execute_values, execute_batch
 import pandas as pd
-
 import utils
 from config import DB_NAME, DB_USER, LOCAL_DB_HOST, DB_PORT, DB_PASSWORD
 import config
 from ConnType import DBLocation
 from contextlib import contextmanager
-import psycopg2
 
 # Logger
 logger = logging.getLogger(__name__)
@@ -352,6 +350,7 @@ def insert_new_ticker(shares, shares_info):
                 """.format(columns=', '.join(shares.keys()), placeholders=', '.join(['%s'] * len(shares)))
                 cur.execute(insert_share_query, list(shares.values()))
                 last_inserted_id = cur.fetchone()[0]
+                print(type(last_inserted_id))
                 # Update 'shares_info' with the last_inserted_id
                 shares_info['share_id'] = last_inserted_id
                 # Insert into 'shares_info'
@@ -551,6 +550,57 @@ def query_previous_cash_flow_statement(share_id: int, start_date:str, end_date:s
         raise
 
 
+def query_data_as_csv(table_name: str, query_params: dict) -> str | None:
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=DictCursor) as cur:
+                # Build WHERE clause dynamically based on provided parameters
+                where_conditions = []
+                values = []
+
+                for key, value in query_params.items():
+                    if isinstance(value, (list, tuple)):
+                        # Handle multiple values with IN clause
+                        placeholders = ",".join(["%s"] * len(value))
+                        where_conditions.append(f"{key} IN ({placeholders})")
+                        values.extend(value)
+                    else:
+                        # Handle single value with = operator
+                        where_conditions.append(f"{key} = %s")
+                        values.append(value)
+
+                if not where_conditions:
+                    # If no parameters provided, select all rows
+                    sql = f'SELECT * FROM {table_name};'
+                else:
+                    where_clause = " AND ".join(where_conditions)
+                    sql = f'SELECT * FROM {table_name} WHERE {where_clause};'
+
+                cur.execute(sql, tuple(values))
+                rows = cur.fetchall()
+
+                if not rows:
+                    return None
+
+                # Get column names from cursor description (more reliable)
+                fieldnames = [desc[0] for desc in cur.description]
+
+                output = io.StringIO()
+                writer = csv.DictWriter(output, fieldnames=fieldnames)
+                writer.writeheader()
+
+                # Write rows, handling missing columns
+                for row in rows:
+                    # Ensure each row has all expected columns
+                    row_dict = {field: row.get(field) for field in fieldnames}
+                    writer.writerow(row_dict)
+
+                return output.getvalue()
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f"#query_data_as_csv: {error}")
+        raise
+
 # EDGAR Database
 @contextmanager
 def get_edgar_db_connection():
@@ -622,3 +672,65 @@ def get_filings_by_filing_id(filing_id: str, insert_date:str = None) -> dict | N
         return None
 
 
+
+
+
+def upsert_from_csv_data(csv_data: List[Dict[str, Any]], table_name: str, conflict_columns: set):
+    """
+    Upsert data from CSV rows into database using ON CONFLICT DO UPDATE SET
+    Supports multiple conflict columns
+    """
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                if not csv_data:
+                    logger.warning('No data to upsert')
+                    return
+
+                # Get column names from first row
+                columns = list(csv_data[0].keys())
+
+                # Validate that conflict columns exist in the data
+                missing_conflict_columns = conflict_columns - set(columns)
+                if missing_conflict_columns:
+                    raise ValueError(f"Conflict columns not found in data: {missing_conflict_columns}")
+
+                # Create the INSERT ... ON CONFLICT query dynamically
+                placeholders = ', '.join(['%s'] * len(columns))
+
+                # Handle multiple conflict columns - join with commas
+                conflict_columns_str = ', '.join(conflict_columns)
+
+                # Exclude conflict columns from update set
+                update_columns = [col for col in columns if col not in conflict_columns]
+                update_set = ', '.join([f"{col} = EXCLUDED.{col}" for col in update_columns])
+
+                insert_query = f"""
+                    INSERT INTO {table_name} ({', '.join(columns)})
+                    VALUES ({placeholders})
+                    ON CONFLICT ({conflict_columns_str}) 
+                    DO UPDATE SET {update_set}
+                """
+
+                # Prepare data for insertion (convert values appropriately)
+                values_list = []
+                for row in csv_data:
+                    values = []
+                    for col in columns:
+                        value = row[col]
+                        # Handle empty strings and convert to None for NULL
+                        if value == '':
+                            values.append(None)
+                        else:
+                            values.append(value)
+                    values_list.append(values)
+
+                # Execute all inserts
+                cur.executemany(insert_query, values_list)
+
+                conn.commit()
+                print(f"✅ Successfully upserted {len(csv_data)} rows into {table_name}")
+
+    except (Exception, psycopg2.DatabaseError) as error:
+        print(f"❌ Upsert error: {error}")
+        raise

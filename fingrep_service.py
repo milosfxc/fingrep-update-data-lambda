@@ -5,6 +5,8 @@ import inspect
 
 import pandas as pd
 import requests
+
+import aws_service
 import config
 import db_ops
 import finviz
@@ -81,6 +83,7 @@ def insert_grouped_daily_bars(df):
     db_ops.upsert_dataframe_v2(df, 'd_timeframe')
 
 
+
 def get_new_ticker_data_and_insert(ticker, finviz_df):
     method_name = inspect.currentframe().f_code.co_name
     try:
@@ -106,6 +109,8 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
         db_ops.insert_banned_ticker(ticker)
         return
     ticker_id = db_ops.insert_new_ticker(shares_data, shares_info_data)
+    # Append to ids for s3
+    aws.add_share_id(ticker_id, 'new')
     # Starter plan required for 2+ years historical data
     date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * config.years)
     get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)

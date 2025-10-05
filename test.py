@@ -1,9 +1,12 @@
 import datetime
+import io
 import json
 import os
 import random
 import re
 import time
+
+import boto3
 import edgar
 from typing import Union
 from edgar import set_identity, Company, download_filings, Filing
@@ -15,9 +18,11 @@ from datetime import timedelta, timezone
 import pandas as pd
 from edgar.xbrl.standardization import standardize_statement
 
+import aws_service
 import config
 import db_ops
 import fundamentals_service
+import utils
 import yahoo_service
 
 # Set pandas to display all rows and columns
@@ -43,8 +48,28 @@ def add(number: int) -> int:
 
 if __name__ == "__main__":
     x1 = time.perf_counter()
-    fundamentals_service.get_company_fundamentals('RVMD',148, config.report_start_date)
-    pd.to_numeric(None)
+    utc_datetime = utils.get_utc_date(config.days)
+    # Initialize S3 client with your environment variables
+    s3_client = boto3.client(
+        's3',
+        aws_access_key_id=os.getenv('AWS_FINGREP_DB_DATA_KEY'),
+        aws_secret_access_key=os.getenv('AWS_FINGREP_DB_DATA_SECRET'),
+    )
+    s3_client.put_object(
+        Bucket='fingrep',
+        Key='db_data/end.txt',
+        ContentType='text',
+        Metadata={
+            'timestamp': utc_datetime
+        }
+    )
+    # print(file_csv)
+    # print(file_csv)
+    # df_csv = pd.read_csv('/home/milos/Desktop/data.csv')
+    # print(db_ops.query_data_as_csv('shares', {'id': list({3})}))
+    # csv_content = aws.read_csv_from_file('/home/milos/Desktop/data.csv')
+    # aws.upsert_from_csv_data(csv_content, 'd_timeframe', {'share_id','date'})
+    # df = edgar.get_by_accession_number('0001379785-22-000032').obj().financials
     # df2 = edgar.get_by_accession_number('0001410578-22-000345').xbrl()
     # df3 = edgar.get_by_accession_number('0001410578-23-000248').xbrl()
     # print(df1.entity_info)

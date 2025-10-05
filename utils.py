@@ -2,7 +2,7 @@ import math
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Union
-
+import logging
 
 headers = {"User-Agent": "milosfxc@gmail.com"}
 
@@ -74,6 +74,16 @@ forms = {
     }
 }
 
+table_ids = {
+    'shares': {'id'},
+    'shares_info': {'share_id'},
+    'd_timeframe': {'share_id', 'date'},
+    'income_statement': {'share_id', 'date', 'report_type'},
+    'cash_flow_statement': {'share_id', 'date', 'report_type'},
+    'balance_sheet': {'share_id', 'date', 'report_type'},
+    'ratios': {'share_id', 'date', 'report_type'}
+}
+
 def camel_to_snake(name) -> str:
     # Insert underscores before capital letters, lowercase everything
     name = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
@@ -93,3 +103,26 @@ def replace_dict_nan_with_none(obj):
 
 def or_zero(val):
     return val if val is not None else 0
+
+class ColorFormatter(logging.Formatter):
+    # ANSI color codes
+    COLORS = {
+        'DEBUG': '\033[0;37m',   # White
+        'INFO': '\033[94m',      # Blue
+        'WARNING': '\033[93m',   # Yellow
+        'ERROR': '\033[38;5;208m',  # Orange (using 256-color code)
+        'CRITICAL': '\033[91m',  # Red
+        'RESET': '\033[0m'       # Reset color
+    }
+
+    def format(self, record):
+        color = self.COLORS.get(record.levelname, self.COLORS['RESET'])
+        message = super().format(record)
+        return f"{color}{message}{self.COLORS['RESET']}"
+
+def setup_logger(name:str, level: int, handler:logging.Handler, propagate:bool) -> logging.Logger:
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    logger.addHandler(handler)
+    logger.propagate = propagate
+    return logger

@@ -1,5 +1,7 @@
 import concurrent
 import time
+
+import aws_service
 from config import logger, update_fundamentals
 import pandas as pd
 from datetime import datetime, timezone, timedelta
@@ -13,40 +15,6 @@ from db_ops import get_existing_tickers, get_banned_tickers
 from utils import get_utc_date
 from fundamentals_service import update_fundamentals
 from concurrent.futures import ThreadPoolExecutor
-import psutil
-
-
-def calculate_max_instances():
-    # Get system memory information
-    virtual_memory = psutil.virtual_memory()
-    total_memory = virtual_memory.total / 1024 / 1024  # Convert to MB
-    available_memory = virtual_memory.available / 1024 / 1024  # Convert to MB
-
-    print(f"System Memory Information:")
-    print(f"  Total RAM: {total_memory:.2f} MB")
-    print(f"  Available RAM: {available_memory:.2f} MB")
-
-    # Based on your profiling data
-    peak_memory_per_instance = 244.3  # MB (worst case)
-    avg_memory_per_instance = 200  # MB (typical case)
-
-    print(f"\nYour program memory usage:")
-    print(f"  Peak memory: {peak_memory_per_instance:.2f} MB")
-    print(f"  Average memory: {avg_memory_per_instance:.2f} MB")
-
-    # Calculate maximum instances (conservative - leave 25% memory free)
-    max_instances_peak = int((available_memory * 0.75) / peak_memory_per_instance)
-    max_instances_avg = int((available_memory * 0.75) / avg_memory_per_instance)
-
-    print(f"\nMaximum instances based on:")
-    print(f"  Peak memory: {max_instances_peak} instances")
-    print(f"  Average memory: {max_instances_avg} instances")
-
-    # Recommend the more conservative number
-    recommended_instances = min(max_instances_peak, max_instances_avg)
-    print(f"\nRecommended maximum: {recommended_instances} instances")
-
-    return recommended_instances
 
 
 def get_stock_data():
@@ -98,7 +66,7 @@ def get_stock_data():
         for i in range(100, 0, -1):
             date_str = datetime.utcnow() - timedelta(days=i)
             date_str = date_str.strftime("%Y-%m-%d")
-            db_ops.update_market_breadth(date_str)
+            db_ops.update_market_breadth(date_str) # todo s3 bucket
 
     # Stock splits check
     tickers_split = fingrep_service.get_splits()
@@ -110,12 +78,16 @@ def get_stock_data():
             if db_ops.delete_aggregate_bars(ticker_id):
                 date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * config.years)
                 fingrep_service.get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
+                aws.add_share_id(ticker_id, 'split')
             else:
                 logger.error(f"Couldn't delete and reinsert ticker {ticker} for stock split.")
 
     # Update fundamentals
     if update_fundamentals:
         update_fundamentals()
+    # Upload data to S3
+    if config.s3_upload:
+        aws.update_s3_bucket()
 
 
 if __name__ == "__main__":

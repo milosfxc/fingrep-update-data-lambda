@@ -123,7 +123,7 @@ def get_company_fundamentals(ticker:str, share_id, nearby_report_date:pd.Timesta
                     if not db_ops.upsert_statement_v2(stmts_dict[key], utils.camel_to_snake(table_name),['share_id', 'report_type', 'date']):
                         return False
         else:
-            logger.info(f"{stmt_name} data for ticker {ticker} successfully requested via yf, but nothing to insert.")
+            logger.info(f"{ticker} successfully requested via yf, but nothing to insert.")
             return False
         return True
     else:

@@ -1,17 +1,19 @@
 import os
+from utils import ColorFormatter,setup_logger
 from ConnType import DBLocation
-
+import logging
 
 # stock market data config
-days = 1 # Offset from current date
+days = 6 # Offset from current date
 years = 5 # OHLCV data
 mb_historical = True # false updates market breadth for the current day, true updates for the last 100 days
 insert_fundamentals = True # Insert fundamentals for new tickers
 update_fundamentals = False # Update fundamentals for existing tickers
+s3_upload = True
 report_start_date = '2020-12-31'
-limit = 200 # insertion limit
+limit = 1 # insertion limit
 multi_threaded = False
-threads_number = 20
+threads_number = 10
 thread_delay = 0.3 # Time delay between submitting a task
 scale_factor = 10000
 # database config
@@ -29,26 +31,16 @@ DB_USER = os.getenv("FINGREP_DB_USER")
 DB_PASSWORD = os.getenv("FINGREP_DB_PASS")
 DB_PORT = 5432
 
-# logger
-import logging
-logger = logging.getLogger('fingrep')
-logger.setLevel(logging.ERROR)
-logger.propagate = False
-# Add handlers, formatters, etc.
+# Logger handler
 handler = logging.StreamHandler()
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+handler.setFormatter(ColorFormatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+# logger
+logger = setup_logger(name='fingrep',level=logging.ERROR,handler=handler,propagate=False)
+# aws logger
+aws_logger = setup_logger(name='aws',level=logging.INFO,handler=handler,propagate=False)
 # Suppress edgar.httpclient logger
-edgar_logger = logging.getLogger('edgar')
-edgar_logger.setLevel(logging.ERROR)
+edgar_logger = setup_logger(name='edgar',level=logging.ERROR,handler=handler,propagate=False)
 # Suppress httpx logger
-httpx_logger = logging.getLogger('httpx')
-httpx_logger.setLevel(logging.WARNING)
+httpx_logger = setup_logger(name='httpx',level=logging.ERROR,handler=handler,propagate=False)
 # Suppress httpxthrottlecache logger
-httpxthrottlecache_logger = logging.getLogger('httpxthrottlecache')
-httpxthrottlecache_logger.setLevel(logging.WARNING)
-# Prevent propagation to the root logger
-edgar_logger.propagate = False
-httpx_logger.propagate = False
-httpxthrottlecache_logger = False
+httpxthrottlecache_logger = setup_logger(name='httpxthrottlecache',level=logging.ERROR,handler=handler,propagate=False)
