@@ -2,7 +2,7 @@ import os
 from utils import ColorFormatter,setup_logger
 from ConnType import DBLocation
 import logging
-
+from edgar import set_identity
 # stock market data config
 days = 6 # Offset from current date
 years = 5 # OHLCV data
@@ -11,11 +11,13 @@ insert_fundamentals = True # Insert fundamentals for new tickers
 update_fundamentals = False # Update fundamentals for existing tickers
 s3_upload = True
 report_start_date = '2020-12-31'
-limit = 1 # insertion limit
+limit = 20 # insertion limit
 multi_threaded = False
 threads_number = 10
 thread_delay = 0.3 # Time delay between submitting a task
 scale_factor = 10000
+# EDGAR Identity
+set_identity('milosfxc@gmail.com')
 # database config
 db_location = DBLocation.LOCAL
 remote_connection_pool = None

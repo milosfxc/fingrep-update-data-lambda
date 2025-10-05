@@ -1,6 +1,5 @@
 import concurrent
 import time
-
 import aws_service
 from config import logger, update_fundamentals
 import pandas as pd
@@ -78,7 +77,7 @@ def get_stock_data():
             if db_ops.delete_aggregate_bars(ticker_id):
                 date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * config.years)
                 fingrep_service.get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
-                aws.add_share_id(ticker_id, 'split')
+                aws_service.add_share_id(ticker_id, 'split')
             else:
                 logger.error(f"Couldn't delete and reinsert ticker {ticker} for stock split.")
 
@@ -87,7 +86,7 @@ def get_stock_data():
         update_fundamentals()
     # Upload data to S3
     if config.s3_upload:
-        aws.update_s3_bucket()
+        aws_service.update_s3_bucket()
 
 
 if __name__ == "__main__":

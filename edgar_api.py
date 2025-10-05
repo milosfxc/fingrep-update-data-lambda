@@ -3,10 +3,7 @@ import datetime
 from edgar import set_identity
 import pandas as pd
 import requests
-
-import config
 pd.set_option('future.no_silent_downcasting', True)
-import db_ops
 import utils
 # Set up logging
 from config import logger

@@ -4,7 +4,6 @@ from typing import Optional
 from utils import or_zero
 import pandas as pd
 import yfinance as yf
-
 import config
 import db_ops
 import edgar_service_v2

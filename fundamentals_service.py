@@ -1,7 +1,5 @@
-import concurrent
 import datetime
 import edgar
-
 import aws_service
 import edgar_service_v2
 import yahoo_service
@@ -60,7 +58,7 @@ def update_fundamentals():
     df_latest_filings = db_ops.get_latest_filings_for_insert()
     latest_filings = list()
     for index, row in df_latest_filings.iterrows():
-        aws.add_share_id(row['share_id'], 'fundamentals')
+        aws_service.add_share_id(row['share_id'], 'fundamentals')
         row_dict = row.to_dict()
         row_dict['inserted'] = yahoo_service.get_company_fundamentals(row['ticker'],row['share_id'])
         row_dict['attempt_date'] = datetime.datetime.now()
@@ -73,7 +71,7 @@ def update_company_fundamentals(ticker: str, share_id: int, form: str, accession
     try:
         if form in ['10-K','10-Q']:
             # s3 bucket
-            aws.add_share_id(share_id,'fundamentals')
+            aws_service.add_share_id(share_id,'fundamentals')
             # Get filing for report period
             filing = edgar.get_by_accession_number(accession_number)
             report_date = datetime.datetime.strptime(filing.period_of_report, '%Y-%m-%d')

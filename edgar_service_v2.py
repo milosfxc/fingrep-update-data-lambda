@@ -1,11 +1,9 @@
-import time
 from datetime import timedelta, datetime, date
 from typing import Optional, Dict, Union
 import edgar
 import numpy as np
 import pandas as pd
-from edgar import Filing
-
+from edgar import Filing,set_identity
 import XBRLTagMapper
 import config
 import db_ops

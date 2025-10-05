@@ -350,7 +350,6 @@ def insert_new_ticker(shares, shares_info):
                 """.format(columns=', '.join(shares.keys()), placeholders=', '.join(['%s'] * len(shares)))
                 cur.execute(insert_share_query, list(shares.values()))
                 last_inserted_id = cur.fetchone()[0]
-                print(type(last_inserted_id))
                 # Update 'shares_info' with the last_inserted_id
                 shares_info['share_id'] = last_inserted_id
                 # Insert into 'shares_info'

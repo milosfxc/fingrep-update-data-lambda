@@ -1,21 +1,15 @@
 import sys
-import time
 from datetime import datetime,date, timezone, timedelta
 import inspect
-
 import pandas as pd
 import requests
-
 import aws_service
 import config
 import db_ops
 import finviz
 from fundamentals_service import get_company_fundamentals
-
 import polygon
 import utils
-from db_ops import upsert_dataframe, foreign_keys_cache
-from edgar_api import get_trading_info
 from ta_utils import rsi_tv_new_tickers, rsi_tv_existing_tickers
 from utils import get_utc_date
 
@@ -110,7 +104,7 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
         return
     ticker_id = db_ops.insert_new_ticker(shares_data, shares_info_data)
     # Append to ids for s3
-    aws.add_share_id(ticker_id, 'new')
+    aws_service.add_share_id(ticker_id, 'new')
     # Starter plan required for 2+ years historical data
     date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * config.years)
     get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)

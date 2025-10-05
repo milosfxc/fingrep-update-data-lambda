@@ -117,7 +117,6 @@ def update_s3_bucket():
             )
         else:
             aws_logger.error(f'Lambda not triggered for date {utc_datetime}.')
-
     except ClientError as e:
         aws_logger.error(f"Error listing files: {e}")
 
