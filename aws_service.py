@@ -92,7 +92,6 @@ def update_s3_bucket():
                         's3_path': f"s3://fingrep/db_data/{filename}.csv"
                     }
                     aws_logger.error(f"❌ {filename}: Upload failed - {e}")
-
             else:
                 upload_results[filename] = {
                     'status': 'skipped',
@@ -101,12 +100,13 @@ def update_s3_bucket():
                 aws_logger.warning(f"⚠️  {filename}: No data to upload")
 
         # Summary
+        failed_count = len([r for r in upload_results.values() if r['status'] == 'error'])
         aws_logger.info(f"\n📊 Upload Summary:")
         aws_logger.info(f"   Successful: {successful_uploads}/{total_files}")
-        aws_logger.info(f"   Failed: {len([r for r in upload_results.values() if r['status'] == 'error'])}")
+        aws_logger.info(f"   Failed: {failed_count}")
         aws_logger.info(f"   Skipped: {len([r for r in upload_results.values() if r['status'] == 'skipped'])}")
         # Trigger AWS Lambda
-        if successful_uploads > 1 and successful_uploads == total_files:
+        if successful_uploads > 1 and failed_count == 0:
             s3_client.put_object(
                 Bucket='fingrep',
                 Key='db_data/trigger.txt',
@@ -116,7 +116,7 @@ def update_s3_bucket():
                 }
             )
         else:
-            aws_logger.error(f'Lambda not triggered for date {utc_datetime}.')
+            aws_logger.critical(f'Lambda not triggered for date {utc_datetime}.')
     except ClientError as e:
         aws_logger.error(f"Error listing files: {e}")
 
