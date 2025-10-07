@@ -28,11 +28,14 @@ def get_s3_data() -> Dict | None:
     try:
         s3_client = boto3.client('s3',region_name='us-east-1')
         response = s3_client.list_objects_v2(Bucket='fingrep', Prefix='db_data/')
+        timestamp = s3_client.get_object(Bucket='fingrep', Key='db_data/trigger.txt')['Metadata']['timestamp']
         ans = dict()
         if 'Contents' in response:
             for obj in response['Contents']:
                 if obj['Key'].endswith('.csv'):
-                    ans[obj['Key']] = read_csv('fingrep', obj['Key'])
+                    csv_data = read_csv('fingrep', obj['Key'])
+                    if csv_data['timestamp'] == timestamp:
+                        ans[obj['Key']] = csv_data
         return ans
     except Exception as e:
         raise Exception(f"Error reading CSV: {str(e)}")

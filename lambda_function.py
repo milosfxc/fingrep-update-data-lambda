@@ -9,7 +9,4 @@ def lambda_handler(event, context):
         if k in data:
             v = data[k]
             db_ops.upsert_from_csv_data_smart(v['data'], v['table'], table_ids[v['table']])
-    return {
-        'statusCode': 200,
-        'body': 'Object list printed in logs'
-    }
+    return {'statusCode': 200, 'body': 'Inserted into database'}
