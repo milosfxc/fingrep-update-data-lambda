@@ -47,7 +47,5 @@ def add(number: int) -> int:
 
 
 if __name__ == "__main__":
-    x = {'a': 1, 'b': 2}
-    if 'a' in x.keys():
-        print(x)
+    print(utils.get_utc_date(config.days))
 

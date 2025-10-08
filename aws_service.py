@@ -51,7 +51,7 @@ def update_s3_bucket():
         total_files = len(data)
 
         aws_logger.info(f"📤 Starting S3 upload of {total_files} files...")
-        utc_datetime = datetime.now(timezone.utc)
+        utc_datetime = datetime.now(timezone.utc).isoformat()
         # Upload each CSV data to S3
         for filename, csv_data in data.items():
             if csv_data is not None and csv_data.strip():
@@ -63,9 +63,10 @@ def update_s3_bucket():
                         Key=s3_key,
                         Body=csv_data.encode('utf-8'),
                         ContentType='text/csv',
-                        Metadata={
-                            'timestamp': utc_datetime.isoformat(),
-                            'table': filename.split('.')[0] if '.' in filename else filename
+                        Metadata= {
+                            'timestamp': utc_datetime,
+                            'table': filename.split('.')[0] if '.' in filename else filename,
+                            'dml': 'delete' if filename.endswith('delete_ids.csv') else 'insert'
                         }
                     )
 
@@ -102,17 +103,17 @@ def update_s3_bucket():
         # Summary
         failed_count = len([r for r in upload_results.values() if r['status'] == 'error'])
         aws_logger.info(f"\n📊 Upload Summary:")
-        aws_logger.info(f"   Successful: {successful_uploads}/{total_files}")
-        aws_logger.info(f"   Failed: {failed_count}")
-        aws_logger.info(f"   Skipped: {len([r for r in upload_results.values() if r['status'] == 'skipped'])}")
+        aws_logger.info(f"  ✅  Successful: {successful_uploads}/{total_files}")
+        aws_logger.info(f"  ❌  Failed: {failed_count}")
+        aws_logger.info(f"  ⏭️ Skipped: {len([r for r in upload_results.values() if r['status'] == 'skipped'])}")
         # Trigger AWS Lambda
-        if successful_uploads > 1 and failed_count == 0:
+        if successful_uploads > 0 and failed_count == 0:
             s3_client.put_object(
                 Bucket='fingrep',
                 Key='db_data/trigger.txt',
                 ContentType='text',
                 Metadata={
-                    'timestamp': utc_datetime.isoformat()
+                    'timestamp': utc_datetime
                 }
             )
         else:

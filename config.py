@@ -4,14 +4,14 @@ from ConnType import DBLocation
 import logging
 from edgar import set_identity
 # stock market data config
-days = 7 # Offset from current date
+days = 8 # Offset from current date
 years = 5 # OHLCV data
 mb_historical = True # false updates market breadth for the current day, true updates for the last 100 days
 insert_fundamentals = True # Insert fundamentals for new tickers
 update_fundamentals = False # Update fundamentals for existing tickers
 s3_upload = True
 report_start_date = '2020-12-31'
-limit = 1 # insertion limit
+limit = 10 # insertion limit
 multi_threaded = False
 threads_number = 10
 thread_delay = 0.3 # Time delay between submitting a task
