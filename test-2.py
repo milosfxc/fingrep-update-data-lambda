@@ -16,7 +16,7 @@ import db_ops
 import edgar_api
 import edgar_service_v2
 import fingrep_service
-import polygon
+import polygon_service
 import utils
 import xbrl_utils
 from utils import get_utc_date

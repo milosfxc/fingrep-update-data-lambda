@@ -8,7 +8,7 @@ import config
 import db_ops
 import finviz
 from fundamentals_service import get_company_fundamentals
-import polygon
+import polygon_service
 import utils
 from ta_utils import rsi_tv_new_tickers, rsi_tv_existing_tickers
 from utils import get_utc_date
@@ -25,7 +25,7 @@ def call_and_update_market_breadth(date):
 
 
 def get_grouped_daily_bars(date_str: str) -> pd.DataFrame:
-        data = polygon.request_grouped_daily_bars(date=date_str)
+        data = polygon_service.request_grouped_daily_bars(date=date_str)
         if data['resultsCount'] == 0:
             return pd.DataFrame()
         df = pd.DataFrame(data['results'])
@@ -46,7 +46,7 @@ def get_grouped_daily_bars(date_str: str) -> pd.DataFrame:
 
 def get_and_insert_aggregated_bars(ticker, ticker_id, date_from, limit):
 
-    data = polygon.request_aggregate_daily_bars(ticker, date_from, limit)
+    data = polygon_service.request_aggregate_daily_bars(ticker, date_from, limit)
     df_aggregated_daily = pd.DataFrame(data['results'])
 
     # Prepare for insert
@@ -81,7 +81,7 @@ def insert_grouped_daily_bars(df):
 def get_new_ticker_data_and_insert(ticker, finviz_df):
     method_name = inspect.currentframe().f_code.co_name
     try:
-        ticker_data = polygon.request_ticker_details_v3(ticker)
+        ticker_data = polygon_service.request_ticker_details_v3(ticker)
     except requests.RequestException:
         logger.warning(f"{method_name} - Couldn't obtain ticker details.")
         return
@@ -157,7 +157,7 @@ def update_rsi_existing_tickers():
 
 def get_splits():
     try:
-        res = polygon.request_splits()
+        res = polygon_service.request_splits()
         arr = [entry['ticker'] for entry in res]
         return arr
     except TypeError as e:
@@ -178,5 +178,5 @@ def get_prev_grouped_daily_bars():
     sys.exit(1)
 
 def get_all_tickers(date_str: str):
-    return polygon.request_all_tickers(date=date_str)
+    return polygon_service.request_all_tickers(date=date_str)
 
