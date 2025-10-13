@@ -1,5 +1,7 @@
 import inspect
 import os
+import urllib
+
 import requests
 import logging
 from retry import retry
@@ -144,5 +146,59 @@ def request_splits():
     except requests.RequestException as e:
         if retry_counter >= 3:  # Only log after the third attempt
             logger.warning(f"request_splits - Exception occurred on the 3rd try: {str(e)}")
+            retry_counter = 0  # Reset the counter after third attempt
+        raise
+
+@retry(exceptions=requests.RequestException, tries=3, delay=2, backoff=2)
+def request_short_interest(tickers: list, date_gt:str):
+    global retry_counter
+
+    tickers_encoded = urllib.parse.quote(','.join(tickers))
+    url = f"https://api.polygon.io/stocks/v1/short-interest?settlement_date.gt={date_gt}&ticker.any_of={tickers_encoded}&limit=5000&sort=ticker.asc"
+
+    params = {
+        "apiKey": os.getenv("POLYGON_API_KEY")
+    }
+    try:
+        response = requests.get(url, params=params)
+        retry_counter += 1
+
+        if response.status_code == 200:
+            data = response.json()
+            retry_counter = 0
+            return data['results']
+        else:
+            raise requests.RequestException(
+                f"request_short_interest - API request failed with status code: {response.status_code}")
+    except requests.RequestException as e:
+        if retry_counter >= 3:  # Only log after the third attempt
+            logger.warning(f"request_short_interest - Exception occurred on the 3rd try: {str(e)}")
+            retry_counter = 0  # Reset the counter after third attempt
+        raise
+
+
+@retry(exceptions=requests.RequestException, tries=3, delay=2, backoff=2)
+def request_short_volume(tickers: list, date_gte:str):
+    global retry_counter
+
+    tickers_encoded = urllib.parse.quote(','.join(tickers))
+    url = f"https://api.polygon.io/stocks/v1/short-volume?ticker.any_of={tickers_encoded}&date.gte={date_gte}&limit=5000&sort=date.asc"
+    params = {
+        "apiKey": os.getenv("POLYGON_API_KEY")
+    }
+    try:
+        response = requests.get(url, params=params)
+        retry_counter += 1
+
+        if response.status_code == 200:
+            data = response.json()
+            retry_counter = 0
+            return data['results']
+        else:
+            raise requests.RequestException(
+                f"request_short_volume - API request failed with status code: {response.status_code}")
+    except requests.RequestException as e:
+        if retry_counter >= 3:  # Only log after the third attempt
+            logger.warning(f"request_short_volume - Exception occurred on the 3rd try: {str(e)}")
             retry_counter = 0  # Reset the counter after third attempt
         raise
