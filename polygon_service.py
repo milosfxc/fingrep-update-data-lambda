@@ -150,11 +150,11 @@ def request_splits():
         raise
 
 @retry(exceptions=requests.RequestException, tries=3, delay=2, backoff=2)
-def request_short_interest(tickers: list, date_gt:str):
+def request_short_interest(tickers: list, date_gte:str):
     global retry_counter
 
     tickers_encoded = urllib.parse.quote(','.join(tickers))
-    url = f"https://api.polygon.io/stocks/v1/short-interest?settlement_date.gt={date_gt}&ticker.any_of={tickers_encoded}&limit=5000&sort=ticker.asc"
+    url = f"https://api.polygon.io/stocks/v1/short-interest?settlement_date.gte={date_gte}&ticker.any_of={tickers_encoded}&limit=5000&sort=ticker.asc"
 
     params = {
         "apiKey": os.getenv("POLYGON_API_KEY")
@@ -202,3 +202,19 @@ def request_short_volume(tickers: list, date_gte:str):
             logger.warning(f"request_short_volume - Exception occurred on the 3rd try: {str(e)}")
             retry_counter = 0  # Reset the counter after third attempt
         raise
+
+
+def batch_requests(tickers:list, batch_size:int, request_function: callable, date_gte:str) -> list[dict] | None:
+    if not tickers:
+        logger.info("No tickers provided for batch requests")
+        return None
+    data = []
+    for i in range(0, len(tickers), batch_size):
+        batch =  tickers[i:i+batch_size]
+        try:
+            if requested_data := request_function(batch, date_gte=date_gte):
+                print(requested_data)
+                data.extend(requested_data)
+        except requests.RequestException as e:
+            logger.error(f"batch_requests_{request_function.__name__} - Exception occurred on the 3rd try for the batch of tickers {batch}: \n{e}")
+    return data
