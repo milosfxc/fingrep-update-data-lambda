@@ -1,17 +1,11 @@
 import inspect
 import os
 import urllib
-
 import requests
-import logging
 from retry import retry
-
 import config
 from utils import get_utc_date
-
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+from config import logger
 
 # Global variable to track retry attempts
 retry_counter = 0
@@ -150,12 +144,11 @@ def request_splits():
         raise
 
 @retry(exceptions=requests.RequestException, tries=3, delay=2, backoff=2)
-def request_short_interest(tickers: list, date_gte:str):
+def request_short_interest(tickers: list, date:str, date_operator:str = ''):
     global retry_counter
 
     tickers_encoded = urllib.parse.quote(','.join(tickers))
-    url = f"https://api.polygon.io/stocks/v1/short-interest?settlement_date.gte={date_gte}&ticker.any_of={tickers_encoded}&limit=5000&sort=ticker.asc"
-
+    url = f"https://api.polygon.io/stocks/v1/short-interest?settlement_date{date_operator}={date}&ticker.any_of={tickers_encoded}&limit=5000&sort=settlement_date.asc"
     params = {
         "apiKey": os.getenv("POLYGON_API_KEY")
     }
@@ -178,11 +171,11 @@ def request_short_interest(tickers: list, date_gte:str):
 
 
 @retry(exceptions=requests.RequestException, tries=3, delay=2, backoff=2)
-def request_short_volume(tickers: list, date_gte:str):
+def request_short_volume(tickers: list, date:str, date_operator:str = ''):
     global retry_counter
 
     tickers_encoded = urllib.parse.quote(','.join(tickers))
-    url = f"https://api.polygon.io/stocks/v1/short-volume?ticker.any_of={tickers_encoded}&date.gte={date_gte}&limit=5000&sort=date.asc"
+    url = f"https://api.polygon.io/stocks/v1/short-volume?ticker.any_of={tickers_encoded}&date{date_operator}={date}&limit=5000&sort=date.asc"
     params = {
         "apiKey": os.getenv("POLYGON_API_KEY")
     }
@@ -204,16 +197,15 @@ def request_short_volume(tickers: list, date_gte:str):
         raise
 
 
-def batch_requests(tickers:list, batch_size:int, request_function: callable, date_gte:str) -> list[dict] | None:
+def batch_requests(tickers:list, request_function: callable,batch_size:int, date:str, date_operator:str = '') -> list[dict] | None:
     if not tickers:
-        logger.info("No tickers provided for batch requests")
+        logger.warning(f"batch_requests_{request_function.__name__} - No tickers provided for batch requests")
         return None
     data = []
     for i in range(0, len(tickers), batch_size):
         batch =  tickers[i:i+batch_size]
         try:
-            if requested_data := request_function(batch, date_gte=date_gte):
-                print(requested_data)
+            if requested_data := request_function(tickers=batch, date=date, date_operator=date_operator):
                 data.extend(requested_data)
         except requests.RequestException as e:
             logger.error(f"batch_requests_{request_function.__name__} - Exception occurred on the 3rd try for the batch of tickers {batch}: \n{e}")

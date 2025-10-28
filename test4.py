@@ -1,29 +1,19 @@
 import config
+import db_ops
+import fingrep_service
 import polygon_service
 from _datetime import datetime, timezone, timedelta
 
+import utils
 if __name__ == '__main__':
-    tickers = [
-        "AAPL",  # Apple
-        "MSFT",  # Microsoft
-        "GOOGL",  # Alphabet (Google)
-        "AMZN",  # Amazon
-        "META",  # Meta Platforms
-        "NVDA",  # Nvidia
-        "TSLA",  # Tesla
-        "BRK.B",  # Berkshire Hathaway
-        "JPM",  # JPMorgan Chase
-        "JNJ",  # Johnson & Johnson
-        "V",  # Visa
-        "PG",  # Procter & Gamble
-        "XOM",  # Exxon Mobil
-        "PFE",  # Pfizer
-        "NFLX",  # Netflix
-        "DIS",  # Disney
-        "KO",  # Coca-Cola
-        "PEP",  # PepsiCo
-        "CSCO",  # Cisco Systems
-        "INTC"  # Intel
-    ]
+    # ticker_id_map = {'MSFT':1, 'AAPL':2}
+    # tickers = ['MSFT', 'AAPL']
+    # short_volume = polygon_service.batch_requests(tickers=tickers,
+    #                                               request_function=polygon_service.request_short_volume,
+    #                                               batch_size=300,
+    #                                               date = utils.get_utc_date(config.days),
+    #                                               date_operator='')
+    # print(short_volume)
+    # def batch_requests(tickers:list, request_function: callable,batch_size:int, date:str, date_operator:str = '') -> list[dict] | None:
+    fingrep_service.fetch_and_insert_market_metrics('VET', 6)
 
-    data = polygon_service.batch_requests(tickers,300,polygon_service.request_short_interest,'2025-09-30')

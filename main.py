@@ -11,6 +11,7 @@ import fingrep_service
 from ConnType import DBLocation
 from SSHTunnelManager import SSHTunnelManager
 from db_ops import get_existing_tickers, get_banned_tickers
+from fingrep_service import fetch_and_update_market_metrics
 from utils import get_utc_date
 from fundamentals_service import update_fundamentals
 from concurrent.futures import ThreadPoolExecutor
@@ -24,6 +25,8 @@ def get_stock_data():
     # Data frame for existing tickers
     df_grouped_daily['id'] = df_grouped_daily['T'].map(existing_tickers)
     df_grouped_daily_existing = df_grouped_daily.dropna(subset=['id'])
+    # Update market metrics existing tickers
+    fetch_and_update_market_metrics(existing_tickers)
     # Importing data for existing tickers
     fingrep_service.insert_grouped_daily_bars(df_grouped_daily_existing.copy())
     # Data frame for new tickers
@@ -77,6 +80,7 @@ def get_stock_data():
             if db_ops.delete_aggregate_bars(ticker_id):
                 date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * config.years)
                 fingrep_service.get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
+                fingrep_service.update_market_metrics_shares_outstanding(ticker, ticker_id)
                 aws_service.add_share_id(ticker_id, 'split')
             else:
                 logger.error(f"Couldn't delete and reinsert ticker {ticker} for stock split.")

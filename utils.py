@@ -126,3 +126,14 @@ def setup_logger(name:str, level: int, handler:logging.Handler, propagate:bool) 
     logger.addHandler(handler)
     logger.propagate = propagate
     return logger
+
+def safe_filter_dict_keys(data:list[dict], keys_to_keep:set, keys_to_add:dict, rename:dict) -> list[dict]:
+    """Safely reduce dict keys to key_to_keep"""
+    result = []
+    for item in data:
+        reduced_dict = {}
+        for key in keys_to_keep:
+            reduced_dict[rename.get(key,key)] = item.get(key)
+        if keys_to_add: reduced_dict.update(keys_to_add)
+        result.append(reduced_dict)
+    return result

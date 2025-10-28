@@ -12,7 +12,7 @@ import polygon_service
 import utils
 from ta_utils import rsi_tv_new_tickers, rsi_tv_existing_tickers
 from utils import get_utc_date
-
+from db_ops_v2 import upsert_data_smart
 pd.set_option('display.max_rows', None)  # Show all rows
 pd.set_option('display.max_columns', None)  # Show all columns
 pd.set_option('display.width', None)  # To allow the console to use the full width
@@ -102,16 +102,21 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
     elif shares_data.get("share_type_id") not in utils.allowed_share_type_ids:
         db_ops.insert_banned_ticker(ticker)
         return
+    # Insert ticker
     ticker_id = db_ops.insert_new_ticker(shares_data, shares_info_data)
     # Append to ids for s3
     aws_service.add_share_id(ticker_id, 'new')
     # Starter plan required for 2+ years historical data
     date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * config.years)
     get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
+    # Update market metrics
+    fetch_and_insert_market_metrics(ticker, ticker_id)
     # Fundamental data and trade info
     cik = shares_info_data.get('cik')
     if config.insert_fundamentals and cik is not None and ticker_id is not None and shares_data.get('share_type_id') not in(6, 8):
         get_company_fundamentals(ticker, ticker_id, config.report_start_date)
+
+
 
 # Separates data for shares and share_info tables
 def extract_ticker_details_v3(ticker_details, finviz_data):
@@ -179,4 +184,98 @@ def get_prev_grouped_daily_bars():
 
 def get_all_tickers(date_str: str):
     return polygon_service.request_all_tickers(date=date_str)
+
+def update_market_metrics_shares_outstanding(ticker:str, ticker_id:int):
+    try:
+        shares_outstanding = None
+        ticker_details = polygon_service.request_ticker_details_v3(ticker)
+        if 'share_class_shares_outstanding' in ticker_details:
+            shares_outstanding = ticker_details['share_class_shares_outstanding']
+        elif 'weighted_shares_outstanding' in ticker_details:
+            shares_outstanding = ticker_details['weighted_shares_outstanding']
+
+        if shares_outstanding:
+            db_ops.upsert_statement_v2({'share_id': ticker_id, 'date': utils.get_utc_date(config.days,True),'shares_outstanding': shares_outstanding},
+                                       'market_metrics',
+                                       ['share_id', 'date'])
+    except Exception as e:
+        logger.error(f"update_market_metrics_shares_outstanding couldn't find shares outstanding for ticker/share_id {ticker}/{ticker_id}: {e}")
+
+
+def fetch_and_insert_market_metrics(ticker:str, ticker_id:int):
+    try:
+        # Short volume
+        short_volume = polygon_service.request_short_volume(tickers=[ticker], date=config.date_from, date_operator='.gte')
+        if short_volume:
+            sv_list = utils.safe_filter_dict_keys(
+                data=short_volume,
+                keys_to_keep={'date', 'short_volume', 'total_volume', 'short_volume_ratio', 'exempt_volume', 'non_exempt_volume'},
+                keys_to_add={'share_id': ticker_id},
+                rename={'total_volume': 'f_volume'}
+            )
+            upsert_data_smart(sv_list,'market_metrics', {'date', 'share_id'})
+        # Short interest
+        short_interest = polygon_service.request_short_interest(tickers=[ticker], date=config.date_from, date_operator='.gte')
+        if short_interest:
+            print(short_interest)
+            si_list = utils.safe_filter_dict_keys(
+                data=short_interest,
+                keys_to_keep= {'settlement_date', 'short_interest', 'avg_daily_volume', 'days_to_cover'},
+                keys_to_add= {'share_id': ticker_id},
+                rename= {'settlement_date': 'date', 'avg_daily_volume': 'avg_f_volume', 'days_to_cover': 'short_interest_ratio'}
+            )
+            print(si_list)
+            upsert_data_smart(si_list,'market_metrics', {'date', 'share_id'})
+
+
+    except Exception as e:
+        logger.error(f"insert_market_metrics couldn't insert market metrics for ticker/share_id {ticker}/{ticker_id}: {e}")
+
+
+def fetch_and_update_market_metrics(ticker_id_map:dict):
+    try:
+        tickers = list(ticker_id_map.keys())
+        # Short volume
+        short_volumes = polygon_service.batch_requests(tickers=tickers,
+                                                       request_function=polygon_service.request_short_volume,
+                                                       batch_size=300,
+                                                       date=utils.get_utc_date(config.days),
+                                                       date_operator='')
+        if short_volumes:
+            sv_list = []
+            for short_volume in short_volumes:
+                sv_list_item = utils.safe_filter_dict_keys(
+                    data=[short_volume],
+                    keys_to_keep={'date', 'short_volume', 'total_volume', 'short_volume_ratio', 'exempt_volume',
+                                  'non_exempt_volume'},
+                    keys_to_add={'share_id': ticker_id_map[short_volume['ticker']]},
+                    rename={'total_volume': 'f_volume'}
+                )
+                sv_list.extend(sv_list_item)
+            # Update database
+            upsert_data_smart(sv_list,'market_metrics', {'date', 'share_id'})
+
+        # Short interest
+        short_interests = polygon_service.batch_requests(tickers=tickers,
+                                                         request_function=polygon_service.request_short_interest,
+                                                         batch_size=300,
+                                                         date=utils.get_utc_date(config.days),
+                                                         date_operator='')
+        if short_interests:
+            si_list = []
+            for short_interest in short_interests:
+                si_list_item = utils.safe_filter_dict_keys(
+                    data=[short_interest],
+                    keys_to_keep= {'settlement_date', 'short_interest', 'avg_daily_volume', 'days_to_cover'},
+                    keys_to_add= {'share_id': ticker_id_map[short_interest['ticker']]},
+                    rename= {'settlement_date': 'date', 'avg_daily_volume': 'avg_f_volume', 'days_to_cover': 'short_interest_ratio'}
+                )
+                si_list.extend(si_list_item)
+            # Update database
+            upsert_data_smart(si_list,'market_metrics', {'date', 'share_id'})
+
+    except Exception as e:
+        logger.error(f"fetch_and_update_market_metrics couldn't update market metrics for date {utils.get_utc_date(config.days)}.")
+
+
 
