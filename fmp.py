@@ -1,20 +1,20 @@
-import os
-from typing import Optional, Union
-
-import pandas as pd
-import utils
-from db_ops import upsert_dataframe
-import logging
-import fmpsdk as fmp
-import datetime
-import logging
-# Logging configuration
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.ERROR)  # Ignore INFO messages from the root logger
-
-# Pandas configuration
-pd.set_option('display.max_columns', None)
-pd.set_option('display.width', 400)
+# import os
+# from typing import Optional, Union
+#
+# import pandas as pd
+# import utils
+# from db_ops import upsert_dataframe
+# import logging
+# import fmpsdk as fmp
+# import datetime
+# import logging
+# # Logging configuration
+# logger = logging.getLogger(__name__)
+# logger.setLevel(logging.ERROR)  # Ignore INFO messages from the root logger
+#
+# # Pandas configuration
+# pd.set_option('display.max_columns', None)
+# pd.set_option('display.width', 400)
 
 
 # def get_fundamentals(cik: str, share_id: int, currency_id: int, ticker: str, period: str, date: datetime = None):
@@ -52,25 +52,25 @@ pd.set_option('display.width', 400)
 #         logger.error(f"API request error: {e}")
 
 
-def get_fundamentals_v2(statement: str, ticker: str, period: str):
-    try:
-        fmp_api_key = os.getenv('FMP_API_KEY')
-        if not fmp_api_key:
-            logger.error("FMP_API_KEY environment variable is not set.")
-            return None
-
-        api_function_map = {
-            'balance_sheet': fmp.balance_sheet_statement,
-            'income_statement': fmp.income_statement,
-            'cash_flow': fmp.cash_flow_statement
-        }
-
-        if statement not in api_function_map:
-            logger.error(f"Invalid statement type: {statement}")
-            return None
-
-        return api_function_map[statement](apikey=fmp_api_key, symbol=ticker, period=period)
-
-    except Exception as e:
-        logger.error(f"API request error for ticker {ticker}: {e}")
-        return None
+# def get_fundamentals_v2(statement: str, ticker: str, period: str):
+#     try:
+#         fmp_api_key = os.getenv('FMP_API_KEY')
+#         if not fmp_api_key:
+#             logger.error("FMP_API_KEY environment variable is not set.")
+#             return None
+#
+#         api_function_map = {
+#             'balance_sheet': fmp.balance_sheet_statement,
+#             'income_statement': fmp.income_statement,
+#             'cash_flow': fmp.cash_flow_statement
+#         }
+#
+#         if statement not in api_function_map:
+#             logger.error(f"Invalid statement type: {statement}")
+#             return None
+#
+#         return api_function_map[statement](apikey=fmp_api_key, symbol=ticker, period=period)
+#
+#     except Exception as e:
+#         logger.error(f"API request error for ticker {ticker}: {e}")
+#         return None

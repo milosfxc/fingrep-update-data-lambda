@@ -11,7 +11,7 @@ from fundamentals_service import get_company_fundamentals
 import polygon_service
 import utils
 from ta_utils import rsi_tv_new_tickers, rsi_tv_existing_tickers
-from utils import get_utc_date
+from utils import get_utc_date, is_number
 from db_ops_v2 import upsert_data_smart
 pd.set_option('display.max_rows', None)  # Show all rows
 pd.set_option('display.max_columns', None)  # Show all columns
@@ -117,10 +117,10 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
         get_company_fundamentals(ticker, ticker_id, config.report_start_date)
 
 
-
 # Separates data for shares and share_info tables
 def extract_ticker_details_v3(ticker_details, finviz_data):
-
+    shares_outstanding = ticker_details.get('share_class_shares_outstanding')
+    weighted_shares_outstanding = ticker_details.get('weighted_shares_outstanding')
     ticker_data = {
         'ticker': ticker_details.get('ticker'),
         'cik': ticker_details.get('cik'),
@@ -130,8 +130,8 @@ def extract_ticker_details_v3(ticker_details, finviz_data):
         'ipo_date': ticker_details.get('list_date'),
         'share_type_id': db_ops.get_cached_foreign_keys()['share_types'].get(ticker_details.get('type')),
         'composite_figi': ticker_details.get('composite_figi'),
-        'shares_outstanding': ticker_details.get('share_class_shares_outstanding'),
-        'weighted_shares_outstanding': ticker_details.get('weighted_shares_outstanding'),
+        'shares_outstanding': shares_outstanding * config.scale_factor if is_number(shares_outstanding) else None,
+        'weighted_shares_outstanding': weighted_shares_outstanding * config.scale_factor if is_number(weighted_shares_outstanding) else None,
         'sector_id': db_ops.get_cached_foreign_keys()['sectors'].get(finviz_data.get('sector')),
         'industry_id': db_ops.get_cached_foreign_keys()['industries'].get(finviz_data.get('industry')),
         'country_id': db_ops.get_cached_foreign_keys()['countries'].get(finviz_data.get('country'))
@@ -204,6 +204,16 @@ def update_market_metrics_shares_outstanding(ticker:str, ticker_id:int):
 
 def fetch_and_insert_market_metrics(ticker:str, ticker_id:int):
     try:
+        # Short interest
+        short_interest = polygon_service.request_short_interest(tickers=[ticker], date=config.date_from, date_operator='.gte')
+        if short_interest:
+            si_list = utils.safe_filter_dict_keys(
+                data=short_interest,
+                keys_to_keep= {'settlement_date', 'short_interest', 'avg_daily_volume', 'days_to_cover'},
+                keys_to_add= {'share_id': ticker_id},
+                rename= {'settlement_date': 'date', 'avg_daily_volume': 'avg_f_volume', 'days_to_cover': 'short_interest_ratio'}
+            )
+            upsert_data_smart(si_list,'market_metrics', {'share_id', 'date'})
         # Short volume
         short_volume = polygon_service.request_short_volume(tickers=[ticker], date=config.date_from, date_operator='.gte')
         if short_volume:
@@ -213,20 +223,7 @@ def fetch_and_insert_market_metrics(ticker:str, ticker_id:int):
                 keys_to_add={'share_id': ticker_id},
                 rename={'total_volume': 'f_volume'}
             )
-            upsert_data_smart(sv_list,'market_metrics', {'date', 'share_id'})
-        # Short interest
-        short_interest = polygon_service.request_short_interest(tickers=[ticker], date=config.date_from, date_operator='.gte')
-        if short_interest:
-            print(short_interest)
-            si_list = utils.safe_filter_dict_keys(
-                data=short_interest,
-                keys_to_keep= {'settlement_date', 'short_interest', 'avg_daily_volume', 'days_to_cover'},
-                keys_to_add= {'share_id': ticker_id},
-                rename= {'settlement_date': 'date', 'avg_daily_volume': 'avg_f_volume', 'days_to_cover': 'short_interest_ratio'}
-            )
-            print(si_list)
-            upsert_data_smart(si_list,'market_metrics', {'date', 'share_id'})
-
+            upsert_data_smart(sv_list,'market_metrics', {'share_id', 'date'})
 
     except Exception as e:
         logger.error(f"insert_market_metrics couldn't insert market metrics for ticker/share_id {ticker}/{ticker_id}: {e}")
@@ -235,12 +232,14 @@ def fetch_and_insert_market_metrics(ticker:str, ticker_id:int):
 def fetch_and_update_market_metrics(ticker_id_map:dict):
     try:
         tickers = list(ticker_id_map.keys())
+        date = utils.get_utc_date(config.days)
         # Short volume
-        short_volumes = polygon_service.batch_requests(tickers=tickers,
-                                                       request_function=polygon_service.request_short_volume,
-                                                       batch_size=300,
-                                                       date=utils.get_utc_date(config.days),
-                                                       date_operator='')
+        # short_volumes = polygon_service.batch_requests(tickers=tickers,
+        #                                                request_function=polygon_service.request_short_volume,
+        #                                                batch_size=300,
+        #                                                date=utils.get_utc_date(config.days),
+        #                                                date_operator='')
+        short_volumes = polygon_service.request_short_volume(tickers=tickers,date=date)
         if short_volumes:
             sv_list = []
             for short_volume in short_volumes:
@@ -256,11 +255,12 @@ def fetch_and_update_market_metrics(ticker_id_map:dict):
             upsert_data_smart(sv_list,'market_metrics', {'date', 'share_id'})
 
         # Short interest
-        short_interests = polygon_service.batch_requests(tickers=tickers,
-                                                         request_function=polygon_service.request_short_interest,
-                                                         batch_size=300,
-                                                         date=utils.get_utc_date(config.days),
-                                                         date_operator='')
+        # short_interests = polygon_service.batch_requests(tickers=tickers,
+        #                                                  request_function=polygon_service.request_short_interest,
+        #                                                  batch_size=300,
+        #                                                  date=utils.get_utc_date(config.days),
+        #                                                  date_operator='')
+        short_interests = polygon_service.request_short_interest(tickers=tickers,date=date)
         if short_interests:
             si_list = []
             for short_interest in short_interests:

@@ -1,39 +1,65 @@
---BALANCE SHEET
-CREATE OR REPLACE FUNCTION handle_fiscal_and_calendar_period_conflict_balance_sheet()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM balance_sheet WHERE fiscal_period_id = NEW.fiscal_period_id AND share_id = NEW.share_id)
-	AND NOT EXISTS (SELECT 1 FROM balance_sheet WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type)
-	THEN
-        NEW.fiscal_period_id := NULL;
-    END IF;
-	IF EXISTS (SELECT 1 FROM balance_sheet WHERE calendar_period_id = NEW.calendar_period_id AND share_id = NEW.share_id)
-	AND NOT EXISTS (SELECT 1 FROM balance_sheet WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type)
-	THEN
-        NEW.calendar_period_id := NULL;
-    END IF;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER check_fiscal_and_calendar_conflict_balance_sheet
-BEFORE INSERT ON balance_sheet
-FOR EACH ROW
-EXECUTE FUNCTION handle_fiscal_and_calendar_period_conflict_balance_sheet();
-
---INCOME STATEMENT
+--industries
+INSERT INTO industries (name) VALUES ('Closed-End Fund - Debt'), ('Exchange Traded Fund'), ('Oil & Gas E&P'), ('Software - Application'), ('Utilities - Regulated Electric'), ('Shell Companies'), ('REIT - Healthcare Facilities'), ('Restaurants'), ('Trucking'), ('Oil & Gas Midstream'), ('Packaged Foods'), ('Software - Infrastructure'), ('Footwear & Accessories'), ('Banks - Regional'), ('Banks - Diversified'), ('Lumber & Wood Production'), ('Oil & Gas Equipment & Services'), ('Recreational Vehicles'), ('Health Information Services'), ('Lodging'), ('Asset Management'), ('Specialty Business Services'), ('REIT - Retail'), ('Furnishings, Fixtures & Appliances'), ('Food Distribution'), ('Advertising Agencies'), ('Specialty Retail'), ('Biotechnology'), ('Electrical Equipment & Parts'), ('Semiconductors'), ('Internet Retail'), ('Information Technology Services'), ('Oil & Gas Refining & Marketing'), ('Auto Manufacturers'), ('Auto Parts'), ('Engineering & Construction'), ('Consumer Electronics'), ('Rental & Leasing Services'), ('Specialty Chemicals'), ('Chemicals'), ('Publishing'), ('Waste Management'), ('Entertainment'), ('Grocery Stores'), ('Building Products & Equipment'), ('Discount Stores'), ('Farm & Heavy Construction Machinery'), ('Metal Fabrication'), ('Telecom Services'), ('REIT - Diversified'), ('Gold'), ('Scientific & Technical Instruments'), ('Insurance - Property & Casualty'), ('Medical Instruments & Supplies'), ('Packaging & Containers'), ('Credit Services'), ('Other Industrial Metals & Mining'), ('Steel'), ('Industrial Distribution'), ('Beverages - Non-Alcoholic'), ('Utilities - Regulated Water'), ('Specialty Industrial Machinery'), ('Insurance Brokers'), ('Capital Markets'), ('Beverages - Wineries & Distilleries'), ('Personal Services'), ('Aerospace & Defense'), ('REIT - Specialty'), ('Resorts & Casinos'), ('Medical Devices'), ('Apparel Manufacturing'), ('Diagnostics & Research'), ('REIT - Hotel & Motel'), ('Real Estate - Development'), ('Oil & Gas Integrated'), ('Leisure'), ('Tobacco'), ('Drug Manufacturers - Specialty & Generic'), ('Internet Content & Information'), ('Medical Distribution'), ('Education & Training Services'), ('Household & Personal Products'), ('Agricultural Inputs'), ('Travel Services'), ('Communication Equipment'), ('Marine Shipping'), ('Staffing & Employment Services'), ('Integrated Freight & Logistics'), ('Closed-End Fund - Equity'), ('Apparel Retail'), ('Pollution & Treatment Controls'), ('Tools & Accessories'), ('Utilities - Regulated Gas'), ('Closed-End Fund - Foreign'), ('Coking Coal'), ('Medical Care Facilities'), ('Utilities - Independent Power Producers'), ('Computer Hardware'), ('Electronics & Computer Distribution'), ('Beverages - Brewers'), ('Real Estate Services'), ('Electronic Components'), ('Semiconductor Equipment & Materials'), ('Other Precious Metals & Mining'), ('Copper'), ('Building Materials'), ('Broadcasting'), ('Insurance - Specialty'), ('Residential Construction'), ('Luxury Goods'), ('Confectioners'), ('Conglomerates'), ('Financial Conglomerates'), ('Railroads'), ('REIT - Industrial'), ('REIT - Mortgage'), ('Consulting Services'), ('Farm Products'), ('Home Improvement Retail'), ('Electronic Gaming & Multimedia'), ('Solar'), ('Airlines'), ('Auto & Truck Dealerships'), ('REIT - Residential'), ('Uranium'), ('Textile Manufacturing'), ('Healthcare Plans'), ('Insurance - Life'), ('Airports & Air Services'), ('Utilities - Diversified'), ('Security & Protection Services'), ('Mortgage Finance'), ('Financial Data & Stock Exchanges'), ('Utilities - Renewable'), ('Real Estate - Diversified'), ('REIT - Office'), ('Infrastructure Operations'), ('Pharmaceutical Retailers'), ('Insurance - Diversified'), ('Insurance - Reinsurance'), ('Oil & Gas Drilling'), ('Gambling'), ('Drug Manufacturers - General'), ('Business Equipment & Supplies'), ('Paper & Paper Products'), ('Silver'), ('Department Stores'), ('Thermal Coal'), ('Aluminum');
+--sectors
+INSERT INTO sectors (name) VALUES ('Financial'),('Energy'),('Technology'),('Utilities'),('Real Estate'),('Consumer Cyclical'),('Industrials'),('Consumer Defensive'),('Basic Materials'),('Healthcare'),('Communication Services');
+--ticker types
+INSERT INTO share_types (short_name, name) VALUES ('CS', 'Common Stock'), ('PFD', 'Preferred Stock'), ('WARRANT', 'Warrant'), ('RIGHT', 'Rights'), ('BOND', 'Corporate Bond'), ('ETF', 'Exchange Traded Fund'), ('ETN', 'Exchange Traded Note'), ('ETV', 'Exchange Traded Vehicle'), ('SP', 'Structured Product'), ('ADRC', 'American Depository Receipt Common'), ('ADRP', 'American Depository Receipt Preferred'), ('ADRW', 'American Depository Receipt Warrants'), ('ADRR', 'American Depository Receipt Rights'), ('FUND', 'Fund'), ('BASKET', 'Basket'), ('UNIT', 'Unit'), ('LT', 'Liquidating Trust'), ('OS', 'Ordinary Shares'), ('GDR', 'Global Depository Receipts'), ('OTHER', 'Other Security Type'), ('NYRS', 'New York Registry Shares'), ('AGEN', 'Agency Bond'), ('EQLK', 'Equity Linked Bond'), ('ETS', 'Single-security ETF');
+--countries
+INSERT INTO countries (name) VALUES ('Australia'), ('USA'), ('China'), ('South Korea'), ('Canada'), ('Israel'), ('India'), ('Switd'), ('Hong Kong'), ('United Kingdom'), ('Japan'), ('Singapore'), ('Brazil'), ('United Arab Emirates'), ('Argentina'), ('Italy'), ('Greece'), ('Bermuda'), ('France'), ('Malaysia'), ('Netherlands'), ('Germany'), ('Mexico'), ('Spain'), ('Luxembourg'), ('Turkey'), ('Indonesia'), ('Cyprus'), ('Ireland'), ('Taiwan'), ('Chile'), ('South Africa'), ('Cayman Islands'), ('Monaco'), ('Sweden'), ('Norway'), ('Bahamas'), ('Philippines'), ('Finland'), ('Denmark'), ('Belgium'), ('Kazakhstan'), ('Peru'), ('Malta'), ('Colombia'), ('Panama');
+--currencies
+INSERT INTO currencies (symbol) VALUES
+('ADP'), ('AED'), ('AFA'), ('ALL'), ('AMD'), ('ANG'), ('AON'), ('AOR'), ('ARP'),
+('ARS'), ('ATS'), ('AUD'), ('AWF'), ('AWG'), ('AZM'), ('BAK'), ('BAM'), ('BBD'),
+('BDT'), ('BEF'), ('BGL'), ('BHD'), ('BIF'), ('BMD'), ('BND'), ('BOB'), ('BRL'),
+('BSD'), ('BTN'), ('BTR'), ('BWP'), ('BYR'), ('BZD'), ('CAD'), ('CDF'), ('CHF'),
+('CLF'), ('CLP'), ('CNY'), ('COP'), ('CRC'), ('CUP'), ('CVE'), ('CZK'), ('CYP'),
+('DEM'), ('DJF'), ('DKK'), ('DOP'), ('DZD'), ('ECS'), ('EEK'), ('EGP'), ('ERN'),
+('ESP'), ('ETB'), ('EUR'), ('FIM'), ('FJD'), ('FKP'), ('FRF'), ('GBP'), ('GEL'),
+('GHC'), ('GIP'), ('GMD'), ('GNF'), ('GRD'), ('GTQ'), ('GWP'), ('GYD'), ('HKD'),
+('HNL'), ('HRK'), ('HTG'), ('HUF'), ('IDR'), ('IEP'), ('ILS'), ('INR'), ('IQD'),
+('IRR'), ('ISK'), ('ITL'), ('JMD'), ('JOD'), ('JPY'), ('KES'), ('KGS'), ('KHR'),
+('KMF'), ('KPW'), ('KRW'), ('KWD'), ('KYD'), ('KZT'), ('LAK'), ('LBP'), ('LKR'),
+('LRD'), ('LSL'), ('LTL'), ('LUF'), ('LVL'), ('LYD'), ('MAD'), ('MDL'), ('MGF'),
+('MKD'), ('MMK'), ('MNT'), ('MOP'), ('MRO'), ('MTL'), ('MUR'), ('MVR'), ('MWK'),
+('MXN'), ('MXP'), ('MYR'), ('MZM'), ('NAD'), ('NGN'), ('NIO'), ('NLG'), ('NOK'),
+('NPR'), ('NZD'), ('OMR'), ('PAB'), ('PEN'), ('PGK'), ('PHP'), ('PKR'), ('PLN'),
+('PLZ'), ('PTE'), ('PYG'), ('QAR'), ('ROL'), ('RON'), ('RSD'), ('RUB'), ('RUR'),
+('RWF'), ('SAR'), ('SBD'), ('SBL'), ('SCR'), ('SDD'), ('SDP'), ('SEK'), ('SGD'),
+('SHP'), ('SIT'), ('SKK'), ('SLL'), ('SOS'), ('SRG'), ('STD'), ('SVC'), ('SYP'),
+('SZL'), ('THB'), ('TJS'), ('TMM'), ('TND'), ('TOP'), ('TPE'), ('TRY'), ('TTD'),
+('TWD'), ('TZS'), ('UAH'), ('UAK'), ('UGX'), ('USD'), ('UVC'), ('UYU'), ('UZS'),
+('VEB'), ('VND'), ('VUV'), ('WST'), ('XAF'), ('XAG'), ('XAU'), ('XCD'), ('XDR'),
+('XEU'), ('XPD'), ('XPF'), ('XPT'), ('YER'), ('YTL'), ('YUN'), ('ZAL'), ('ZAR'),
+('ZMK'), ('ZRN'), ('ZWD');
+--exchanges
+INSERT INTO exchanges (name, mic, operating_mic) VALUES ('NYSE American', 'XASE', 'XNYS'), ('Nasdaq OMX BX', 'XBOS', 'XNAS'), ('NYSE National', 'XCIS', 'XNYS'), ('FINRA NYSE TRF', 'FINY', 'XNYS'), ('FINRA Nasdaq TRF Carteret', 'FINN', 'FINR'), ('FINRA Nasdaq TRF Chicago', 'FINC', 'FINR'), ('FINRA Alternative Display Facility', 'XADF', 'FINR'), ('Unlisted Trading Privileges', 'nan', 'XNAS'), ('International Securities Exchange', 'XISE', 'XNAS'), ('Cboe EDGA', 'EDGA', 'XCBO'), ('Cboe EDGX', 'EDGX', 'XCBO'), ('NYSE Chicago', 'XCHI', 'XNYS'), ('New York Stock Exchange', 'XNYS', 'XNYS'), ('NYSE Arca', 'ARCX', 'XNYS'), ('Nasdaq', 'XNAS', 'XNAS'), ('Consolidated Tape Association', 'nan', 'XNYS'), ('Long-Term Stock Exchange', 'LTSE', 'LTSE'), ('Investors Exchange', 'IEXG', 'IEXG'), ('Cboe Stock Exchange', 'CBSX', 'XCBO'), ('Nasdaq Philadelphia Exchange LLC', 'XPHL', 'XNAS'), ('Cboe BYX', 'BATY', 'XCBO'), ('Cboe BZX', 'BATS', 'XCBO'), ('MIAX Pearl', 'EPRL', 'MIHI'), ('Members Exchange', 'MEMX', 'MEMX'), ('OTC Equity Security', 'OOTC', 'FINR');
+--default values because this doesn't work: @Column(columnDefinition = "NUMERIC DEFAULT 0", precision = 10, scale = 2)
+ALTER TABLE d_timeframe ALTER COLUMN dense_volume SET DEFAULT 0;
+ALTER TABLE d_timeframe ALTER COLUMN volume SET DEFAULT 0;
+ALTER TABLE d_timeframe ALTER COLUMN dollar_volume SET DEFAULT 0;
+--latest filings
+CREATE TABLE latest_filings (
+    accession_number VARCHAR PRIMARY KEY,
+    cik INTEGER NOT NULL,
+    share_id INTEGER NOT NULL,
+    filing_date DATE NOT NULL,
+    form VARCHAR,
+    inserted BOOLEAN,
+    attempt_date TIMESTAMP
+);
+--INCOME STATEMENT NEW
 CREATE OR REPLACE FUNCTION handle_fiscal_and_calendar_period_conflict_income_statement()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM income_statement WHERE fiscal_period_id = NEW.fiscal_period_id AND share_id = NEW.share_id)
-	AND NOT EXISTS (SELECT 1 FROM income_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type)
-	THEN
-        NEW.fiscal_period_id := NULL;
+    IF EXISTS (SELECT 1 FROM income_statement WHERE fiscal_period_id = NEW.fiscal_period_id AND share_id = NEW.share_id) AND NOT EXISTS (SELECT 1 FROM income_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type AND fiscal_period_id = NEW.fiscal_period_id) THEN
+            NEW.fiscal_period_id := NULL;
+    ELSIF EXISTS (SELECT 1 FROM income_statement WHERE fiscal_period_id = NEW.fiscal_period_id AND share_id = NEW.share_id) THEN
+            NEW.fiscal_period_id := NULL;
     END IF;
-	IF EXISTS (SELECT 1 FROM income_statement WHERE calendar_period_id = NEW.calendar_period_id AND share_id = NEW.share_id)
-	AND NOT EXISTS (SELECT 1 FROM income_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type)
-	THEN
-        NEW.calendar_period_id := NULL;
+    IF EXISTS (SELECT 1 FROM income_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type) AND NOT EXISTS (SELECT 1 FROM income_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type AND calendar_period_id = NEW.calendar_period_id) THEN
+            NEW.calendar_period_id := NULL;
+    ELSIF EXISTS (SELECT 1 FROM income_statement WHERE calendar_period_id = NEW.calendar_period_id AND share_id = NEW.share_id) THEN
+            NEW.calendar_period_id := NULL;
     END IF;
     RETURN NEW;
 END;
@@ -44,19 +70,43 @@ BEFORE INSERT ON income_statement
 FOR EACH ROW
 EXECUTE FUNCTION handle_fiscal_and_calendar_period_conflict_income_statement();
 
---CASHFLOW STATEMENT
+--BALANCE SHEET NEW
+CREATE OR REPLACE FUNCTION handle_fiscal_and_calendar_period_conflict_balance_sheet()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM balance_sheet WHERE fiscal_period_id = NEW.fiscal_period_id AND share_id = NEW.share_id) AND NOT EXISTS (SELECT 1 FROM balance_sheet WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type AND fiscal_period_id = NEW.fiscal_period_id) THEN
+            NEW.fiscal_period_id := NULL;
+    ELSIF EXISTS (SELECT 1 FROM balance_sheet WHERE fiscal_period_id = NEW.fiscal_period_id AND share_id = NEW.share_id) THEN
+            NEW.fiscal_period_id := NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM balance_sheet WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type) AND NOT EXISTS (SELECT 1 FROM balance_sheet WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type AND calendar_period_id = NEW.calendar_period_id) THEN
+            NEW.calendar_period_id := NULL;
+    ELSIF EXISTS (SELECT 1 FROM balance_sheet WHERE calendar_period_id = NEW.calendar_period_id AND share_id = NEW.share_id) THEN
+            NEW.calendar_period_id := NULL;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER check_fiscal_and_calendar_conflict_balance_sheet
+BEFORE INSERT ON balance_sheet
+FOR EACH ROW
+EXECUTE FUNCTION handle_fiscal_and_calendar_period_conflict_balance_sheet();
+
+
+--CASHFLOW STATEMENT NEW
 CREATE OR REPLACE FUNCTION handle_fiscal_and_calendar_period_conflict_cash_flow_statement()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM cash_flow_statement WHERE fiscal_period_id = NEW.fiscal_period_id AND share_id = NEW.share_id)
-	AND NOT EXISTS (SELECT 1 FROM cash_flow_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type)
-	THEN
-        NEW.fiscal_period_id := NULL;
+    IF EXISTS (SELECT 1 FROM cash_flow_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type) AND NOT EXISTS (SELECT 1 FROM cash_flow_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type AND fiscal_period_id = NEW.fiscal_period_id) THEN
+            NEW.fiscal_period_id := NULL;
+    ELSIF EXISTS (SELECT 1 FROM cash_flow_statement WHERE fiscal_period_id = NEW.fiscal_period_id AND share_id = NEW.share_id) THEN
+            NEW.fiscal_period_id := NULL;
     END IF;
-	IF EXISTS (SELECT 1 FROM cash_flow_statement WHERE calendar_period_id = NEW.calendar_period_id AND share_id = NEW.share_id)
-	AND NOT EXISTS (SELECT 1 FROM cash_flow_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type)
-	THEN
-        NEW.calendar_period_id := NULL;
+    IF EXISTS (SELECT 1 FROM cash_flow_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type) AND NOT EXISTS (SELECT 1 FROM cash_flow_statement WHERE share_id = NEW.share_id AND date = NEW.date AND report_type = NEW.report_type AND calendar_period_id = NEW.calendar_period_id) THEN
+            NEW.calendar_period_id := NULL;
+    ELSIF EXISTS (SELECT 1 FROM cash_flow_statement WHERE calendar_period_id = NEW.calendar_period_id AND share_id = NEW.share_id) THEN
+            NEW.calendar_period_id := NULL;
     END IF;
     RETURN NEW;
 END;
@@ -696,6 +746,100 @@ INSERT INTO market_breadth (
     RETURN;
 END;
 $$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION update_market_metrics()
+RETURNS TRIGGER AS $$
+DECLARE
+	_prev_short_interest market_metrics.short_interest%type;
+	_short_interest market_metrics.short_interest%type;
+	_prev_short_interest_ratio market_metrics.short_interest_ratio%type;
+	_short_interest_ratio market_metrics.short_interest_ratio%type;
+    _prev_avg_f_volume market_metrics.avg_f_volume%type;
+    _avg_f_volume market_metrics.avg_f_volume%type;
+    _price d_timeframe.close%type;
+    _market_cap market_metrics.market_cap%type;
+    _shares_outstanding market_metrics.shares_outstanding%type;
+    _common_shares_outstanding market_metrics.shares_outstanding%type;
+    _avg_shares_basic market_metrics.shares_outstanding%type;
+BEGIN
+-- PREVIOUS SHORT INTEREST VALUES IF CURRENT VALUES ARE NULL
+SELECT short_interest, short_interest_ratio, avg_f_volume INTO _prev_short_interest, _prev_short_interest_ratio, _prev_avg_f_volume FROM market_metrics
+WHERE share_id = NEW.share_id AND date < NEW.date ORDER BY date DESC LIMIT 1;
+-- SHORT INTEREST
+IF NEW.short_interest IS NULL THEN
+    _short_interest := _prev_short_interest;
+ELSE
+    _short_interest := NEW.short_interest;
+END IF;
+-- SHORT INTEREST RATIO
+IF NEW.short_interest_ratio IS NULL THEN
+   _short_interest_ratio := _prev_short_interest_ratio;
+ELSE
+   _short_interest_ratio := NEW.short_interest_ratio;
+END IF;
+-- AVG_F_VOLUME
+IF NEW.avg_f_volume IS NULL THEN
+   _avg_f_volume := _prev_avg_f_volume;
+ELSE
+   _avg_f_volume := NEW.avg_f_volume;
+END IF;
+-- PRICE
+SELECT close INTO _price FROM d_timeframe WHERE share_id = NEW.share_id AND date = NEW.date;
+-- SHARES OUTSTANDING
+SELECT shares_outstanding INTO _shares_outstanding FROM shares_info
+WHERE share_id = NEW.share_id AND shares_outstanding IS NOT NULL;
+-- COMMON SHARES OUTSTANDING
+SELECT common_shares_outstanding INTO _common_shares_outstanding FROM balance_sheet
+WHERE share_id = NEW.share_id AND date <= NEW.date AND date > NEW.date - INTERVAL '100 days' AND common_shares_outstanding IS NOT NULL
+ORDER BY date DESC LIMIT 1;
+-- AVERAGE SHARES OUTSTANDING
+SELECT avg_shares_basic INTO _avg_shares_basic FROM income_statement
+WHERE share_id = NEW.share_id AND date <= NEW.date AND date > NEW.date - INTERVAL '100 days' AND avg_shares_basic IS NOT NULL
+ORDER BY date DESC LIMIT 1;
+-- SHARES OUTSTANDING
+IF _common_shares_outstanding > 0 THEN
+   _shares_outstanding := _common_shares_outstanding;
+ELSIF _avg_shares_basic > 0 THEN
+   _shares_outstanding := _avg_shares_basic;
+END IF;
+-- MARKET CAP
+IF _shares_outstanding > 0 AND _price > 0 THEN
+   _market_cap := _shares_outstanding * _price / 10000;
+END IF;
+
+INSERT INTO market_metrics (
+    share_id,
+    date,
+    avg_f_volume,
+    market_cap,
+    shares_outstanding,
+    short_interest,
+    short_interest_ratio
+) VALUES (
+    NEW.share_id,
+    NEW.date,
+    _avg_f_volume,
+    _market_cap,
+    _shares_outstanding,
+    _short_interest,
+    _short_interest_ratio
+         ) ON CONFLICT (share_id, date) DO UPDATE SET
+    share_id = EXCLUDED.share_id,
+    date = EXCLUDED.date,
+    avg_f_volume = EXCLUDED.avg_f_volume,
+    market_cap = EXCLUDED.market_cap,
+    shares_outstanding = EXCLUDED.shares_outstanding,
+    short_interest = EXCLUDED.short_interest,
+    short_interest_ratio = EXCLUDED.short_interest_ratio;
+RETURN NEW;
+
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_market_metrics_trigger
+AFTER INSERT ON market_metrics
+FOR EACH ROW
+EXECUTE FUNCTION update_market_metrics();
 
 CREATE OR REPLACE FUNCTION update_ratios()
 RETURNS TRIGGER AS $$

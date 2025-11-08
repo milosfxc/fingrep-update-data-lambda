@@ -66,7 +66,7 @@ def get_stock_data():
         db_ops.update_market_breadth(get_utc_date(days=config.days))
     else:
         for i in range(100, 0, -1):
-            date_str = datetime.utcnow() - timedelta(days=i)
+            date_str = datetime.now(timezone.utc) - timedelta(days=i)
             date_str = date_str.strftime("%Y-%m-%d")
             db_ops.update_market_breadth(date_str) # todo s3 bucket
 

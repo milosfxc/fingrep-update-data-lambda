@@ -148,7 +148,7 @@ def request_short_interest(tickers: list, date:str, date_operator:str = ''):
     global retry_counter
 
     tickers_encoded = urllib.parse.quote(','.join(tickers))
-    url = f"https://api.polygon.io/stocks/v1/short-interest?settlement_date{date_operator}={date}&ticker.any_of={tickers_encoded}&limit=5000&sort=settlement_date.asc"
+    url = f"https://api.polygon.io/stocks/v1/short-interest?settlement_date{date_operator}={date}&ticker.any_of={tickers_encoded}&limit=25000&sort=settlement_date.asc"
     params = {
         "apiKey": os.getenv("POLYGON_API_KEY")
     }
@@ -175,7 +175,7 @@ def request_short_volume(tickers: list, date:str, date_operator:str = ''):
     global retry_counter
 
     tickers_encoded = urllib.parse.quote(','.join(tickers))
-    url = f"https://api.polygon.io/stocks/v1/short-volume?ticker.any_of={tickers_encoded}&date{date_operator}={date}&limit=5000&sort=date.asc"
+    url = f"https://api.polygon.io/stocks/v1/short-volume?ticker.any_of={tickers_encoded}&date{date_operator}={date}&limit=25000&sort=date.asc"
     params = {
         "apiKey": os.getenv("POLYGON_API_KEY")
     }
