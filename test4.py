@@ -1,5 +1,4 @@
-
-
+import fingrep_service
 import utils
 if __name__ == '__main__':
     # ticker_id_map = {'MSFT':1, 'AAPL':2}
@@ -26,3 +25,5 @@ if __name__ == '__main__':
         {'avg_f_volume': 1490008, 'short_interest_ratio': 1.48, 'short_interest': 2200773, 'date': '2023-11-30',
          'share_id': 4}
     ]
+
+fingrep_service.fetch_and_insert_market_metrics('PLX',4)

@@ -41,11 +41,11 @@ SELECT shares_outstanding INTO _shares_outstanding FROM shares_info
 WHERE share_id = NEW.share_id AND shares_outstanding IS NOT NULL;
 -- COMMON SHARES OUTSTANDING
 SELECT common_shares_outstanding INTO _common_shares_outstanding FROM balance_sheet
-WHERE share_id = NEW.share_id AND date <= NEW.date AND date > NEW.date - INTERVAL '100 days' AND common_shares_outstanding IS NOT NULL
+WHERE share_id = NEW.share_id AND date <= NEW.date AND date > NEW.date - INTERVAL '135 days' AND common_shares_outstanding IS NOT NULL
 ORDER BY date DESC LIMIT 1;
 -- AVERAGE SHARES OUTSTANDING
 SELECT avg_shares_basic INTO _avg_shares_basic FROM income_statement
-WHERE share_id = NEW.share_id AND date <= NEW.date AND date > NEW.date - INTERVAL '100 days' AND avg_shares_basic IS NOT NULL
+WHERE share_id = NEW.share_id AND date <= NEW.date AND date > NEW.date - INTERVAL '135 days' AND avg_shares_basic IS NOT NULL
 ORDER BY date DESC LIMIT 1;
 -- SHARES OUTSTANDING
 IF _common_shares_outstanding > 0 THEN

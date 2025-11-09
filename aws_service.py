@@ -34,9 +34,11 @@ def update_s3_bucket():
     new_ids = list(new_ids) if (new_ids := share_ids['new']) else None
     fund_ids = list(fund_ids) if (fund_ids := share_ids['new'].union(share_ids['fundamentals'])) else None
     data = {'d_timeframe.bulk': db_ops.query_data_as_csv('d_timeframe', {'date': utils.get_utc_date(config.days)}),
+            'market_metrics.bulk': db_ops.query_data_as_csv('market_metrics', {'date': utils.get_utc_date(config.days)}),
             'shares': db_ops.query_data_as_csv('shares', {'id': new_ids}) if new_ids else None,
             'shares_info': db_ops.query_data_as_csv('shares_info', {'share_id': new_ids}) if new_ids else None,
             'd_timeframe': db_ops.query_data_as_csv('d_timeframe', {'share_id': list(ids)})  if (ids := share_ids['new'].union(share_ids['split'])) else None,
+            'market_metrics': db_ops.query_data_as_csv('market_metrics', {'share_id': list(ids)} if (ids := share_ids['new']) else None),
             'income_statement': db_ops.query_data_as_csv('income_statement', {'share_id': fund_ids}) if fund_ids else None,
             'cash_flow_statement': db_ops.query_data_as_csv('cash_flow_statement', {'share_id': fund_ids}) if fund_ids else None,
             'balance_sheet': db_ops.query_data_as_csv('balance_sheet', {'share_id': fund_ids}) if fund_ids else None,

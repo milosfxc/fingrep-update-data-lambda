@@ -234,11 +234,6 @@ def fetch_and_update_market_metrics(ticker_id_map:dict):
         tickers = list(ticker_id_map.keys())
         date = utils.get_utc_date(config.days)
         # Short volume
-        # short_volumes = polygon_service.batch_requests(tickers=tickers,
-        #                                                request_function=polygon_service.request_short_volume,
-        #                                                batch_size=300,
-        #                                                date=utils.get_utc_date(config.days),
-        #                                                date_operator='')
         short_volumes = polygon_service.request_short_volume(tickers=tickers,date=date)
         if short_volumes:
             sv_list = []
@@ -255,11 +250,6 @@ def fetch_and_update_market_metrics(ticker_id_map:dict):
             upsert_data_smart(sv_list,'market_metrics', {'date', 'share_id'})
 
         # Short interest
-        # short_interests = polygon_service.batch_requests(tickers=tickers,
-        #                                                  request_function=polygon_service.request_short_interest,
-        #                                                  batch_size=300,
-        #                                                  date=utils.get_utc_date(config.days),
-        #                                                  date_operator='')
         short_interests = polygon_service.request_short_interest(tickers=tickers,date=date)
         if short_interests:
             si_list = []
