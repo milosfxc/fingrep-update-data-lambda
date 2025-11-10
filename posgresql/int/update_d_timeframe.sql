@@ -22,7 +22,6 @@ DECLARE
 	_avg_volume_40 BIGINT;
 	_avg_volume_ytd BIGINT;
 	_convergence d_timeframe.convergence%type;
-	_market_cap shares_info.market_cap%type;
 	_rel_change_from_open d_timeframe.rel_change_from_open%type;
 	_rel_w_change d_timeframe.rel_w_change%type;
 	_rel_m_change d_timeframe.rel_m_change%type;
@@ -211,14 +210,6 @@ SELECT
 	INTO _convergence
 FROM last_3;
 
---MARKET CAP
-SELECT
-	CASE WHEN shares_outstanding IS NOT NULL
-	THEN shares_outstanding * NEW.close
-	END
-	INTO _market_cap
-FROM shares_info;
-
 --WEEKLY CHANGE
 SELECT (NEW.close * _magn / open - 10000) * 100 INTO _rel_w_change FROM d_timeframe WHERE date > (NEW.date - INTERVAL '1 week')
 AND share_id = NEW.share_id ORDER BY date ASC LIMIT 1;
@@ -262,10 +253,6 @@ rel_w_change = _rel_w_change, rel_m_change = _rel_m_change, rel_q_change = _rel_
 rel_ytd_change = _rel_ytd_change, rel_y_change = _rel_y_change,
 twenty_day_low = _twenty_day_low, twenty_day_high = _twenty_day_high, fifty_day_low = _fifty_day_low, fifty_day_high = _fifty_day_high, ytd_low = _ytd_low, ytd_high = _ytd_high, all_time_low = _all_time_low, all_time_high = _all_time_high
 WHERE share_id = NEW.share_id AND date = NEW.date;
-
-IF _market_cap IS NOT NULL THEN
-	UPDATE shares_info SET market_cap = _market_cap WHERE share_id = NEW.share_id;
-END IF;
 
 RETURN NEW;
 END;

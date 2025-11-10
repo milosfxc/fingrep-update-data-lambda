@@ -48,10 +48,12 @@ SELECT avg_shares_basic INTO _avg_shares_basic FROM income_statement
 WHERE share_id = NEW.share_id AND date <= NEW.date AND date > NEW.date - INTERVAL '135 days' AND avg_shares_basic IS NOT NULL
 ORDER BY date DESC LIMIT 1;
 -- SHARES OUTSTANDING
-IF _common_shares_outstanding > 0 THEN
-   _shares_outstanding := _common_shares_outstanding;
-ELSIF _avg_shares_basic > 0 THEN
-   _shares_outstanding := _avg_shares_basic;
+IF NEW.date < CURRENT_DATE - INTERVAL '30 days' OR _shares_outstanding IS NULL THEN
+    IF _common_shares_outstanding > 0 THEN
+       _shares_outstanding := _common_shares_outstanding;
+    ELSIF _avg_shares_basic > 0 THEN
+       _shares_outstanding := _avg_shares_basic;
+    END IF;
 END IF;
 -- MARKET CAP
 IF _shares_outstanding > 0 AND _price > 0 THEN
