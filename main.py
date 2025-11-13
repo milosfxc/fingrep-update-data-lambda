@@ -1,5 +1,5 @@
 import datetime
-from datetime import timedelta
+from datetime import timedelta, timezone
 
 import pandas as pd
 from sshtunnel import BaseSSHTunnelForwarderError

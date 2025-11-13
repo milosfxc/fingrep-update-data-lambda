@@ -1,8 +1,11 @@
+from datetime import datetime, timezone
+
 from ConnType import DBLocation
 import os
 
 indices_list = ['^SPX', '^IXIC', '^VIX', '^DJI', '^NYA', '^RUT']
 DAYS_OFFSET = 120
+CURRENT_UTC_DATE = datetime.now(timezone.utc).strftime('%Y-%m-%d')
 INSERT_INDEX_DETAILS = True
 INSERT_CURRENT_DAY = True
 db_location = DBLocation.LOCAL
