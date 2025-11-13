@@ -1,3 +1,5 @@
+import csv
+import io
 import logging
 from contextlib import contextmanager
 
@@ -121,3 +123,56 @@ def upsert_dataframe(df: pd.DataFrame, table_name: str):
             conn.commit()
     except Exception as e:
         logger.error(f"Error during database operation: {e}")
+
+
+
+def query_data_as_csv(table_name: str, query_params: dict) -> str | None:
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=DictCursor) as cur:
+                # Build WHERE clause dynamically based on provided parameters
+                where_conditions = []
+                values = []
+                if query_params:
+                    for key, value in query_params.items():
+                        if isinstance(value, (list, tuple)):
+                            # Handle multiple values with IN clause
+                            placeholders = ",".join(["%s"] * len(value))
+                            where_conditions.append(f"{key} IN ({placeholders})")
+                            values.extend(value)
+                        else:
+                            # Handle single value with = operator
+                            where_conditions.append(f"{key} = %s")
+                            values.append(value)
+
+                if not where_conditions:
+                    # If no parameters provided, select all rows
+                    sql = f'SELECT * FROM {table_name};'
+                else:
+                    where_clause = " AND ".join(where_conditions)
+                    sql = f'SELECT * FROM {table_name} WHERE {where_clause};'
+
+                cur.execute(sql, tuple(values))
+                rows = cur.fetchall()
+
+                if not rows:
+                    return None
+
+                # Get column names from cursor description (more reliable)
+                fieldnames = [desc[0] for desc in cur.description]
+
+                output = io.StringIO()
+                writer = csv.DictWriter(output, fieldnames=fieldnames)
+                writer.writeheader()
+
+                # Write rows, handling missing columns
+                for row in rows:
+                    # Ensure each row has all expected columns
+                    row_dict = {field: row.get(field) for field in fieldnames}
+                    writer.writerow(row_dict)
+
+                return output.getvalue()
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f"#query_data_as_csv: {error}")
+        raise
