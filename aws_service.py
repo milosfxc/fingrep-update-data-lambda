@@ -35,6 +35,7 @@ def update_s3_bucket():
     fund_ids = list(fund_ids) if (fund_ids := share_ids['new'].union(share_ids['fundamentals'])) else None
     data = {'d_timeframe.bulk': db_ops.query_data_as_csv('d_timeframe', {'date': utils.get_utc_date(config.days)}),
             'market_metrics.bulk': db_ops.query_data_as_csv('market_metrics', {'date': utils.get_utc_date(config.days)}),
+            'market_breadth': db_ops.query_data_as_csv('market_breadth', None if config.mb_historical else {'date': utils.get_utc_date(config.days)}),
             'shares': db_ops.query_data_as_csv('shares', {'id': new_ids}) if new_ids else None,
             'shares_info': db_ops.query_data_as_csv('shares_info', {'share_id': new_ids}) if new_ids else None,
             'd_timeframe': db_ops.query_data_as_csv('d_timeframe', {'share_id': list(ids)})  if (ids := share_ids['new'].union(share_ids['split'])) else None,

@@ -54,6 +54,9 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int, filing:
     if  is_xbrl == 1:
         filing = edgar.get_by_accession_number(accession_number=accession_number) if filing is None else filing
         # Ratio triggers require this order IS -> CFS -> BS
+        if not filing:
+            logger.warning(f"Filing with accession number {accession_number} was None")
+            return None
         financials = filing.obj().financials
         statements = {
             'IncomeStatement': financials.income_statement().to_dataframe().replace(['',np.nan],None) if financials.income_statement() else pd.DataFrame(),

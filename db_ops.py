@@ -557,17 +557,17 @@ def query_data_as_csv(table_name: str, query_params: dict) -> str | None:
                 # Build WHERE clause dynamically based on provided parameters
                 where_conditions = []
                 values = []
-
-                for key, value in query_params.items():
-                    if isinstance(value, (list, tuple)):
-                        # Handle multiple values with IN clause
-                        placeholders = ",".join(["%s"] * len(value))
-                        where_conditions.append(f"{key} IN ({placeholders})")
-                        values.extend(value)
-                    else:
-                        # Handle single value with = operator
-                        where_conditions.append(f"{key} = %s")
-                        values.append(value)
+                if query_params:
+                    for key, value in query_params.items():
+                        if isinstance(value, (list, tuple)):
+                            # Handle multiple values with IN clause
+                            placeholders = ",".join(["%s"] * len(value))
+                            where_conditions.append(f"{key} IN ({placeholders})")
+                            values.extend(value)
+                        else:
+                            # Handle single value with = operator
+                            where_conditions.append(f"{key} = %s")
+                            values.append(value)
 
                 if not where_conditions:
                     # If no parameters provided, select all rows
