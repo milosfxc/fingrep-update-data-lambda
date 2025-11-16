@@ -99,7 +99,7 @@ def upsert_dataframe_composite_id(df: pd.DataFrame, table_name: str):
         logger.error(f"Error during database operation: {e}")
 
 
-def upsert_dataframe(df: pd.DataFrame, table_name: str):
+def upsert_dataframe(df: pd.DataFrame, table_name: str, return_ids: bool = False) -> list[int] | None:
     # Replace NaN with None
     df = df.astype(object).where(pd.notnull(df), None)
     # Create a list of column update expressions for ON CONFLICT
@@ -109,9 +109,15 @@ def upsert_dataframe(df: pd.DataFrame, table_name: str):
         INSERT INTO {table_name} ({', '.join(df.columns)}) 
         VALUES ({', '.join(['%s'] * len(df.columns))})
         ON CONFLICT (ticker) DO UPDATE SET
-        {update_columns};
+        {update_columns}
     """
+    # Check if it's necessary to return ids
+    if return_ids:
+        upsert_financials_query = upsert_financials_query + ' RETURNING id;'
+    else:
+        upsert_financials_query = upsert_financials_query + ';'
     try:
+        return_ids_list = []
         # Open a connection to the PostgresSQL database
         with get_db_connection() as conn:
             # Open a cursor to perform database operations
@@ -119,8 +125,13 @@ def upsert_dataframe(df: pd.DataFrame, table_name: str):
                 # Iterate over each row in the DataFrame
                 for row in df.itertuples(index=False, name=None):
                     cursor.execute(upsert_financials_query, row)
+                    if return_ids:
+                        if res := cursor.fetchone():
+                            return_ids_list.append(res[0])
+
             # Commit the transaction
             conn.commit()
+        return return_ids_list if return_ids else None
     except Exception as e:
         logger.error(f"Error during database operation: {e}")
 

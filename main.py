@@ -1,9 +1,7 @@
 import datetime
-from datetime import timedelta, timezone
-
 import pandas as pd
 from sshtunnel import BaseSSHTunnelForwarderError
-
+import aws_service
 import db_ops
 import config
 import yahoo_service
@@ -19,7 +17,10 @@ def update_indices():
         # Insert index details
         if config.INSERT_INDEX_DETAILS:
                 ticker = yahoo_service.get_index_details(config.indices_list, foreign_keys.get('currencies'))
-                db_ops.upsert_dataframe(ticker, 'indices')
+                if indices_ids := db_ops.upsert_dataframe(ticker, 'indices', True):
+                    [aws_service.add_index_id(index_id, 'new') for index_id in indices_ids]
+
+
 
         # Foreign keys
         foreign_keys = db_ops.get_foreign_keys()
@@ -29,10 +30,12 @@ def update_indices():
         ohlcv_data = yahoo_service.get_indices_ohlcv(config.indices_list, date=date, indices_mapping=indices_mapping)
         # Removes all rows that aren't current date
         if config.INSERT_CURRENT_DAY:
-                ohlcv_data = ohlcv_data[ohlcv_data['date'] == date.today().strftime('%Y-%m-%d')]
+            ohlcv_data = ohlcv_data[ohlcv_data['date'] == date.today().strftime('%Y-%m-%d')]
         # Insert if not empty
         if not ohlcv_data.empty:
-                db_ops.upsert_dataframe_composite_id(ohlcv_data, 'indices_d_timeframe')
+            db_ops.upsert_dataframe_composite_id(ohlcv_data, 'indices_d_timeframe')
+        if config.S3_UPLOAD:
+            aws_service.update_s3_bucket()
 
 if __name__ == '__main__':
         if config.db_location == DBLocation.REMOTE:

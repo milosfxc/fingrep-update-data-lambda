@@ -5,10 +5,9 @@ from datetime import timezone, datetime
 from typing import List, Dict, Any
 import boto3
 from botocore.exceptions import ClientError
-import config
+from config import aws_logger, CURRENT_UTC_DATE
 import db_ops
 import logging
-
 index_ids = {'new': set()}
 
 def get_s3_client():
@@ -19,7 +18,7 @@ def get_s3_client():
     )
 
 
-def add_share_id(index_id, key):
+def add_index_id(index_id, key):
     global index_ids
     if index_id is not None and isinstance(index_id, int):
         index_ids[key].add(index_id)
@@ -30,8 +29,9 @@ def add_share_id(index_id, key):
 def update_s3_bucket():
     # Get data for S3
     new_ids = list(new_ids) if (new_ids := index_ids['new']) else None
-    data = {'indices_d_timeframe.bulk': db_ops.query_data_as_csv('indices_d_timeframe', {'date': config.CURRENT_UTC_DATE}),
-            'indices': db_ops.query_data_as_csv('indices', {'id': new_ids}) if new_ids else None,
+    data = {'indices': db_ops.query_data_as_csv('indices', {'id': new_ids}),
+            'indices_d_timeframe': db_ops.query_data_as_csv('indices_d_timeframe', {'index_id': new_ids}),
+            'indices_d_timeframe.bulk': db_ops.query_data_as_csv('indices_d_timeframe', {'date': CURRENT_UTC_DATE})
             }
     # Upload data to S3
     try:
@@ -70,7 +70,7 @@ def update_s3_bucket():
                         's3_path': f"s3://fg/{s3_key}",
                         'size_bytes': file_size,
                         'row_count': row_count,
-                        'upload_time': utils.get_utc_date(0)
+                        'upload_time': utc_datetime
                     }
 
                     successful_uploads += 1
