@@ -88,6 +88,9 @@ def get_stock_data():
     # Update fundamentals
     if update_fundamentals:
         update_fundamentals()
+    # Add missing shares to the remote
+    if config.missing_remote_shares:
+        [aws_service.add_share_id(i, 'new') for i in config.missing_remote_shares]
     # Upload data to S3
     if config.s3_upload:
         aws_service.update_s3_bucket()
