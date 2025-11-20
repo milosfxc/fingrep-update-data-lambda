@@ -11,7 +11,7 @@ date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(da
 mb_historical = True # false updates market breadth for the current day, true updates for the last 100 days
 insert_fundamentals = True # Insert fundamentals for new tickers
 update_fundamentals = False # Update fundamentals for existing tickers
-s3_upload = True
+s3_upload = False
 report_start_date = '2020-12-31'
 limit = 20 # insertion limit
 multi_threaded = False

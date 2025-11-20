@@ -57,7 +57,12 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int, filing:
         if not filing:
             logger.warning(f"Filing with accession number {accession_number} was None")
             return None
-        financials = filing.obj().financials
+        try:
+            financials = filing.obj().financials
+        except AttributeError:
+            logger.warning(f"Filing {accession_number} missing attributes")
+            return None
+
         statements = {
             'IncomeStatement': financials.income_statement().to_dataframe().replace(['',np.nan],None) if financials.income_statement() else pd.DataFrame(),
             'CashFlowStatement': financials.cashflow_statement().to_dataframe().replace(['',np.nan],None) if financials.cashflow_statement() else pd.DataFrame(),
@@ -191,6 +196,12 @@ def get_position_value_sum_or_max(df_stmt: pd.DataFrame, df_tags: pd.DataFrame, 
 
 
 def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf) -> dict | None:
+    """
+    :param filing:
+    :param df_inc:
+    :param df_cf:
+    :return: repot_type, acc_standard, currency, period_start, filing_date, date, fiscal_period, calendar_period, cf_period_start
+    """
     ans = {}
     # Report type
     if filing.form in utils.forms['annual']:
@@ -213,7 +224,7 @@ def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf) -> dict | 
             ans['acc_standard'] = None
     # Currency and period start
 
-    for value in values_inc[:3]:
+    for value in values_inc[:100]:
         if all(key in ans for key in ['currency', 'period_start']):
             break
         df_pos = filing.xbrl().query().by_statement_type('IncomeStatement').by_dimension(None).by_value(
@@ -231,7 +242,7 @@ def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf) -> dict | 
     ans['fiscal_period'] = get_fiscal_period(entity_info,filing.form)
     ans['calendar_period'] = get_calendar_period(filing.period_of_report, filing.form)
     # Period start for cashflow
-    for value in values_cf[:3]:
+    for value in values_cf[:25]:
         if all(key in ans for key in ['currency', 'period_start', 'cf_period_start']):
             return ans
         df_pos = (filing.xbrl().query().by_statement_type('CashFlowStatement').by_dimension(None).by_value(float(value))
@@ -239,7 +250,10 @@ def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf) -> dict | 
         if len(df_pos) == 1 and {'period_start', 'period_end'}.issubset(df_pos.columns) and df_pos.loc[0, 'period_end'] == filing.period_of_report:
             ans['cf_period_start'] = df_pos.loc[0, 'period_start']
     # todo Check if you can reduce conditions for None, maybe I don't need all ans keys.
-    logger.info(f"Function get_other_data has returned None although it has collected this data:\n {ans}.")
+    for k in ['report_type', 'acc_standard', 'currency', 'period_start', 'filing_date', 'date', 'fiscal_period', 'calendar_period', 'cf_period_start']:
+        if k not in ans:
+            ans[k] = None
+    logger.warning(f"get_other_data returned None for filing {filing.accession_number}, although it has collected this data:\n {ans}.")
     return None
 
 
