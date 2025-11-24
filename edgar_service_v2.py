@@ -1,3 +1,4 @@
+import time
 from datetime import timedelta, datetime, date
 from typing import Optional, Dict, Union
 import edgar
@@ -22,6 +23,8 @@ def get_by_accession_number_retry(accession_number: str) -> edgar.Filing | None:
                 return filing
         except Exception:
             pass
+        if attempt == 1:
+            time.sleep(3)
 
     return None
 
