@@ -11,6 +11,22 @@ from config import logger
 import utils
 
 
+
+def get_by_accession_number_retry(accession_number: str) -> edgar.Filing | None:
+    for attempt in (1, 2):
+        filing = edgar.get_by_accession_number(accession_number)
+        if filing is None: continue
+        try:
+            obj = filing.obj()
+            if hasattr(obj, 'financials'):
+                return filing
+        except Exception:
+            pass
+
+    return None
+
+
+
 def get_filings_by_company(ticker: str, cutoff_date:str) -> pd.DataFrame:
     """
     Functions returns dataframe of all filings by company.
@@ -52,16 +68,13 @@ def get_latest_filings(filing_date:str) -> pd.DataFrame:
 
 def get_filing_details(accession_number:str, is_xbrl:int, share_id: int, filing:Filing = None) -> Dict[str,dict] | None:
     if  is_xbrl == 1:
-        filing = edgar.get_by_accession_number(accession_number=accession_number) if filing is None else filing
+        filing = get_by_accession_number_retry(accession_number=accession_number)
         # Ratio triggers require this order IS -> CFS -> BS
         if not filing:
             logger.warning(f"Filing with accession number {accession_number} was None")
             return None
-        try:
-            financials = filing.obj().financials
-        except AttributeError:
-            logger.warning(f"Filing {accession_number} missing attributes")
-            return None
+
+        financials = filing.obj().financials
 
         statements = {
             'IncomeStatement': financials.income_statement().to_dataframe().replace(['',np.nan],None) if financials.income_statement() else pd.DataFrame(),
@@ -70,7 +83,7 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int, filing:
         }
         # Rename columns to match period end date
         for key,stmt in statements.items():
-            if len(stmt.columns) > 2 and filing.period_of_report in stmt.columns[2] and {'concept', 'label'}.issubset(stmt.columns):
+            if filing.period_of_report and len(stmt.columns) > 2 and filing.period_of_report in stmt.columns[2] and {'concept', 'label'}.issubset(stmt.columns):
                 stmt = stmt[['concept', 'label', stmt.columns[2]]]
                 statements[key] = stmt.rename(columns={stmt.columns[2]:filing.period_of_report}, inplace=False)
             else:
