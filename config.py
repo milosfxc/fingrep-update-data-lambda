@@ -10,10 +10,10 @@ years = 5 # OHLCV data
 date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * years)
 mb_historical = True # false updates market breadth for the current day, true updates for the last 100 days
 insert_fundamentals = True # Insert fundamentals for new tickers
-update_fundamentals = False # Update fundamentals for existing tickers
-s3_upload = False
+update_fundamentals = True # Update fundamentals for existing tickers
+s3_upload = True
 report_start_date = '2020-12-31'
-limit = 20 # insertion limit
+limit = 10 # insertion limit
 multi_threaded = False
 threads_number = 10
 thread_delay = 0.3 # Time delay between submitting a task

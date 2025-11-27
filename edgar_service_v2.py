@@ -1,3 +1,4 @@
+import sys
 import time
 from datetime import timedelta, datetime, date
 from typing import Optional, Dict, Union
@@ -94,9 +95,19 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int, filing:
                 if statements[key].empty:
                     logger.warning(f"Could not find {key} in filing with accession number: {filing.accession_number}")
                     return {}
+
+        # XBRL Dataframe
+        df_xbrl = filing.xbrl().query().by_dimension(None).to_dataframe('concept', 'period_start', 'period_end', 'numeric_value', 'unit_ref')
+        if not {'concept', 'period_start', 'period_end', 'numeric_value', 'unit_ref'}.issubset(df_xbrl.columns):
+            diff = {'concept', 'period_start', 'period_start', 'numeric_value', 'unit_ref'}.difference(df_xbrl.columns)
+            logger.warning(
+                f"get_filing_details returned None for filing {filing.accession_number} because df_xbrl has missing columns: {diff}")
+            return None
         # Other data
-        other_data = get_other_data(filing, statements['IncomeStatement'], statements['CashFlowStatement'])
-        if not other_data: return None
+        other_data = get_other_data(filing, statements['IncomeStatement'], statements['CashFlowStatement'], df_xbrl)
+        if not other_data:
+            logger.warning(f"get_other_data returned None for filing {accession_number}, switching to yfinance.")
+            return None
         other_data['share_id'] = share_id
         # Dataframes for XBRL query
         previous_end_date = (datetime.strptime(other_data['period_start'], '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
@@ -114,9 +125,7 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int, filing:
             'form': filing.form,
             'cik': filing.cik,
             'statements': {key: df.to_dict() for key, df in statements.items()},
-            'df_instant_prev_end': df_instant_prev_end.to_dict(),
-            'df_instant_end': df_instant_end.to_dict(),
-            'df_period': df_period.to_dict()
+            'xbrl': filing.xbrl().query().to_dataframe().to_dict()
         }
         db_ops.insert_filing(filing.accession_number, archive)
         # # XBRL Mappings
@@ -211,13 +220,15 @@ def get_position_value_sum_or_max(df_stmt: pd.DataFrame, df_tags: pd.DataFrame, 
     return pos_value * config.scale_factor if pos_value != 0 else None
 
 
-def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf) -> dict | None:
+def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf, df_xbrl: pd.DataFrame) -> dict | None:
     """
+    :param df_xbrl:
     :param filing:
     :param df_inc:
     :param df_cf:
     :return: repot_type, acc_standard, currency, period_start, filing_date, date, fiscal_period, calendar_period, cf_period_start
     """
+
     ans = {}
     # Report type
     if filing.form in utils.forms['annual']:
@@ -225,9 +236,6 @@ def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf) -> dict | 
     elif filing.form in utils.forms['quarterly']:
         ans['report_type'] = 'q'
 
-    # Numeric column values
-    values_inc = pd.to_numeric(df_inc[filing.period_of_report], errors='coerce').dropna()
-    values_cf = pd.to_numeric(df_cf[filing.period_of_report], errors='coerce').dropna()
     # Accounting standard
     for concept in df_inc['concept']:
         if concept.startswith('us-gaap'):
@@ -238,16 +246,29 @@ def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf) -> dict | 
             break
         else:
             ans['acc_standard'] = None
-    # Currency and period start
 
-    for value in values_inc[:100]:
+
+    # Currency and period start
+    df_inc_concept_value = df_inc[['concept', filing.period_of_report]].copy()
+    df_inc_concept_value[filing.period_of_report] = pd.to_numeric(df_inc_concept_value[filing.period_of_report], errors='coerce')
+    df_inc_concept_value.dropna(inplace=True)
+
+    for concept, value in zip(df_inc_concept_value['concept'], df_inc_concept_value[filing.period_of_report]):
         if all(key in ans for key in ['currency', 'period_start']):
             break
-        df_pos = filing.xbrl().query().by_statement_type('IncomeStatement').by_dimension(None).by_value(
-            float(value)).to_dataframe('concept', 'period_start', 'period_end', 'unit_ref').drop_duplicates()
-        if len(df_pos) == 1 and df_pos.loc[0, 'period_end'] == filing.period_of_report:
-            ans['period_start'] = df_pos.loc[0, 'period_start']
-            currency = get_currency(filing, df_pos.loc[0, 'unit_ref'])
+        concept = concept.replace('_', ':')
+        mask = (
+            (df_xbrl['concept'] == concept) &
+            (df_xbrl['period_start'].notna()) &
+            (df_xbrl['period_end'] == filing.period_of_report) &
+            (np.isclose(df_xbrl['numeric_value'], float(value), rtol=0, atol=0.001)) &
+            (df_xbrl['unit_ref'].notna())
+        )
+        df_pos = df_xbrl[mask].copy()
+        df_pos.drop_duplicates(inplace=True)
+        if len(df_pos) == 1:
+            ans['period_start'] = df_pos.iloc[0]['period_start']
+            currency = get_currency(filing, df_pos.iloc[0]['unit_ref'])
             if currency:
                 ans['currency'] = currency
     # Filing date and period of report
@@ -258,13 +279,26 @@ def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf) -> dict | 
     ans['fiscal_period'] = get_fiscal_period(entity_info,filing.form)
     ans['calendar_period'] = get_calendar_period(filing.period_of_report, filing.form)
     # Period start for cashflow
-    for value in values_cf[:25]:
+    df_cf_concept_value = df_cf[['concept', filing.period_of_report]].copy()
+    df_cf_concept_value[filing.period_of_report] = pd.to_numeric(df_cf_concept_value[filing.period_of_report], errors='coerce')
+    df_cf_concept_value.dropna(inplace=True)
+    for concept, value in zip(df_cf_concept_value['concept'], df_cf_concept_value[filing.period_of_report]):
         if all(key in ans for key in ['currency', 'period_start', 'cf_period_start']):
             return ans
-        df_pos = (filing.xbrl().query().by_statement_type('CashFlowStatement').by_dimension(None).by_value(float(value))
-                  .to_dataframe('period_start', 'period_end').drop_duplicates())
-        if len(df_pos) == 1 and {'period_start', 'period_end'}.issubset(df_pos.columns) and df_pos.loc[0, 'period_end'] == filing.period_of_report:
-            ans['cf_period_start'] = df_pos.loc[0, 'period_start']
+        concept = concept.replace('_', ':')
+        mask = (
+            (df_xbrl['concept'] == concept) &
+            (df_xbrl['period_start'].notna()) &
+            (df_xbrl['period_end'] == filing.period_of_report) &
+            (np.isclose(df_xbrl['numeric_value'], float(value), rtol=0, atol=0.001)) &
+            (df_xbrl['unit_ref'].notna())
+            )
+
+        df_pos = df_xbrl[mask].copy()
+        df_pos.drop_duplicates(inplace=True)
+
+        if len(df_pos) == 1:
+            ans['cf_period_start'] = df_pos.iloc[0]['period_start']
     # todo Check if you can reduce conditions for None, maybe I don't need all ans keys.
     for k in ['report_type', 'acc_standard', 'currency', 'period_start', 'filing_date', 'date', 'fiscal_period', 'calendar_period', 'cf_period_start']:
         if k not in ans:
