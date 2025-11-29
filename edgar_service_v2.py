@@ -124,16 +124,11 @@ def get_filing_details(accession_number:str, is_xbrl:int, share_id: int, filing:
             'currency': other_data['currency'],
             'form': filing.form,
             'cik': filing.cik,
-            'statements': {key: df.to_dict() for key, df in statements.items()},
-            'xbrl': filing.xbrl().query().to_dataframe().to_dict()
+            'statements': {key: df.to_dict(orient='records') for key, df in statements.items()},
+            'xbrl': filing.xbrl().query().to_dataframe().to_dict(orient='records'),
         }
         db_ops.insert_filing(filing.accession_number, archive)
-        # # XBRL Mappings
-        # xbrl_map = dict()
-        # # Load data from pickle
-        # if os.path.exists('data/xbrl_map'):
-        #     with open('data/xbrl_map', 'rb') as f:
-        #         xbrl_map = pickle.load(f)
+        # Extract statement positions
         for stmt in statements.keys():
             statements[stmt] = get_statement(stmt, statements[stmt], other_data, df_instant_end, df_period, filing.period_of_report)
         # Income statement and cashflow statement period compatibility
@@ -247,7 +242,6 @@ def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf, df_xbrl: p
         else:
             ans['acc_standard'] = None
 
-
     # Currency and period start
     df_inc_concept_value = df_inc[['concept', filing.period_of_report]].copy()
     df_inc_concept_value[filing.period_of_report] = pd.to_numeric(df_inc_concept_value[filing.period_of_report], errors='coerce')
@@ -271,6 +265,7 @@ def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf, df_xbrl: p
             currency = get_currency(filing, df_pos.iloc[0]['unit_ref'])
             if currency:
                 ans['currency'] = currency
+
     # Filing date and period of report
     ans['filing_date'] = filing.header.acceptance_datetime
     ans['date'] = filing.period_of_report
@@ -278,12 +273,13 @@ def get_other_data(filing: edgar.Filing, df_inc: pd.DataFrame, df_cf, df_xbrl: p
     entity_info = filing.xbrl().entity_info
     ans['fiscal_period'] = get_fiscal_period(entity_info,filing.form)
     ans['calendar_period'] = get_calendar_period(filing.period_of_report, filing.form)
+
     # Period start for cashflow
     df_cf_concept_value = df_cf[['concept', filing.period_of_report]].copy()
     df_cf_concept_value[filing.period_of_report] = pd.to_numeric(df_cf_concept_value[filing.period_of_report], errors='coerce')
     df_cf_concept_value.dropna(inplace=True)
     for concept, value in zip(df_cf_concept_value['concept'], df_cf_concept_value[filing.period_of_report]):
-        if all(key in ans for key in ['currency', 'period_start', 'cf_period_start']):
+        if all(key in ans for key in ['currency', 'period_start', 'cf_period_start', 'report_type']):
             return ans
         concept = concept.replace('_', ':')
         mask = (

@@ -1,6 +1,6 @@
 import os
 from datetime import datetime, timezone, timedelta
-from utils import ColorFormatter,setup_logger
+from logging_utils import ColorFormatter,setup_logger
 from ConnType import DBLocation
 import logging
 from edgar import set_identity

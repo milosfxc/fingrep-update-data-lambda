@@ -634,7 +634,7 @@ def insert_filing(filing_id, filing: dict):
 
 
 
-def get_filings_by_filing_id(filing_id: str, insert_date:str = None) -> dict | None:
+def get_filing_by_filing_id(filing_id: str, insert_date:str = None) -> dict | None:
     """
     Functions retrieves data from filings database.
     :param filing_id: Ticker or Accession Number
