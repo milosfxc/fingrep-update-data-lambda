@@ -58,6 +58,8 @@ def get_stock_data():
             fingrep_service.get_new_ticker_data_and_insert(new_ticker, finviz_df)
             print(counter)
             counter += 1
+            if counter % config.s3_upload_limit == 0:
+                aws_service.update_s3_bucket()
     # Update RSI for existing tickers
     fingrep_service.update_rsi_existing_tickers()
 

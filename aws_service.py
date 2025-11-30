@@ -31,6 +31,7 @@ def add_share_id(share_id, key):
 
 def update_s3_bucket():
     # Get data for S3
+    global share_ids
     new_ids = list(new_ids) if (new_ids := share_ids['new']) else None
     fund_ids = list(fund_ids) if (fund_ids := share_ids['new'].union(share_ids['fundamentals'])) else None
     data = {'d_timeframe.bulk': db_ops.query_data_as_csv('d_timeframe', {'date': utils.get_utc_date(config.days)}),
@@ -119,6 +120,9 @@ def update_s3_bucket():
                     'timestamp': utc_datetime
                 }
             )
+            # Reset share_ids for new insertion cycle
+            share_ids = {'new': set(), 'split': set(), 'fundamentals': set()}
+            aws_logger.info(f'Reset share_ids for new insertion cycle.')
         else:
             aws_logger.critical(f'Lambda not triggered for date {utc_datetime}.')
     except ClientError as e:

@@ -19,12 +19,13 @@ if __name__ == "__main__":
     # fundamentals_service.get_company_fundamentals('FLGT', 836, config.report_start_date)
     start_time = time.perf_counter()
 
-    filing = edgar.get_by_accession_number('0001562762-25-000278')
-    # df_xbrl = filing.xbrl().query().by_concept('us-gaap:Assets').by_dimension(None).to_dataframe()
-    # print(df_xbrl)
-    # pprint(filing.xbrl())
-    df_bs = filing.obj().financials.balance_sheet().to_dataframe()
-    df_bs = filing.xbrl().statements.balance_sheet().to_dataframe()
+    filing = edgar.get_by_accession_number('0000790051-21-000080')
+    df_xbrl = filing.xbrl().query().by_dimension(None).to_dataframe()
+    print(df_xbrl)
+    df_bs = filing.xbrl().statements.income_statement().to_dataframe()
     print(df_bs)
+    print(filing.xbrl().presentation_trees)
     print(time.perf_counter() - start_time)
+
+
 
