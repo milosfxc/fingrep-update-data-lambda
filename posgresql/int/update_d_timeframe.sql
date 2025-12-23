@@ -88,7 +88,7 @@ row_count AS (
     SELECT COUNT(*) AS cnt FROM last_20
 )
 SELECT
-	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN 100 * (AVG(high * _magn / low) - 10000) END AS _rel_adr,
+	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN 100 * (AVG(high * _magn / NULLIF(low,0)) - 10000) END AS _rel_adr,
 	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(high - low) END AS _abs_adr,
 	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(close) END AS _sma20,
 	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(volume) END AS _avg_volume,
@@ -130,10 +130,10 @@ INTO _avg_volume_ytd, _ytd_low, _ytd_high
 FROM last_252;
 
 SELECT
-	CASE WHEN _avg_volume_40 != 0 AND _avg_volume_ytd != 0 THEN _avg_volume_40 * _magn / _avg_volume_ytd ELSE 0 END AS _dense_volume
+	CASE WHEN _avg_volume_40 != 0 AND _avg_volume_ytd != 0 THEN _avg_volume_40 * _magn / NULLIF(_avg_volume_ytd,0) ELSE 0 END AS _dense_volume
 INTO _dense_volume;
 --RVOL
-SELECT CASE WHEN _avg_volume != 0 THEN volume * _magn / _avg_volume END INTO _rel_volume
+SELECT CASE WHEN _avg_volume != 0 THEN volume * _magn / NULLIF(_avg_volume,0) END INTO _rel_volume
 FROM d_timeframe WHERE share_id = NEW.share_id AND date = NEW.date;
 --SMA50 & FIFTY DAY HIGH/LOW
 WITH last_50 AS (

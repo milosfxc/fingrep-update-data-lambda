@@ -3,7 +3,7 @@ import time
 import aws_service
 from config import logger, update_fundamentals
 import pandas as pd
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, UTC
 from sshtunnel import BaseSSHTunnelForwarderError
 import config
 import db_ops
@@ -58,7 +58,7 @@ def get_stock_data():
             fingrep_service.get_new_ticker_data_and_insert(new_ticker, finviz_df)
             print(counter)
             counter += 1
-            if counter % config.s3_upload_limit == 0:
+            if config.s3_upload and counter % config.s3_upload_limit == 0:
                 aws_service.update_s3_bucket()
     # Update RSI for existing tickers
     fingrep_service.update_rsi_existing_tickers()
@@ -80,7 +80,7 @@ def get_stock_data():
         for ticker in common_tickers:
             ticker_id = existing_tickers[ticker]
             if db_ops.delete_aggregate_bars(ticker_id):
-                date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * config.years)
+                date_from = datetime.now(UTC).date() - timedelta(days=365 * config.years)
                 fingrep_service.get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
                 fingrep_service.update_market_metrics_shares_outstanding(ticker, ticker_id)
                 aws_service.add_share_id(ticker_id, 'split')

@@ -15,7 +15,7 @@ edgar_company_facts_positions_path = {
     'Assets': ['facts', 'us-gaap', 'Assets', 'units', 'USD'],
 }
 
-allowed_share_type_ids = [1, 10, 14, 17, 18, 19, 21, 24]# todo bring back 6 (ETF)
+allowed_share_type_ids = [1, 6, 7, 8, 9, 10, 14, 17, 18, 19, 21, 24]# todo bring back 6 (ETF)
 
 
 def remove_stock_suffix(input_string):

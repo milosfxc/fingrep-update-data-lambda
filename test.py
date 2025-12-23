@@ -1,4 +1,6 @@
 import time
+from typing import Optional, Dict
+
 import config
 import pandas as pd
 pd.set_option('display.max_rows', None)            # Show all rows
@@ -9,6 +11,7 @@ pd.set_option('display.expand_frame_repr', False)  # <<< THIS one disables line 
 pd.set_option('display.float_format', '{:,.2f}'.format)
 import edgar
 from pprint import pprint
+from datetime import datetime, timedelta, time, timezone, UTC
 
 # import config
 # import fundamentals_service
@@ -17,15 +20,16 @@ from pprint import pprint
 
 if __name__ == "__main__":
     # fundamentals_service.get_company_fundamentals('FLGT', 836, config.report_start_date)
-    start_time = time.perf_counter()
-
-    filing = edgar.get_by_accession_number('0000790051-21-000080')
-    df_xbrl = filing.xbrl().query().by_dimension(None).to_dataframe()
-    print(df_xbrl)
-    df_bs = filing.xbrl().statements.income_statement().to_dataframe()
-    print(df_bs)
-    print(filing.xbrl().presentation_trees)
-    print(time.perf_counter() - start_time)
-
-
-
+    # start_time = time.perf_counter()
+    #
+    # filing = edgar.get_by_accession_number('0000790051-21-000080')
+    # df_xbrl = filing.xbrl().query().by_dimension(None).to_dataframe()
+    # print(df_xbrl)
+    # df_bs = filing.xbrl().statements.income_statement().to_dataframe()
+    # print(df_bs)
+    # print(filing.xbrl().presentation_trees)
+    # print(time.perf_counter() - start_time)
+    date_from_new = datetime.now(UTC).date() - timedelta(days=365 * config.years)
+    date_from_old = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * config.years)
+    print(date_from_old)
+    print(date_from_new)
