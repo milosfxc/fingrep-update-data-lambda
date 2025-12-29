@@ -9,8 +9,8 @@ import config
 import db_ops
 import utils
 from config import logger, aws_logger
-
-
+from time import sleep
+from math import ceil
 share_ids = {'new': set(), 'split': set(), 'fundamentals': set()}
 
 def get_s3_client():
@@ -47,6 +47,10 @@ def update_s3_bucket():
             'ratios': db_ops.query_data_as_csv('ratios', {'share_id':fund_ids}) if fund_ids else None,
             'delete_ids': 'id\n' + '\n'.join(str(i) for i in share_ids['split']) if share_ids['split'] else None
             }
+    # Wait for the previous function call to completes its task
+    elapsed = (utils.get_utc_date(0,False) - config.last_s3_upload).total_seconds()
+    print(f"Time elapsed: {elapsed} seconds")
+    sleep(max(0, ceil(60 - elapsed)))
     # Upload data to S3
     try:
         s3_client = get_s3_client()

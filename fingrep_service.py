@@ -232,37 +232,38 @@ def fetch_and_insert_market_metrics(ticker:str, ticker_id:int):
 def fetch_and_update_market_metrics(ticker_id_map:dict):
     try:
         tickers = list(ticker_id_map.keys())
-        date = utils.get_utc_date(config.days)
         # Short volume
-        short_volumes = polygon_service.request_short_volume(tickers=tickers,date=date)
-        if short_volumes:
-            sv_list = []
-            for short_volume in short_volumes:
-                sv_list_item = utils.safe_filter_dict_keys(
-                    data=[short_volume],
-                    keys_to_keep={'date', 'short_volume', 'total_volume', 'short_volume_ratio', 'exempt_volume',
-                                  'non_exempt_volume'},
-                    keys_to_add={'share_id': ticker_id_map[short_volume['ticker']]},
-                    rename={'total_volume': 'f_volume'}
-                )
-                sv_list.extend(sv_list_item)
-            # Update database
-            upsert_data_smart(sv_list,'market_metrics', {'date', 'share_id'})
+        for i in range(0, len(tickers), 500):
+            short_volumes = polygon_service.request_short_volume(tickers=tickers[i:i+250], date=utils.get_utc_date(config.days))
+            if short_volumes:
+                sv_list = []
+                for short_volume in short_volumes:
+                    sv_list_item = utils.safe_filter_dict_keys(
+                        data=[short_volume],
+                        keys_to_keep={'date', 'short_volume', 'total_volume', 'short_volume_ratio', 'exempt_volume',
+                                      'non_exempt_volume'},
+                        keys_to_add={'share_id': ticker_id_map[short_volume['ticker']]},
+                        rename={'total_volume': 'f_volume'}
+                    )
+                    sv_list.extend(sv_list_item)
+                # Update database
+                upsert_data_smart(sv_list,'market_metrics', {'date', 'share_id'})
 
         # Short interest
-        short_interests = polygon_service.request_short_interest(tickers=tickers,date=date)
-        if short_interests:
-            si_list = []
-            for short_interest in short_interests:
-                si_list_item = utils.safe_filter_dict_keys(
-                    data=[short_interest],
-                    keys_to_keep= {'settlement_date', 'short_interest', 'avg_daily_volume', 'days_to_cover'},
-                    keys_to_add= {'share_id': ticker_id_map[short_interest['ticker']]},
-                    rename= {'settlement_date': 'date', 'avg_daily_volume': 'avg_f_volume', 'days_to_cover': 'short_interest_ratio'}
-                )
-                si_list.extend(si_list_item)
-            # Update database
-            upsert_data_smart(si_list,'market_metrics', {'date', 'share_id'})
+        for i in range(0, len(tickers), 500):
+            short_interests = polygon_service.request_short_interest(tickers=tickers[i:i+250],date=utils.get_utc_date(config.days))
+            if short_interests:
+                si_list = []
+                for short_interest in short_interests:
+                    si_list_item = utils.safe_filter_dict_keys(
+                        data=[short_interest],
+                        keys_to_keep= {'settlement_date', 'short_interest', 'avg_daily_volume', 'days_to_cover'},
+                        keys_to_add= {'share_id': ticker_id_map[short_interest['ticker']]},
+                        rename= {'settlement_date': 'date', 'avg_daily_volume': 'avg_f_volume', 'days_to_cover': 'short_interest_ratio'}
+                    )
+                    si_list.extend(si_list_item)
+                # Update database
+                upsert_data_smart(si_list,'market_metrics', {'date', 'share_id'})
 
     except Exception as e:
         logger.error(f"fetch_and_update_market_metrics couldn't update market metrics for date {utils.get_utc_date(config.days)}.")
