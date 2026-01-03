@@ -61,7 +61,8 @@ def get_latest_filings(filing_date:str) -> pd.DataFrame:
 
     # Filters for the query below
     forms = list(utils.forms['annual'].union(utils.forms['quarterly']))
-    df_filings = (edgar.get_filings(filing_date=filing_date, amendments=False).to_pandas()
+    df_filings = (edgar.get_filings(filing_date=filing_date, amendments=False)
+                  .to_pandas()
                   .query('form in @forms'))
     if not df_filings.empty and {'form', 'cik', 'filing_date', 'accession_number'}.issubset(set(df_filings.columns)):
         return df_filings

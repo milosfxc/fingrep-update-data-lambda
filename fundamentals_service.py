@@ -1,6 +1,7 @@
 import datetime
 import edgar
 import aws_service
+import config
 import edgar_service_v2
 import yahoo_service
 from edgar_service_v2 import get_filings_by_company, get_q4_statements, get_filing_details
@@ -40,7 +41,8 @@ def get_company_fundamentals(ticker: str, share_id: int, cutoff_date:str):
 
 def update_fundamentals():
     # Daily update
-    df_filings = edgar_service_v2.get_latest_filings(get_utc_date(days=1,as_str=True))
+    df_filings = edgar_service_v2.get_latest_filings(get_utc_date(days=config.days))
+
     ticker_and_share_id_by_cik = db_ops.get_foreign_keys()['ticker_and_share_id_by_cik']
     processed_filings = db_ops.get_accession_numbers()
     filings = []
