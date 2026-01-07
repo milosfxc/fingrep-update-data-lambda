@@ -668,11 +668,10 @@ def get_q4_statements(a_statements:dict,share_id:int, report_period: date) -> di
     a_bs = a_statements.pop('BalanceSheet')
     q_statements ={'BalanceSheet': a_bs}
     # Other data
-
     filing_date = a_bs['filing_date']
     report_date = a_bs['date']
     currency_id = a_bs['currency_id']
-    fiscal_period_id  = a_bs['fiscal_period_id'] + 4
+    fiscal_period_id  = a_bs['fiscal_period_id'] + 4 if a_bs['fiscal_period_id'] else None
     calendar_period_id = utils.report_periods.get(get_calendar_period(report_date,'10-Q'))
     q_statements['BalanceSheet']['fiscal_period_id'] = fiscal_period_id
     q_statements['BalanceSheet']['calendar_period_id'] = calendar_period_id

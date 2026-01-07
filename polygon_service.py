@@ -62,7 +62,7 @@ def request_all_tickers(date: str):
 @retry(exceptions=requests.RequestException, tries=3, delay=2, backoff=2)
 def request_aggregate_daily_bars(ticker, date_from, limit):
     global retry_counter
-    url = (f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/{date_from}/{get_utc_date(days=config.days)}"
+    url = (f"https://api.massive.com/v2/aggs/ticker/{ticker}/range/1/day/{date_from}/{get_utc_date(days=config.days)}"
            f"?adjusted=true&sort=asc&limit={limit}")
     params = {
         "apiKey": os.getenv("POLYGON_API_KEY")
@@ -210,3 +210,32 @@ def batch_requests(tickers:list, request_function: callable,batch_size:int, date
         except requests.RequestException as e:
             logger.error(f"batch_requests_{request_function.__name__} - Exception occurred on the 3rd try for the batch of tickers {batch}: \n{e}")
     return data
+
+
+@retry(exceptions=requests.RequestException, tries=3, delay=2, backoff=2)
+def request_aggregate_bars(ticker:str, timeframe:str, date_start:str, date_end:str, limit:int):
+    global retry_counter
+    url = (f"https://api.massive.com/v2/aggs/ticker/{ticker}/range/1/{timeframe}/{date_start}/{date_end}"
+           f"?adjusted=true&sort=asc&limit={limit}")
+    params = {
+        "apiKey": os.getenv("POLYGON_API_KEY")
+    }
+
+
+    method_name = inspect.currentframe().f_code.co_name
+    try:
+        response = requests.get(url, params=params)
+        retry_counter += 1
+
+        if response.status_code == 200:
+            data = response.json()
+            retry_counter = 0
+            return data
+        else:
+            raise requests.RequestException(f"{method_name} - API request failed with status code: {response.status_code}")
+
+    except requests.RequestException as e:
+        if retry_counter >= 3:  # Only log after the third attempt
+            logger.error(f"{method_name} - Exception occurred on the third try: {str(e)}")
+            retry_counter = 0  # Reset the counter after third attempt
+        raise
