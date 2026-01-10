@@ -70,7 +70,7 @@ SELECT CASE WHEN _abs_atr IS NOT NULL AND NEW.close <> 0 THEN _abs_atr * _magn /
 
 --DOLLAR VOLUME
 IF NEW.volume IS NOT NULL AND NEW.vwap IS NOT NULL THEN
-    _dollar_volume := NEW.volume * NEW.vwap;
+    _dollar_volume := NEW.volume * NEW.vwap / _magn;
 ELSE
     _dollar_volume := 0;
 END IF;
@@ -92,7 +92,7 @@ SELECT
 	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(high - low) END AS _abs_adr,
 	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(close) END AS _sma20,
 	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(volume) END AS _avg_volume,
-	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(volume * vwap) END AS _avg_dollar_volume,
+	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(volume * vwap / _magn) END AS _avg_dollar_volume,
 	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN MIN(low) END AS _twenty_day_low,
 	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN MAX(high) END AS _twenty_day_high
 INTO
