@@ -5,7 +5,7 @@ from ConnType import DBLocation
 import logging
 from edgar import set_identity
 # stock market data config
-days = 1 # Offset from current date
+days = 2 # Offset from current date
 years = 5 # OHLCV data
 date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * years)
 mb_historical = True # false updates market breadth for the current day, true updates for the last 100 days

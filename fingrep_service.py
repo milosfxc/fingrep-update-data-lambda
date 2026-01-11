@@ -234,7 +234,7 @@ def fetch_and_update_market_metrics(ticker_id_map:dict):
         tickers = list(ticker_id_map.keys())
         # Short volume
         for i in range(0, len(tickers), 500):
-            short_volumes = polygon_service.request_short_volume(tickers=tickers[i:i+250], date=utils.get_utc_date(config.days))
+            short_volumes = polygon_service.request_short_volume(tickers=tickers[i:i+500], date=utils.get_utc_date(config.days))
             if short_volumes:
                 sv_list = []
                 for short_volume in short_volumes:
@@ -251,7 +251,7 @@ def fetch_and_update_market_metrics(ticker_id_map:dict):
 
         # Short interest
         for i in range(0, len(tickers), 500):
-            short_interests = polygon_service.request_short_interest(tickers=tickers[i:i+250],date=utils.get_utc_date(config.days))
+            short_interests = polygon_service.request_short_interest(tickers=tickers[i:i+500],date=utils.get_utc_date(config.days))
             if short_interests:
                 si_list = []
                 for short_interest in short_interests:
