@@ -11,6 +11,8 @@ from markdown_it.common.utils import escapeHtml
 from datetime import datetime, timedelta, date
 import config
 import pandas as pd
+
+import fingrep_service
 from config import POLYGON_API_KEY
 import db_ops
 import edgar_service_v2
@@ -210,4 +212,9 @@ if __name__ == "__main__":
     # for i in range(1,31):
     #     date_str = date(2025, 11, i).strftime('%Y-%m-%d')
     #     get_convertible_notes_offerings(date_str)
-    fundamentals_service.get_company_fundamentals('GNLN',6385,config.report_start_date)
+    # date_from = datetime.now(UTC).date() - timedelta(days=365 * config.years)
+    # fingrep_service.get_and_insert_aggregated_bars('GUT',9248,date_from, 5000)
+    # fundamentals_service.get_company_fundamentals('GUT',9248,config.report_start_date)
+    df = pd.read_csv('/home/milosfxc/Desktop/ids.csv')
+    arr = df['share_id'].values.tolist()
+    print(f"missing_remote_shares = {arr[1500:]}")

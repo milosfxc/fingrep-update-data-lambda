@@ -74,7 +74,7 @@ def update_s3_bucket():
                         Metadata= {
                             'timestamp': utc_datetime,
                             'table': filename.split('.')[0] if '.' in filename else filename,
-                            'dml': 'delete' if filename.endswith('delete_ids.csv') else 'insert'
+                            'dml': 'delete' if s3_key.endswith('delete_ids.csv') else 'insert'
                         }
                     )
 

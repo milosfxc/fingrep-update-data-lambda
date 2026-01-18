@@ -28,7 +28,8 @@ def get_stock_data():
     # Importing data for existing tickers
     fingrep_service.insert_grouped_daily_bars(df_grouped_daily_existing.copy())
     # Update market metrics existing tickers
-    fetch_and_update_market_metrics(existing_tickers)
+    if config.market_metrics:
+        fetch_and_update_market_metrics(existing_tickers)
     # Data frame for new tickers
     df_grouped_daily_new = df_grouped_daily[df_grouped_daily['id'].isna()]
     df_grouped_daily_new = df_grouped_daily_new[~df_grouped_daily_new['T'].isin(banned_tickers.keys())]
