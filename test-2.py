@@ -1,98 +1,44 @@
-import yfinance as yf
-import pandas as pd
-import numpy as np
+import fingrep_service
+import utils
+from db_ops import get_existing_tickers
+from polygon_service import request_aggregate_bars
+from datetime import datetime, timezone,date, timedelta,time
+from db_ops_v2 import upsert_data_smart
+from utils import us_market_open_utc
 
-# -----------------------------
-# CONFIG
-# -----------------------------
-TICKER = "SPY"
-START = "2012-01-01"
-WINDOW = 252        # rolling window for Markov fit
-VOL_WINDOW = 20
-VWAP_WINDOW = 20
+if __name__ == "__main__":
+    existing_tickers = get_existing_tickers()
+    fingrep_service.insert_minute_bars_for_ticker('TSLA',4117, date(2026, 3,2), date(2026, 3, 3))
 
-# -----------------------------
-# 1. Download data
-# -----------------------------
-df = yf.download(TICKER, start=START, auto_adjust=True)
-df = df[["Close", "Volume"]].dropna()
 
-# -----------------------------
-# 2. Features
-# -----------------------------
-df["ret"] = df["Close"].pct_change()
-
-# VWAP (rolling)
-df["vwap"] = (
-    (df["Close"] * df["Volume"])
-    .rolling(VWAP_WINDOW)
-    .sum()
-    / df["Volume"].rolling(VWAP_WINDOW).sum()
-)
-
-# Volume regime
-df["vol_mean"] = df["Volume"].rolling(VOL_WINDOW).mean()
-
-# -----------------------------
-# 3. Define states
-# -----------------------------
-def state(row):
-    direction = "BULL" if row["ret"] > 0 else "BEAR"
-    vol = "HIGHVOL" if row["Volume"] > row["vol_mean"] else "LOWVOL"
-    vwap = "ABOVE_VWAP" if row["Close"] > row["vwap"] else "BELOW_VWAP"
-    return f"{direction}_{vol}_{vwap}"
-
-df = df.dropna()
-df["state"] = df.apply(state, axis=1)
-
-# -----------------------------
-# 4. 2nd-order Markov backtest
-# -----------------------------
-predictions = []
-actuals = []
-
-for i in range(WINDOW + 2, len(df) - 1):
-    train = df.iloc[i - WINDOW:i]
-
-    # Build transitions: (state[t-2], state[t-1]) -> state[t]
-    transitions = {}
-
-    for j in range(2, len(train)):
-        key = (train["state"].iloc[j-2], train["state"].iloc[j-1])
-        nxt = train["state"].iloc[j]
-
-        transitions.setdefault(key, {})
-        transitions[key][nxt] = transitions[key].get(nxt, 0) + 1
-
-    prev2 = df["state"].iloc[i-2]
-    prev1 = df["state"].iloc[i-1]
-    key = (prev2, prev1)
-
-    if key not in transitions:
-        continue
-
-    probs = transitions[key]
-    total = sum(probs.values())
-
-    bull_prob = sum(v for k, v in probs.items() if k.startswith("BULL")) / total
-    bear_prob = 1 - bull_prob
-
-    predictions.append(bull_prob > bear_prob)
-    actuals.append(df["ret"].iloc[i+1] > 0)
-
-# -----------------------------
-# 5. Evaluation
-# -----------------------------
-predictions = np.array(predictions)
-actuals = np.array(actuals)
-
-accuracy = (predictions == actuals).mean()
-
-# Strategy return
-strategy_ret = df["ret"].iloc[-len(predictions):][predictions].sum()
-buy_hold_ret = df["ret"].iloc[-len(predictions):].sum()
-
-print("\n--- RESULTS ---")
-print(f"Accuracy: {accuracy:.3f}")
-print(f"Strategy return: {strategy_ret:.3f}")
-print(f"Buy & Hold return: {buy_hold_ret:.3f}")
+    # fingrep_service.insert_minute_bars({'MARA': existing_tickers.get('MARA')}, date(2026, 3, 4))
+    # us_market_open = utils.us_market_open_utc(date(2025, 12, 16))
+    # us_premarket_open = us_market_open - timedelta(hours=5.5)
+    # us_market_close = us_market_open + timedelta(hours=6.5)
+    # us_aftermarket_close = us_market_close + timedelta(hours=4) + timedelta(days=10)
+    # date_str = int(us_premarket_open.timestamp() * 1000)
+    # date_end = int(us_aftermarket_close.timestamp() * 1000)
+    # bars = request_aggregate_bars(ticker="AAPL",timeframe="minute", multiplier=1,date_start=str(date_str),date_end=str(date_end),limit=50000)
+    # ohlcv_list = bars['results']
+    # insert_list = []
+    # for ohlcv_dict in ohlcv_list:
+    #     bar_datetime = datetime.fromtimestamp(ohlcv_dict['t'] / 1000, timezone.utc)
+    #     insert_dict = {
+    #         'datetime': bar_datetime,
+    #         'abs_atr': None,
+    #         'avg_volume': None,
+    #         'close': int(ohlcv_dict['c'] * 10_000),
+    #         'convergence2': None,
+    #         'convergence3': None,
+    #         'high': int(ohlcv_dict['h'] * 10_000),
+    #         'low': int(ohlcv_dict['l'] * 10_000),
+    #         'open': int(ohlcv_dict['o'] * 10_000),
+    #         'rel_volume': None,
+    #         'session': 0 if bar_datetime.time() < us_market_open.time() else 1 if bar_datetime.time() < us_market_close.time() else 2,
+    #         'sma10': None,
+    #         'volume': int(ohlcv_dict['v'] * 10_000),
+    #         'vwap': int(ohlcv_dict['vw'] * 10_000),
+    #         'share_id': 5
+    #     }
+    #     insert_list.append(insert_dict)
+    # upsert_data_smart(insert_list,'timeframe_1m',{'share_id','datetime'})

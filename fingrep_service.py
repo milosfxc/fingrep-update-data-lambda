@@ -76,6 +76,75 @@ def insert_grouped_daily_bars(df):
     df[utils.magnified_columns_existing] = df[utils.magnified_columns_existing] * 10000
     db_ops.upsert_dataframe_v2(df, 'd_timeframe')
 
+def insert_minute_bars_for_date(tickers: dict[str,int], date_obj: date):
+    us_market_open = utils.us_market_open_utc(date_obj)
+    us_premarket_open = us_market_open - timedelta(hours=5.5)
+    us_market_close = us_market_open + timedelta(hours=6.5)
+    us_aftermarket_close = us_market_close + timedelta(hours=4)
+    date_start = str(int(us_premarket_open.timestamp() * 1000))
+    date_end = str(int(us_aftermarket_close.timestamp() * 1000))
+    insert_list = []
+    for ticker, share_id in tickers.items():
+        data = polygon_service.request_aggregate_bars(ticker=ticker, timeframe="minute", multiplier=1, date_start=date_start, date_end=date_end, limit=50000)
+        ohlcv_list = data['results']
+        for ohlcv_dict in ohlcv_list:
+            bar_datetime = datetime.fromtimestamp(ohlcv_dict['t'] / 1000, timezone.utc)
+            insert_dict = {
+                'datetime': bar_datetime,
+                'abs_atr': None,
+                'avg_volume': None,
+                'close': int(ohlcv_dict['c'] * 10_000),
+                'convergence2': None,
+                'convergence3': None,
+                'high': int(ohlcv_dict['h'] * 10_000),
+                'low': int(ohlcv_dict['l'] * 10_000),
+                'open': int(ohlcv_dict['o'] * 10_000),
+                'rel_volume': None,
+                'session': 0 if bar_datetime.time() < us_market_open.time() else 1 if bar_datetime.time() < us_market_close.time() else 2,
+                'sma10': None,
+                'volume': int(ohlcv_dict['v'] * 10_000),
+                'vwap': int(ohlcv_dict['vw'] * 10_000),
+                'share_id': share_id
+            }
+            insert_list.append(insert_dict)
+    print('Finished collection.')
+    upsert_data_smart(insert_list,'timeframe_1m',{'share_id','datetime'})
+
+
+def insert_minute_bars_for_ticker(ticker: str, share_id: int, date_start: date, date_end: date):
+    date_iter = date_start
+    insert_list = []
+    while date_iter <= date_end:
+        us_market_open = utils.us_market_open_utc(date_iter)
+        us_premarket_open = us_market_open - timedelta(hours=5.5)
+        us_market_close = us_market_open + timedelta(hours=6.5)
+        us_aftermarket_close = us_market_close + timedelta(hours=4)
+        request_date_start = str(int(us_premarket_open.timestamp() * 1000))
+        request_date_end = str(int(us_aftermarket_close.timestamp() * 1000))
+        data = polygon_service.request_aggregate_bars(ticker=ticker, timeframe="minute", multiplier=1, date_start=request_date_start, date_end=request_date_end, limit=50000)
+        ohlcv_list = data['results']
+        for ohlcv_dict in ohlcv_list:
+            bar_datetime = datetime.fromtimestamp(ohlcv_dict['t'] / 1000, timezone.utc)
+            insert_dict = {
+                'datetime': bar_datetime,
+                'abs_atr': None,
+                'avg_volume': None,
+                'close': int(ohlcv_dict['c'] * 10_000),
+                'convergence2': None,
+                'convergence3': None,
+                'high': int(ohlcv_dict['h'] * 10_000),
+                'low': int(ohlcv_dict['l'] * 10_000),
+                'open': int(ohlcv_dict['o'] * 10_000),
+                'rel_volume': None,
+                'session': 0 if bar_datetime.time() < us_market_open.time() else 1 if bar_datetime.time() < us_market_close.time() else 2,
+                'sma10': None,
+                'volume': int(ohlcv_dict['v'] * 10_000),
+                'vwap': int(ohlcv_dict['vw'] * 10_000),
+                'share_id': share_id
+            }
+            insert_list.append(insert_dict)
+        date_iter = date_iter + timedelta(days=1)
+    upsert_data_smart(insert_list,'timeframe_1m',{'share_id','datetime'})
 
 
 def get_new_ticker_data_and_insert(ticker, finviz_df):

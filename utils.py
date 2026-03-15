@@ -1,8 +1,8 @@
 import math
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, date, time, timedelta, timezone
 from typing import Union
-import logging
+from zoneinfo import ZoneInfo
 
 import config
 
@@ -125,3 +125,9 @@ def is_number(s) -> bool:
         return True
     except (ValueError,TypeError):
         return False
+
+
+
+def us_market_open_utc(d: date) -> datetime:
+    ny_time = datetime.combine(d, time(9, 30), ZoneInfo("America/New_York"))
+    return ny_time.astimezone(timezone.utc)

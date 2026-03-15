@@ -87,7 +87,6 @@ def _upsert_large_dataset(data: List[Dict[str, Any]], table_name: str, conflict_
                 writer = csv.writer(output, quoting=csv.QUOTE_MINIMAL)
 
                 for row in data:
-                    print(row)
                     writer.writerow([None if row.get(col) == '' else row.get(col) for col in columns])
 
                 output.seek(0)

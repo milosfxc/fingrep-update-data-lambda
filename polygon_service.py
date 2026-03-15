@@ -213,9 +213,9 @@ def batch_requests(tickers:list, request_function: callable,batch_size:int, date
 
 
 @retry(exceptions=requests.RequestException, tries=3, delay=2, backoff=2)
-def request_aggregate_bars(ticker:str, timeframe:str, date_start:str, date_end:str, limit:int):
+def request_aggregate_bars(ticker:str, timeframe:str, multiplier:int, date_start:str, date_end:str, limit:int):
     global retry_counter
-    url = (f"https://api.massive.com/v2/aggs/ticker/{ticker}/range/1/{timeframe}/{date_start}/{date_end}"
+    url = (f"https://api.massive.com/v2/aggs/ticker/{ticker}/range/{multiplier}/{timeframe}/{date_start}/{date_end}"
            f"?adjusted=true&sort=asc&limit={limit}")
     params = {
         "apiKey": os.getenv("POLYGON_API_KEY")
