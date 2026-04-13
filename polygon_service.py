@@ -1,11 +1,15 @@
 import inspect
 import os
 import urllib
+from typing import List
+
 import requests
 from retry import retry
 import config
 from utils import get_utc_date
 from config import logger
+from massive.websocket.models import WebSocketMessage, Feed, Market
+from massive import WebSocketClient
 
 # Global variable to track retry attempts
 retry_counter = 0
@@ -212,30 +216,41 @@ def batch_requests(tickers:list, request_function: callable,batch_size:int, date
     return data
 
 
-@retry(exceptions=requests.RequestException, tries=3, delay=2, backoff=2)
-def request_aggregate_bars(ticker:str, timeframe:str, multiplier:int, date_start:str, date_end:str, limit:int):
+@retry(exceptions=requests.RequestException, tries=3, delay=1, backoff=2)
+def request_aggregate_bars(ticker: str, timeframe: str, multiplier: int, date_start: str, date_end: str, limit: int):
     global retry_counter
-    url = (f"https://api.massive.com/v2/aggs/ticker/{ticker}/range/{multiplier}/{timeframe}/{date_start}/{date_end}"
-           f"?adjusted=true&sort=asc&limit={limit}")
+
+    url = (
+        f"https://api.massive.com/v2/aggs/ticker/{ticker}/range/{multiplier}/{timeframe}/{date_start}/{date_end}"
+        f"?adjusted=true&sort=asc&limit={limit}"
+    )
+
     params = {
         "apiKey": os.getenv("POLYGON_API_KEY")
     }
 
-
     method_name = inspect.currentframe().f_code.co_name
+
     try:
         response = requests.get(url, params=params)
         retry_counter += 1
 
         if response.status_code == 200:
-            data = response.json()
             retry_counter = 0
-            return data
-        else:
-            raise requests.RequestException(f"{method_name} - API request failed with status code: {response.status_code}")
+            return response.json()
+
+        raise requests.RequestException(
+            f"{method_name} - API request failed with status code: {response.status_code}"
+        )
 
     except requests.RequestException as e:
-        if retry_counter >= 3:  # Only log after the third attempt
-            logger.error(f"{method_name} - Exception occurred on the third try: {str(e)}")
-            retry_counter = 0  # Reset the counter after third attempt
+        if retry_counter >= 3:
+            logger.error(f"{method_name} - Failed after 3 attempts: {str(e)}")
+            retry_counter = 0
+            return None
+
         raise
+
+
+def create_ws_client(subscriptions: list,feed: Feed, market: Market, raw: bool) -> WebSocketClient:
+    return WebSocketClient(api_key= os.getenv("POLYGON_API_KEY"), subscriptions = subscriptions, feed=feed, market=market,raw=raw)

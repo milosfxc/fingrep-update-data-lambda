@@ -114,6 +114,52 @@ rel_volume = _rel_volume
 WHERE share_id = NEW.share_id AND
 datetime = NEW.datetime;
 
+--TIMEFRAME 10m
+_timeframe_10m_start := timeframe_min_start(NEW.datetime, 10);
+_timeframe_10m_end := _timeframe_10m_start + INTERVAL '10 minutes';
+
+SELECT
+    (ARRAY_AGG(open ORDER BY datetime ASC))[1],
+    MAX(high),
+    MIN(low),
+    (ARRAY_AGG(close ORDER BY datetime DESC))[1],
+    SUM(volume),
+    CASE
+        WHEN SUM(volume) > 0 THEN
+            SUM(vwap * volume) / SUM(volume)
+    END,
+    (ARRAY_AGG(session ORDER BY datetime ASC))[1]
+    INTO
+    _open,_high,_low,_close,_volume,_vwap,_session
+FROM timeframe_5m
+WHERE share_id = NEW.share_id
+  AND datetime >= _timeframe_10m_start
+  AND datetime < _timeframe_10m_end;
+
+IF _close > 0 AND _session IS NOT NULL THEN
+    INSERT INTO timeframe_10m (
+        share_id,
+        datetime,
+        open,
+        high,
+        low,
+        close,
+        volume,
+        vwap,
+        session
+    )
+    VALUES (NEW.share_id, _timeframe_10m_start, _open, _high, _low, _close, _volume, _vwap, _session)
+    ON CONFLICT (share_id, datetime) DO UPDATE
+    SET
+        open   = EXCLUDED.open,
+        high   = EXCLUDED.high,
+        low    = EXCLUDED.low,
+        close  = EXCLUDED.close,
+        volume = EXCLUDED.volume,
+        vwap   = EXCLUDED.vwap,
+        session = EXCLUDED.session;
+END IF;
+
 --TIMEFRAME 15m
 _timeframe_15m_start := timeframe_min_start(NEW.datetime, 15);
 _timeframe_15m_end := _timeframe_15m_start + INTERVAL '15 minutes';

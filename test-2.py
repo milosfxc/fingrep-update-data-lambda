@@ -1,15 +1,16 @@
+from cffi.cffi_opcode import PRIM_FLOAT
+from massive import websocket
 import fingrep_service
-import utils
+from utils import get_utc_date
 from db_ops import get_existing_tickers
 from polygon_service import request_aggregate_bars
 from datetime import datetime, timezone,date, timedelta,time
 from db_ops_v2 import upsert_data_smart
 from utils import us_market_open_utc
-
+from config import  days
 if __name__ == "__main__":
     existing_tickers = get_existing_tickers()
-    fingrep_service.insert_minute_bars_for_ticker('TSLA',4117, date(2026, 3,2), date(2026, 3, 3))
-
+    fingrep_service.insert_minute_bars_for_date(existing_tickers, get_utc_date(72,False))
 
     # fingrep_service.insert_minute_bars({'MARA': existing_tickers.get('MARA')}, date(2026, 3, 4))
     # us_market_open = utils.us_market_open_utc(date(2025, 12, 16))

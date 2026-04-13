@@ -37,6 +37,8 @@ DECLARE
 	_ytd_high d_timeframe.ytd_low%type;
 	_all_time_low d_timeframe.all_time_low%type;
 	_all_time_high d_timeframe.all_time_high%type;
+	_week_start DATE;
+    _week_end DATE;
 BEGIN
 --SMA10
 WITH last_10 AS (
@@ -130,10 +132,10 @@ INTO _avg_volume_ytd, _ytd_low, _ytd_high
 FROM last_252;
 
 SELECT
-	CASE WHEN _avg_volume_40 != 0 AND _avg_volume_ytd != 0 THEN _avg_volume_40 * _magn / NULLIF(_avg_volume_ytd,0) ELSE 0 END AS _dense_volume
+	CASE WHEN _avg_volume_40 != 0 AND _avg_volume_ytd != 0 THEN _avg_volume_40 * _magn / _avg_volume_ytd ELSE 0 END AS _dense_volume
 INTO _dense_volume;
 --RVOL
-SELECT CASE WHEN _avg_volume != 0 THEN volume * _magn / NULLIF(_avg_volume,0) END INTO _rel_volume
+SELECT CASE WHEN _avg_volume != 0 THEN volume * _magn / _avg_volume END INTO _rel_volume
 FROM d_timeframe WHERE share_id = NEW.share_id AND date = NEW.date;
 --SMA50 & FIFTY DAY HIGH/LOW
 WITH last_50 AS (
@@ -185,8 +187,8 @@ WITH last_2 AS (
 	ORDER BY date DESC LIMIT 2
 )
 SELECT close - LAG(close, 1) OVER (ORDER BY date ASC) AS _abs_change,
-((close * _magn / LAG(close, 1) OVER (ORDER BY date ASC)) - 10000) * 100 AS _rel_change,
-((open * _magn / LAG(close, 1) OVER (ORDER BY date ASC)) - 10000) * 100 AS _rel_gap
+((close * _magn / LAG(NULLIF(close,0), 1) OVER (ORDER BY date ASC)) - 10000) * 100 AS _rel_change,
+((open * _magn / LAG(NULLIF(close,0), 1) OVER (ORDER BY date ASC)) - 10000) * 100 AS _rel_gap
 INTO _abs_change, _rel_change, _rel_gap FROM last_2 ORDER BY date DESC LIMIT 1;
 
 --AFTER HOURS CHANGE
@@ -211,27 +213,27 @@ SELECT
 FROM last_3;
 
 --WEEKLY CHANGE
-SELECT (NEW.close * _magn / open - 10000) * 100 INTO _rel_w_change FROM d_timeframe WHERE date > (NEW.date - INTERVAL '1 week')
+SELECT (NEW.close * _magn / NULLIF(open,0) - 10000) * 100 INTO _rel_w_change FROM d_timeframe WHERE date > (NEW.date - INTERVAL '1 week')
 AND share_id = NEW.share_id ORDER BY date ASC LIMIT 1;
 
 --MONTHLY CHANGE
-SELECT (NEW.close * _magn / open - 10000) * 100 INTO _rel_m_change FROM d_timeframe WHERE date > (NEW.date - INTERVAL '1 month')
+SELECT (NEW.close * _magn / NULLIF(open,0) - 10000) * 100 INTO _rel_m_change FROM d_timeframe WHERE date > (NEW.date - INTERVAL '1 month')
 AND share_id = NEW.share_id ORDER BY date ASC LIMIT 1;
 
 --QUARTERLY CHANGE
-SELECT (NEW.close * _magn / open - 10000) * 100 INTO _rel_q_change FROM d_timeframe WHERE date > (NEW.date - INTERVAL '3 month')
+SELECT (NEW.close * _magn / NULLIF(open,0) - 10000) * 100 INTO _rel_q_change FROM d_timeframe WHERE date > (NEW.date - INTERVAL '3 month')
 AND share_id = NEW.share_id ORDER BY date ASC LIMIT 1;
 
 --6M CHANGE
-SELECT (NEW.close * _magn / open - 10000) * 100 INTO _rel_6m_change FROM d_timeframe WHERE date > (NEW.date - INTERVAL '6 month')
+SELECT (NEW.close * _magn / NULLIF(open,0) - 10000) * 100 INTO _rel_6m_change FROM d_timeframe WHERE date > (NEW.date - INTERVAL '6 month')
 AND share_id = NEW.share_id ORDER BY date ASC LIMIT 1;
 
 --YTD CHANGE
-SELECT (NEW.close * _magn / open - 10000) * 100 INTO _rel_ytd_change FROM d_timeframe WHERE date > (NEW.date - INTERVAL '1 year')
+SELECT (NEW.close * _magn / NULLIF(open,0) - 10000) * 100 INTO _rel_ytd_change FROM d_timeframe WHERE date > (NEW.date - INTERVAL '1 year')
 AND share_id = NEW.share_id ORDER BY date ASC LIMIT 1;
 
 --YEAR CHANGE
-SELECT (NEW.close * _magn / close - 10000) * 100 INTO _rel_y_change FROM d_timeframe WHERE date >= DATE_TRUNC('year', NEW.date)
+SELECT (NEW.close * _magn / NULLIF(close,0) - 10000) * 100 INTO _rel_y_change FROM d_timeframe WHERE date >= DATE_TRUNC('year', NEW.date)
 AND share_id = NEW.share_id ORDER BY date ASC LIMIT 1;
 
 --ALL TIME HIGH/LOW
@@ -254,11 +256,53 @@ rel_ytd_change = _rel_ytd_change, rel_y_change = _rel_y_change,
 twenty_day_low = _twenty_day_low, twenty_day_high = _twenty_day_high, fifty_day_low = _fifty_day_low, fifty_day_high = _fifty_day_high, ytd_low = _ytd_low, ytd_high = _ytd_high, all_time_low = _all_time_low, all_time_high = _all_time_high
 WHERE share_id = NEW.share_id AND date = NEW.date;
 
+-- TIMEFRAME W CALCULATION
+_week_start := date_trunc('week', NEW.date)::date;
+_week_end   := (_week_start + INTERVAL '1 week')::date;
+
+INSERT INTO w_timeframe (
+    share_id,
+    date,
+    open,
+    high,
+    low,
+    close,
+    volume,
+    vwap
+)
+SELECT * FROM (
+    SELECT
+        NEW.share_id AS share_id,
+        _week_start AS date,
+        (ARRAY_AGG(open ORDER BY date ASC))[1] AS open,
+        MAX(high) AS high,
+        MIN(low) AS low,
+        (ARRAY_AGG(close ORDER BY date DESC))[1] AS close,
+        SUM(volume) AS volume,
+        CASE
+            WHEN SUM(volume) > 0 THEN
+                SUM(vwap * volume) / SUM(volume)
+        END AS vwap
+    FROM d_timeframe
+    WHERE share_id = NEW.share_id
+      AND date >= _week_start
+      AND date < _week_end
+) t WHERE t.close IS NOT NULL
+ON CONFLICT (share_id, date) DO UPDATE
+SET
+    open    = EXCLUDED.open,
+    high    = EXCLUDED.high,
+    low     = EXCLUDED.low,
+    close   = EXCLUDED.close,
+    volume  = EXCLUDED.volume,
+    vwap    = EXCLUDED.vwap;
+
+
 RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER update_d_timeframe_trigger
-AFTER INSERT ON d_timeframe
+AFTER INSERT OR OR UPDATE OF open, high, low, close, volume, vwap ON d_timeframe
 FOR EACH ROW
 EXECUTE FUNCTION update_d_timeframe();

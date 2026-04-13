@@ -1,6 +1,11 @@
 import sys
-from datetime import datetime,date, timezone, timedelta
+from datetime import datetime, date, timezone, timedelta, time
 import inspect
+from typing import List
+import time
+from cffi.cffi_opcode import PRIM_INT
+from massive.websocket.models import WebSocketMessage, Feed, Market
+
 import pandas as pd
 import requests
 import aws_service
@@ -84,8 +89,15 @@ def insert_minute_bars_for_date(tickers: dict[str,int], date_obj: date):
     date_start = str(int(us_premarket_open.timestamp() * 1000))
     date_end = str(int(us_aftermarket_close.timestamp() * 1000))
     insert_list = []
+    counter = 0
     for ticker, share_id in tickers.items():
+        counter += 1
+        print(counter)
+        if counter == 101: break # todo delete this line later
         data = polygon_service.request_aggregate_bars(ticker=ticker, timeframe="minute", multiplier=1, date_start=date_start, date_end=date_end, limit=50000)
+        if data is None or 'results' not in data:
+            logger.warning(f"No 1m data found for ticker {ticker}")
+            continue
         ohlcv_list = data['results']
         for ohlcv_dict in ohlcv_list:
             bar_datetime = datetime.fromtimestamp(ohlcv_dict['t'] / 1000, timezone.utc)
@@ -104,12 +116,17 @@ def insert_minute_bars_for_date(tickers: dict[str,int], date_obj: date):
                 'sma10': None,
                 'volume': int(ohlcv_dict['v'] * 10_000),
                 'vwap': int(ohlcv_dict['vw'] * 10_000),
-                'share_id': share_id
+                'share_id': share_id,
+                'time': bar_datetime.hour * 100 + bar_datetime.minute
             }
             insert_list.append(insert_dict)
-    print('Finished collection.')
-    upsert_data_smart(insert_list,'timeframe_1m',{'share_id','datetime'})
-
+        if counter % 50 == 0:
+            start_time = time.perf_counter()
+            upsert_data_smart(insert_list,'timeframe_1m',{'share_id','datetime'})
+            print(time.perf_counter() - start_time)
+            insert_list = []
+    if insert_list:
+        upsert_data_smart(insert_list,'timeframe_1m',{'share_id','datetime'})
 
 def insert_minute_bars_for_ticker(ticker: str, share_id: int, date_start: date, date_end: date):
     date_iter = date_start
@@ -177,7 +194,11 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
     aws_service.add_share_id(ticker_id, 'new')
     # Starter plan required for 2+ years historical data
     date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * config.years)
+    # Daily timeframe data
     get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
+    # 1m timeframe data
+    if config.insert_new_tickers_1m_timeframe:
+        insert_minute_bars_for_ticker(ticker, ticker_id, get_utc_date(config.days + config.days_1m), get_utc_date(config.days))
     # Update market metrics
     fetch_and_insert_market_metrics(ticker, ticker_id)
     # Fundamental data and trade info
@@ -336,6 +357,53 @@ def fetch_and_update_market_metrics(ticker_id_map:dict):
 
     except Exception as e:
         logger.error(f"fetch_and_update_market_metrics couldn't update market metrics for date {utils.get_utc_date(config.days)}.")
+import json
+def run_aggregates_stream():
+    handle_agg_insert_list = []
+    us_market_open = utils.us_market_open_utc(get_utc_date(days=0,as_str=False))
+    us_market_open_time = (utils.us_market_open_utc(get_utc_date(days=0,as_str=False))).time()
+    us_market_close_time = (us_market_open + timedelta(hours=6.5)).time()
+    existing_tickers = db_ops.get_existing_tickers()
+
+    def handle_aggregates(msgs: List[WebSocketMessage]):
+        # for m in msgs if isinstance(msgs, str) else []: todo this is for raw input
+        for m in msgs:
+            share_id =  existing_tickers.get(m.symbol)
+            if share_id is None: continue
+            bar_datetime = datetime.fromtimestamp(m.end_timestamp/1000, timezone.utc) # this here returns datetime that's 1 hour ahead of UTC. It must be UTC, not sure if it has something to do with my local time as matches it.
+            insert_dict = {
+                'datetime': bar_datetime,
+                'abs_atr': None,
+                'avg_volume': None,
+                'close': int(m.close * 10_000),
+                'convergence2': None,
+                'convergence3': None,
+                'high': int(m.high * 10_000),
+                'low': int(m.low * 10_000),
+                'open': int(m.open * 10_000),
+                'rel_volume': None,
+                'session': 0 if bar_datetime.time() < us_market_open_time else 1 if bar_datetime.time() < us_market_close_time else 2,
+                'sma10': None,
+                'volume': int(m.volume * 10_000),
+                'vwap': int(m.vwap * 10_000),
+                'share_id': share_id
+            }
+            handle_agg_insert_list.append(insert_dict)
+        # Insert into database
+        if handle_agg_insert_list and len(handle_agg_insert_list) > 2000:
+            start_time = datetime.now(timezone.utc)
+            upsert_data_smart(handle_agg_insert_list,'timeframe_1m',{'share_id','datetime'})
+            elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+            print(f"Inserted in {elapsed:.2f} seconds")
+            print(f"Inserted {len(handle_agg_insert_list)} rows")
+            handle_agg_insert_list.clear()
+    # Run steam
+    ws = polygon_service.create_ws_client(["AM.*"], Feed.Delayed, Market.Stocks, False)
+    ws.run(handle_msg=handle_aggregates)
+
+
+
+
 
 
 

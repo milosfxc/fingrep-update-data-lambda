@@ -229,6 +229,7 @@ def update_market_breadth(date: str):
 def upsert_dataframe_v2(df: pd.DataFrame, table_name: str):
     # Replace NaN with None
     df = df.astype(object).where(pd.notnull(df), None)
+    shs_id = df['share_id'].to_list()
     # Create a list of column update expressions for ON CONFLICT
     update_columns = ', '.join([f"{col} = EXCLUDED.{col}" for col in df.columns if col not in ['share_id', 'date']])
     # Create the SQL query for upserting

@@ -1,7 +1,7 @@
 import concurrent
 import time
 import aws_service
-from config import logger, update_fundamentals
+from config import logger, update_fundamentals, update_existing_tickers_1m_timeframe
 import pandas as pd
 from datetime import datetime, timezone, timedelta, UTC
 from sshtunnel import BaseSSHTunnelForwarderError
@@ -10,7 +10,7 @@ import db_ops
 import fingrep_service
 from ConnType import DBLocation
 from SSHTunnelManager import SSHTunnelManager
-from db_ops import get_existing_tickers, get_banned_tickers
+from db_ops import get_existing_tickers, get_banned_tickers, insert_new_ticker
 from fingrep_service import fetch_and_update_market_metrics
 from utils import get_utc_date
 from fundamentals_service import update_fundamentals
@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 def get_stock_data():
+    print(get_utc_date(days=config.days))
     # Get existing tickers, banned tickers and new daily data
     existing_tickers = get_existing_tickers()
     banned_tickers = get_banned_tickers()
@@ -26,7 +27,13 @@ def get_stock_data():
     df_grouped_daily['id'] = df_grouped_daily['T'].map(existing_tickers)
     df_grouped_daily_existing = df_grouped_daily.dropna(subset=['id'])
     # Importing data for existing tickers
+    startt_time = time.perf_counter()
     fingrep_service.insert_grouped_daily_bars(df_grouped_daily_existing.copy())
+    print(time.perf_counter() - startt_time)
+    return None
+    # Update 1m timeframe for existing tickers
+    if update_existing_tickers_1m_timeframe:
+        fingrep_service.insert_minute_bars_for_date(existing_tickers, get_utc_date(config.days))
     # Update market metrics existing tickers
     if config.market_metrics:
         fetch_and_update_market_metrics(existing_tickers)
@@ -38,29 +45,30 @@ def get_stock_data():
     foreign_keys_db = db_ops.get_foreign_keys()
     finviz_df = pd.read_csv('data/finviz_sic.csv')
     # Get new tickers in threaded environment
-    if config.multi_threaded:
-        with ThreadPoolExecutor(max_workers=config.threads_number) as executor:
-            futures = []
-            for i, new_ticker in enumerate(tickers_list[:config.limit]):
-                future = executor.submit(fingrep_service.get_new_ticker_data_and_insert,new_ticker, finviz_df)
-                futures.append(future)
-                time.sleep(config.thread_delay)
-            # Wait for all tasks to complete
-            for i, future in enumerate(concurrent.futures.as_completed(futures)):
-                try:
-                    future.result()  # This waits for completion and re-raises exceptions
-                    print(f"Completed {i + 1}/{config.limit}")
-                except Exception as e:
-                    print(f"Task {i + 1} failed: {e}")
-    else:
-        for new_ticker in tickers_list:
-            if counter == config.limit:
-                break
-            fingrep_service.get_new_ticker_data_and_insert(new_ticker, finviz_df)
-            print(counter)
-            counter += 1
-            if config.s3_upload and counter % config.s3_upload_limit == 0:
-                aws_service.update_s3_bucket()
+    if config.insert_new_tickers:
+        if config.multi_threaded:
+            with ThreadPoolExecutor(max_workers=config.threads_number) as executor:
+                futures = []
+                for i, new_ticker in enumerate(tickers_list[:config.limit]):
+                    future = executor.submit(fingrep_service.get_new_ticker_data_and_insert,new_ticker, finviz_df)
+                    futures.append(future)
+                    time.sleep(config.thread_delay)
+                # Wait for all tasks to complete
+                for i, future in enumerate(concurrent.futures.as_completed(futures)):
+                    try:
+                        future.result()  # This waits for completion and re-raises exceptions
+                        print(f"Completed {i + 1}/{config.limit}")
+                    except Exception as e:
+                        print(f"Task {i + 1} failed: {e}")
+        else:
+            for new_ticker in tickers_list:
+                if counter == config.limit:
+                    break
+                fingrep_service.get_new_ticker_data_and_insert(new_ticker, finviz_df)
+                print(counter)
+                counter += 1
+                if config.s3_upload and counter % config.s3_upload_limit == 0:
+                    aws_service.update_s3_bucket()
     # Update RSI for existing tickers
     fingrep_service.update_rsi_existing_tickers()
 
