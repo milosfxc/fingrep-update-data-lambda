@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION update_timeframe_3m()
+CREATE OR REPLACE FUNCTION update_timeframe_10m()
 RETURNS TRIGGER AS $$
 DECLARE
 	_magn BIGINT := 10000;
@@ -9,7 +9,7 @@ BEGIN
 --SMA10
 WITH last_10 AS (
 	SELECT close
-	FROM timeframe_3m
+	FROM timeframe_10m
 	WHERE share_id = NEW.share_id
 	AND datetime <= NEW.datetime
 	AND session = 1
@@ -21,7 +21,7 @@ SELECT CASE WHEN (SELECT COUNT(*) FROM last_10) = 10 THEN AVG(close) END INTO _s
 --ABS ATR
 WITH last_15 AS (
     SELECT datetime, high, low, close
-    FROM timeframe_3m
+    FROM timeframe_10m
     WHERE share_id = NEW.share_id
       AND datetime <= NEW.datetime
       AND session = 1
@@ -49,7 +49,7 @@ INTO _abs_atr
 FROM tr_values
 WHERE high_prev_close IS NOT NULL;
 
-UPDATE timeframe_3m SET
+UPDATE timeframe_10m SET
 sma10 = _sma10,
 abs_atr = _abs_atr
 WHERE share_id = NEW.share_id AND
@@ -59,7 +59,7 @@ RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER update_timeframe_3m_trigger
-AFTER INSERT ON timeframe_3m
+CREATE TRIGGER update_timeframe_10m_trigger
+AFTER INSERT ON timeframe_10m
 FOR EACH ROW
-EXECUTE FUNCTION update_timeframe_3m();
+EXECUTE FUNCTION update_timeframe_10m();

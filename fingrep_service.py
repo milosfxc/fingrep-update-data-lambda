@@ -93,37 +93,31 @@ def insert_minute_bars_for_date(tickers: dict[str,int], date_obj: date):
     for ticker, share_id in tickers.items():
         counter += 1
         print(counter)
-        if counter == 101: break # todo delete this line later
+        if counter == 10: break # todo delete this line later
         data = polygon_service.request_aggregate_bars(ticker=ticker, timeframe="minute", multiplier=1, date_start=date_start, date_end=date_end, limit=50000)
         if data is None or 'results' not in data:
             logger.warning(f"No 1m data found for ticker {ticker}")
             continue
         ohlcv_list = data['results']
         for ohlcv_dict in ohlcv_list:
-            bar_datetime = datetime.fromtimestamp(ohlcv_dict['t'] / 1000, timezone.utc)
+            bar_datetime = datetime.fromtimestamp(ohlcv_dict['t'] / 1000, timezone.utc).replace(tzinfo=None)
             insert_dict = {
                 'datetime': bar_datetime,
                 'abs_atr': None,
-                'avg_volume': None,
                 'close': int(ohlcv_dict['c'] * 10_000),
-                'convergence2': None,
-                'convergence3': None,
                 'high': int(ohlcv_dict['h'] * 10_000),
                 'low': int(ohlcv_dict['l'] * 10_000),
                 'open': int(ohlcv_dict['o'] * 10_000),
-                'rel_volume': None,
                 'session': 0 if bar_datetime.time() < us_market_open.time() else 1 if bar_datetime.time() < us_market_close.time() else 2,
                 'sma10': None,
+                'time': bar_datetime.hour * 100 + bar_datetime.minute,
                 'volume': int(ohlcv_dict['v'] * 10_000),
                 'vwap': int(ohlcv_dict['vw'] * 10_000),
-                'share_id': share_id,
-                'time': bar_datetime.hour * 100 + bar_datetime.minute
+                'share_id': share_id
             }
             insert_list.append(insert_dict)
-        if counter % 50 == 0:
-            start_time = time.perf_counter()
+        if counter % 2 == 0:
             upsert_data_smart(insert_list,'timeframe_1m',{'share_id','datetime'})
-            print(time.perf_counter() - start_time)
             insert_list = []
     if insert_list:
         upsert_data_smart(insert_list,'timeframe_1m',{'share_id','datetime'})
@@ -141,7 +135,7 @@ def insert_minute_bars_for_ticker(ticker: str, share_id: int, date_start: date, 
         data = polygon_service.request_aggregate_bars(ticker=ticker, timeframe="minute", multiplier=1, date_start=request_date_start, date_end=request_date_end, limit=50000)
         ohlcv_list = data['results']
         for ohlcv_dict in ohlcv_list:
-            bar_datetime = datetime.fromtimestamp(ohlcv_dict['t'] / 1000, timezone.utc)
+            bar_datetime = datetime.fromtimestamp(ohlcv_dict['t'] / 1000, timezone.utc).replace(tzinfo=None)
             insert_dict = {
                 'datetime': bar_datetime,
                 'abs_atr': None,
@@ -357,7 +351,7 @@ def fetch_and_update_market_metrics(ticker_id_map:dict):
 
     except Exception as e:
         logger.error(f"fetch_and_update_market_metrics couldn't update market metrics for date {utils.get_utc_date(config.days)}.")
-import json
+
 def run_aggregates_stream():
     handle_agg_insert_list = []
     us_market_open = utils.us_market_open_utc(get_utc_date(days=0,as_str=False))
@@ -370,28 +364,26 @@ def run_aggregates_stream():
         for m in msgs:
             share_id =  existing_tickers.get(m.symbol)
             if share_id is None: continue
-            bar_datetime = datetime.fromtimestamp(m.end_timestamp/1000, timezone.utc) # this here returns datetime that's 1 hour ahead of UTC. It must be UTC, not sure if it has something to do with my local time as matches it.
+            bar_datetime = datetime.fromtimestamp(m.end_timestamp/1000, timezone.utc).replace(tzinfo=None) # this here returns datetime that's 1 hour ahead of UTC. It must be UTC, not sure if it has something to do with my local time as matches it.
             insert_dict = {
                 'datetime': bar_datetime,
                 'abs_atr': None,
-                'avg_volume': None,
                 'close': int(m.close * 10_000),
-                'convergence2': None,
-                'convergence3': None,
                 'high': int(m.high * 10_000),
                 'low': int(m.low * 10_000),
                 'open': int(m.open * 10_000),
-                'rel_volume': None,
                 'session': 0 if bar_datetime.time() < us_market_open_time else 1 if bar_datetime.time() < us_market_close_time else 2,
                 'sma10': None,
                 'volume': int(m.volume * 10_000),
                 'vwap': int(m.vwap * 10_000),
-                'share_id': share_id
+                'share_id': share_id,
+                'time': bar_datetime.hour * 100 + bar_datetime.minute # how I got this value 10820000
             }
             handle_agg_insert_list.append(insert_dict)
         # Insert into database
-        if handle_agg_insert_list and len(handle_agg_insert_list) > 2000:
+        if handle_agg_insert_list and len(handle_agg_insert_list) > 300:
             start_time = datetime.now(timezone.utc)
+            print(handle_agg_insert_list[-1])
             upsert_data_smart(handle_agg_insert_list,'timeframe_1m',{'share_id','datetime'})
             elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
             print(f"Inserted in {elapsed:.2f} seconds")

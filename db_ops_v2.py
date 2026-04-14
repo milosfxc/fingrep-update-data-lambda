@@ -88,10 +88,14 @@ def _upsert_large_dataset(data: List[Dict[str, Any]], table_name: str, conflict_
 
                 for row in data:
                     writer.writerow([None if row.get(col) == '' else row.get(col) for col in columns])
-
+                    if row['time'] > 3000:
+                        print("BAD TIME:", row['time'])
                 output.seek(0)
 
-                cur.copy_expert(f"COPY {temp_table} FROM STDIN WITH CSV", output)
+                cur.copy_expert(
+                    f"COPY {temp_table} ({', '.join(columns)}) FROM STDIN WITH CSV",
+                    output
+                )
 
                 # Create index for large datasets (>10k rows)
                 if len(data) > 10000 and conflict_columns:

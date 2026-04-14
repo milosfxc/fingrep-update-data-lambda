@@ -10,7 +10,7 @@ from utils import us_market_open_utc
 from config import  days
 if __name__ == "__main__":
     existing_tickers = get_existing_tickers()
-    fingrep_service.insert_minute_bars_for_date(existing_tickers, get_utc_date(72,False))
+    fingrep_service.insert_minute_bars_for_date(existing_tickers, get_utc_date(0,False))
 
     # fingrep_service.insert_minute_bars({'MARA': existing_tickers.get('MARA')}, date(2026, 3, 4))
     # us_market_open = utils.us_market_open_utc(date(2025, 12, 16))

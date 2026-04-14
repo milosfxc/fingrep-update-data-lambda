@@ -4,23 +4,12 @@ DECLARE
 	_magn BIGINT := 10000;
     _sma10 BIGINT;
 	_abs_atr BIGINT;
-	_avg_volume BIGINT;
-	_rel_volume BIGINT;
-    _convergence2 BOOLEAN;
-	_convergence3 BOOLEAN;
     _timeframe_2m_start TIMESTAMP;
 	_timeframe_2m_end TIMESTAMP;
 	_timeframe_3m_start TIMESTAMP;
 	_timeframe_3m_end TIMESTAMP;
     _timeframe_5m_start TIMESTAMP;
 	_timeframe_5m_end TIMESTAMP;
-	_open BIGINT;
-	_close BIGINT;
-	_high BIGINT;
-	_low BIGINT;
-	_volume BIGINT;
-	_vwap BIGINT;
-	_session SMALLINT;
 BEGIN
 
 --SMA10
@@ -36,85 +25,39 @@ WITH last_10 AS (
 SELECT CASE WHEN (SELECT COUNT(*) FROM last_10) = 10 THEN AVG(close) END INTO _sma10 FROM last_10;
 
 --ABS ATR
-WITH last_14 AS (
-	SELECT
-	    high - low AS high_low,
+WITH last_15 AS (
+    SELECT datetime, high, low, close
+    FROM timeframe_1m
+    WHERE share_id = NEW.share_id
+      AND datetime <= NEW.datetime
+      AND session = 1
+    ORDER BY datetime DESC
+    LIMIT 15
+),
+ordered AS (
+    SELECT *
+    FROM last_15
+    ORDER BY datetime ASC
+),
+tr_values AS (
+    SELECT
+        high - low AS high_low,
         ABS(high - LAG(close) OVER (ORDER BY datetime)) AS high_prev_close,
-        ABS(low - LAG(close) OVER (ORDER BY datetime)) AS low_prev_close
-	FROM timeframe_1m
-	WHERE share_id = NEW.share_id
-	AND datetime <= NEW.datetime
-    AND session = 1
-	ORDER BY datetime DESC
-	LIMIT 14
+        ABS(low  - LAG(close) OVER (ORDER BY datetime)) AS low_prev_close
+    FROM ordered
 )
 SELECT
-	CASE WHEN (SELECT COUNT(*) FROM last_14) = 14 THEN AVG(GREATEST(high_low, high_prev_close, low_prev_close)) END INTO _abs_atr
-FROM
-    last_14;
-
---AVG VOL
-WITH last_20 AS (
-	SELECT high, low, close, volume, vwap
-	FROM timeframe_1m
-	WHERE share_id = NEW.share_id
-	AND datetime <= NEW.datetime
-    AND session = 1
-	ORDER BY datetime DESC
-	LIMIT 20
-)
-SELECT
-	CASE WHEN (SELECT COUNT(*) FROM last_20) = 20 THEN AVG(volume) END AS _avg_volume
-INTO
-	_avg_volume
-FROM last_20;
-
---RVOL
-IF _avg_volume > 0 AND NEW.volume > 0 THEN
-    _rel_volume := NEW.volume * _magn / _avg_volume;
-END IF;
-
---CONVERGENCE 2
-WITH last_2 AS (
-	SELECT datetime, high, low
-	FROM timeframe_1m
-	WHERE share_id = NEW.share_id
-	AND datetime <= NEW.datetime
-    AND session = 1
-	ORDER BY datetime DESC
-	LIMIT 2
-)
-SELECT
-    CASE WHEN (SELECT COUNT(*) FROM last_2) = 2 AND
-	MAX(high) = (SELECT high FROM last_2 ORDER BY datetime ASC LIMIT 1) AND
-	MIN(low) = (SELECT low FROM last_2 ORDER BY datetime ASC LIMIT 1) THEN true ELSE false END AS _convergence2
-	INTO _convergence2
-FROM last_2;
-
---CONVERGENCE 3
-WITH last_3 AS (
-	SELECT datetime, high, low
-	FROM timeframe_1m
-	WHERE share_id = NEW.share_id
-	AND datetime <= NEW.datetime
-    AND session = 1
-	ORDER BY datetime DESC
-	LIMIT 3
-)
-SELECT
-    CASE WHEN (SELECT COUNT(*) FROM last_3) = 3 AND
-	MAX(high) = (SELECT high FROM last_3 ORDER BY datetime ASC LIMIT 1) AND
-	MIN(low) = (SELECT low FROM last_3 ORDER BY datetime ASC LIMIT 1) THEN true ELSE false END AS _convergence3
-	INTO _convergence3
-FROM last_3;
+    CASE
+        WHEN COUNT(*) = 14 THEN
+            AVG(GREATEST(high_low, high_prev_close, low_prev_close))
+    END
+INTO _abs_atr
+FROM tr_values
+WHERE high_prev_close IS NOT NULL;
 
 UPDATE timeframe_1m SET
 sma10 = _sma10,
-abs_atr = _abs_atr,
-convergence2 = _convergence2,
-convergence3 = _convergence3,
-avg_volume = _avg_volume,
-rel_volume = _rel_volume
+abs_atr = _abs_atr
 WHERE share_id = NEW.share_id AND
 datetime = NEW.datetime;
 
@@ -122,141 +65,145 @@ datetime = NEW.datetime;
 _timeframe_2m_start := timeframe_min_start(NEW.datetime, 2);
 _timeframe_2m_end := _timeframe_2m_start + INTERVAL '2 minutes';
 
-SELECT
-    (ARRAY_AGG(open ORDER BY datetime ASC))[1],
-    MAX(high),
-    MIN(low),
-    (ARRAY_AGG(close ORDER BY datetime DESC))[1],
-    SUM(volume),
-    CASE
-        WHEN SUM(volume) > 0 THEN
-            SUM(vwap * volume) / SUM(volume)
-    END,
-    (ARRAY_AGG(session ORDER BY datetime ASC))[1]
-    INTO
-    _open,_high,_low,_close,_volume,_vwap,_session
-FROM timeframe_1m
-WHERE share_id = NEW.share_id
-  AND datetime >= _timeframe_2m_start
-  AND datetime < _timeframe_2m_end;
-
-IF _close > 0 AND _session IS NOT NULL THEN
-    INSERT INTO timeframe_2m (
-        share_id,
-        datetime,
-        open,
-        high,
-        low,
-        close,
-        volume,
-        vwap,
-        session
-    )
-    VALUES (NEW.share_id, _timeframe_2m_start, _open, _high, _low, _close, _volume, _vwap, _session)
-    ON CONFLICT (share_id, datetime) DO UPDATE
-    SET
-        open   = EXCLUDED.open,
-        high   = EXCLUDED.high,
-        low    = EXCLUDED.low,
-        close  = EXCLUDED.close,
-        volume = EXCLUDED.volume,
-        vwap   = EXCLUDED.vwap,
-        session = EXCLUDED.session;
-END IF;
+INSERT INTO timeframe_2m (
+    share_id,
+    datetime,
+    open,
+    high,
+    low,
+    close,
+    volume,
+    vwap,
+    session,
+    time
+)
+SELECT * FROM (
+    SELECT
+        NEW.share_id AS share_id,
+        _timeframe_2m_start AS datetime,
+        (ARRAY_AGG(open ORDER BY datetime ASC))[1] AS open,
+        MAX(high) AS high,
+        MIN(low) AS low,
+        (ARRAY_AGG(close ORDER BY datetime DESC))[1] AS close,
+        SUM(volume) AS volume,
+        CASE
+            WHEN SUM(volume) > 0 THEN
+                SUM(vwap * volume) / SUM(volume)
+        END AS vwap,
+        (ARRAY_AGG(session ORDER BY datetime ASC))[1] AS session,
+        CAST(to_char(_timeframe_2m_start, 'HH24MI') AS smallint) AS time
+    FROM timeframe_1m
+    WHERE share_id = NEW.share_id
+      AND datetime >= _timeframe_2m_start
+      AND datetime < _timeframe_2m_end
+) t
+WHERE t.close IS NOT NULL
+ON CONFLICT (share_id, datetime) DO UPDATE
+SET
+    open    = EXCLUDED.open,
+    high    = EXCLUDED.high,
+    low     = EXCLUDED.low,
+    close   = EXCLUDED.close,
+    volume  = EXCLUDED.volume,
+    vwap    = EXCLUDED.vwap,
+    session = EXCLUDED.session,
+    time    = EXCLUDED.time;
 
 -- TIMEFRAME 3m CALCULATION
 _timeframe_3m_start := timeframe_min_start(NEW.datetime, 3);
 _timeframe_3m_end := _timeframe_3m_start + INTERVAL '3 minutes';
-_close = NULL;
-_session = NULL;
-SELECT
-    (ARRAY_AGG(open ORDER BY datetime ASC))[1],
-    MAX(high),
-    MIN(low),
-    (ARRAY_AGG(close ORDER BY datetime DESC))[1],
-    SUM(volume),
-    CASE
-        WHEN SUM(volume) > 0 THEN
-            SUM(vwap * volume) / SUM(volume)
-    END,
-    (ARRAY_AGG(session ORDER BY datetime ASC))[1]
-    INTO
-    _open,_high,_low,_close,_volume,_vwap,_session
-FROM timeframe_1m
-WHERE share_id = NEW.share_id
-  AND datetime >= _timeframe_3m_start
-  AND datetime < _timeframe_3m_end;
 
-IF _close > 0 AND _session IS NOT NULL THEN
-    INSERT INTO timeframe_3m (
-        share_id,
-        datetime,
-        open,
-        high,
-        low,
-        close,
-        volume,
-        vwap,
-        session
-    )
-    VALUES (NEW.share_id, _timeframe_3m_start, _open, _high, _low, _close, _volume, _vwap, _session)
-    ON CONFLICT (share_id, datetime) DO UPDATE
-    SET
-        open   = EXCLUDED.open,
-        high   = EXCLUDED.high,
-        low    = EXCLUDED.low,
-        close  = EXCLUDED.close,
-        volume = EXCLUDED.volume,
-        vwap   = EXCLUDED.vwap,
-        session = EXCLUDED.session;
-END IF;
+INSERT INTO timeframe_3m (
+    share_id,
+    datetime,
+    open,
+    high,
+    low,
+    close,
+    volume,
+    vwap,
+    session,
+    time
+)
+SELECT * FROM (
+    SELECT
+        NEW.share_id AS share_id,
+        _timeframe_3m_start AS datetime,
+        (ARRAY_AGG(open ORDER BY datetime ASC))[1] AS open,
+        MAX(high) AS high,
+        MIN(low) AS low,
+        (ARRAY_AGG(close ORDER BY datetime DESC))[1] AS close,
+        SUM(volume) AS volume,
+        CASE
+            WHEN SUM(volume) > 0 THEN
+                SUM(vwap * volume) / SUM(volume)
+        END AS vwap,
+        (ARRAY_AGG(session ORDER BY datetime ASC))[1] AS session,
+        CAST(to_char(_timeframe_3m_start, 'HH24MI') AS smallint) AS time
+    FROM timeframe_1m
+    WHERE share_id = NEW.share_id
+      AND datetime >= _timeframe_3m_start
+      AND datetime < _timeframe_3m_end
+) t
+WHERE t.close IS NOT NULL
+ON CONFLICT (share_id, datetime) DO UPDATE
+SET
+    open    = EXCLUDED.open,
+    high    = EXCLUDED.high,
+    low     = EXCLUDED.low,
+    close   = EXCLUDED.close,
+    volume  = EXCLUDED.volume,
+    vwap    = EXCLUDED.vwap,
+    session = EXCLUDED.session,
+    time    = EXCLUDED.time;
 
 -- TIMEFRAME 5m CALCULATION
 _timeframe_5m_start := timeframe_min_start(NEW.datetime, 5);
 _timeframe_5m_end := _timeframe_5m_start + INTERVAL '5 minutes';
-_close = NULL;
-_session = NULL;
-SELECT
-    (ARRAY_AGG(open ORDER BY datetime ASC))[1],
-    MAX(high),
-    MIN(low),
-    (ARRAY_AGG(close ORDER BY datetime DESC))[1],
-    SUM(volume),
-    CASE
-        WHEN SUM(volume) > 0 THEN
-            SUM(vwap * volume) / SUM(volume)
-    END,
-    (ARRAY_AGG(session ORDER BY datetime ASC))[1]
-    INTO
-    _open,_high,_low,_close,_volume,_vwap,_session
-FROM timeframe_1m
-WHERE share_id = NEW.share_id
-  AND datetime >= _timeframe_5m_start
-  AND datetime < _timeframe_5m_end;
 
-IF _close > 0 AND _session IS NOT NULL THEN
-    INSERT INTO timeframe_5m (
-        share_id,
-        datetime,
-        open,
-        high,
-        low,
-        close,
-        volume,
-        vwap,
-        session
-    )
-    VALUES (NEW.share_id, _timeframe_5m_start, _open, _high, _low, _close, _volume, _vwap, _session)
-    ON CONFLICT (share_id, datetime) DO UPDATE
-    SET
-        open   = EXCLUDED.open,
-        high   = EXCLUDED.high,
-        low    = EXCLUDED.low,
-        close  = EXCLUDED.close,
-        volume = EXCLUDED.volume,
-        vwap   = EXCLUDED.vwap,
-        session = EXCLUDED.session;
-END IF;
+INSERT INTO timeframe_5m (
+    share_id,
+    datetime,
+    open,
+    high,
+    low,
+    close,
+    volume,
+    vwap,
+    session,
+    time
+)
+SELECT * FROM (
+    SELECT
+        NEW.share_id AS share_id,
+        _timeframe_5m_start AS datetime,
+        (ARRAY_AGG(open ORDER BY datetime ASC))[1] AS open,
+        MAX(high) AS high,
+        MIN(low) AS low,
+        (ARRAY_AGG(close ORDER BY datetime DESC))[1] AS close,
+        SUM(volume) AS volume,
+        CASE
+            WHEN SUM(volume) > 0 THEN
+                SUM(vwap * volume) / SUM(volume)
+        END AS vwap,
+        (ARRAY_AGG(session ORDER BY datetime ASC))[1] AS session,
+        CAST(to_char(_timeframe_5m_start, 'HH24MI') AS smallint) AS time
+    FROM timeframe_1m
+    WHERE share_id = NEW.share_id
+      AND datetime >= _timeframe_5m_start
+      AND datetime < _timeframe_5m_end
+) t
+WHERE t.close IS NOT NULL
+ON CONFLICT (share_id, datetime) DO UPDATE
+SET
+    open    = EXCLUDED.open,
+    high    = EXCLUDED.high,
+    low     = EXCLUDED.low,
+    close   = EXCLUDED.close,
+    volume  = EXCLUDED.volume,
+    vwap    = EXCLUDED.vwap,
+    session = EXCLUDED.session,
+    time    = EXCLUDED.time;
 
 RETURN NEW;
 END;
