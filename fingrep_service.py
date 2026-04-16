@@ -377,13 +377,12 @@ def run_aggregates_stream():
                 'volume': int(m.volume * 10_000),
                 'vwap': int(m.vwap * 10_000),
                 'share_id': share_id,
-                'time': bar_datetime.hour * 100 + bar_datetime.minute # how I got this value 10820000
+                'time': bar_datetime.hour * 100 + bar_datetime.minute
             }
             handle_agg_insert_list.append(insert_dict)
         # Insert into database
-        if handle_agg_insert_list and len(handle_agg_insert_list) > 300:
+        if handle_agg_insert_list and len(handle_agg_insert_list) > 2000:
             start_time = datetime.now(timezone.utc)
-            print(handle_agg_insert_list[-1])
             upsert_data_smart(handle_agg_insert_list,'timeframe_1m',{'share_id','datetime'})
             elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
             print(f"Inserted in {elapsed:.2f} seconds")
