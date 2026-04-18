@@ -14,11 +14,34 @@ client.subscribe("AM.*") # single ticker
 # client.subscribe("AM.AAPL") # single ticker
 # client.subscribe("AM.AAPL", "AM.MSFT") # multiple tickers
 
-def handle_msg(msgs: List[WebSocketMessage]):
-    count = 0
-    count += len(msgs)
-    print(count)
-
 if __name__ == "__main__":
-    # print messages
-    client.run(handle_msg)
+    import random
+    import time
+    from datetime import datetime, timedelta
+
+    N = 2_000
+
+    # Generate random data
+    base_time = datetime(2026, 1, 1)
+
+    rows = []
+    for _ in range(N):
+        share_id = random.randint(1, 1000)
+        dt = base_time + timedelta(seconds=random.randint(0, 86400))
+        rows.append({
+            "share_id": share_id,
+            "datetime": dt
+        })
+
+    # Warm-up (important for fair timing)
+    for _ in range(3):
+        sorted(rows, key=lambda r: (r["share_id"], r["datetime"]))
+
+    # Actual timing
+    start = time.perf_counter()
+
+    sorted_rows = sorted(rows, key=lambda r: (r["share_id"], r["datetime"]))
+
+    end = time.perf_counter()
+
+    print(f"Sorting {N} rows took: {(end - start) * 1000:.3f} ms")
