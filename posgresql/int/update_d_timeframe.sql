@@ -303,6 +303,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER update_d_timeframe_trigger
-AFTER INSERT OR OR UPDATE OF open, high, low, close, volume, vwap ON d_timeframe
+AFTER INSERT OR UPDATE OF open, high, low, close, volume
+ON d_timeframe
 FOR EACH ROW
 EXECUTE FUNCTION update_d_timeframe();

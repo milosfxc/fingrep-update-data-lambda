@@ -61,6 +61,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER update_timeframe_3h_trigger
-AFTER INSERT ON timeframe_3h
+AFTER INSERT OR UPDATE OF open, high, low, close, volume
+ON timeframe_3h
 FOR EACH ROW
 EXECUTE FUNCTION update_timeframe_3h();

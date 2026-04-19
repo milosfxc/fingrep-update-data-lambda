@@ -160,6 +160,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER update_timeframe_5m_trigger
-AFTER INSERT ON timeframe_5m
+AFTER INSERT OR UPDATE OF open, high, low, close, volume
+ON timeframe_5m
 FOR EACH ROW
 EXECUTE FUNCTION update_timeframe_5m();

@@ -26,6 +26,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER update_indices_d_timeframe
-AFTER INSERT ON indices_d_timeframe
+AFTER INSERT OR UPDATE OF open, high, low, close, volume
+ON indices_d_timeframe
 FOR EACH ROW
 EXECUTE FUNCTION update_indices_d_timeframe();

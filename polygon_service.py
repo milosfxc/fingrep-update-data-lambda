@@ -245,7 +245,7 @@ def request_aggregate_bars(ticker: str, timeframe: str, multiplier: int, date_st
 
     except requests.RequestException as e:
         if retry_counter >= 3:
-            logger.error(f"{method_name} - Failed after 3 attempts: {str(e)}")
+            logger.error(f"{method_name} - Failed after 3 attempts for {ticker}-{date_start}-{date_end}: {str(e)}")
             retry_counter = 0
             return None
 

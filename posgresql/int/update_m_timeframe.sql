@@ -84,6 +84,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER update_m_timeframe_trigger
-AFTER INSERT ON m_timeframe
+AFTER INSERT OR UPDATE OF open, high, low, close, volume
+ON m_timeframe
 FOR EACH ROW
 EXECUTE FUNCTION update_m_timeframe();

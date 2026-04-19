@@ -2,10 +2,7 @@ import sys
 from datetime import datetime, date, timezone, timedelta, time
 import inspect
 from typing import List
-import time
-from cffi.cffi_opcode import PRIM_INT
 from massive.websocket.models import WebSocketMessage, Feed, Market
-import json
 import pandas as pd
 import requests
 import aws_service
@@ -276,6 +273,7 @@ def fetch_and_update_market_metrics(ticker_id_map:dict):
     except Exception as e:
         logger.error(f"fetch_and_update_market_metrics couldn't update market metrics for date {utils.get_utc_date(config.days)}.")
 
+
 def _get_utc_market_hours(date_obj: date) -> tuple[datetime, datetime, datetime, datetime]:
     market_open_utc = utils.us_market_open_utc(date_obj)
     premarket_open_utc = market_open_utc - timedelta(hours=5.5)
@@ -310,36 +308,39 @@ def insert_minute_bars_for_date(tickers: dict[str,int], date_obj: date):
     for ticker, share_id in tickers.items():
         counter += 1
         data = polygon_service.request_aggregate_bars(ticker=ticker, timeframe="minute", multiplier=1, date_start=date_start, date_end=date_end, limit=50000)
-        if data is None or 'results' not in data:
-            logger.warning(f"No 1m data found for ticker {ticker}")
-            continue
-        ohlcv_list = data['results']
-        for ohlcv_dict in ohlcv_list:
+        if data is None or 'results' not in data: continue
+        for ohlcv_dict in data['results']:
             bar_datetime = datetime.fromtimestamp(ohlcv_dict['t'] / 1000, timezone.utc).replace(tzinfo=None)
             insert_dict = _build_bar_dict(ohlcv_dict, share_id,bar_datetime, market_open_utc, market_close_utc)
             insert_list.append(insert_dict)
         if counter % 20 == 0:
-            upsert_data_smart(insert_list,'timeframe_1m',{'share_id','datetime'})
+            upsert_data_smart(insert_list,'timeframe_1m', {'share_id','datetime'})
             insert_list = []
     if insert_list:
-        upsert_data_smart(insert_list,'timeframe_1m',{'share_id','datetime'})
+        upsert_data_smart(insert_list,'timeframe_1m', {'share_id','datetime'})
 
 
 def insert_minute_bars_for_ticker(ticker: str, share_id: int, date_start: date, date_end: date):
     date_iter = date_start
     insert_list = []
+    # Loop over working days
     while date_iter <= date_end:
-        premarket_open_utc, market_open_utc, market_close_utc, aftermarket_close_utc = _get_utc_market_hours(date_iter)
-        request_date_start = str(int(premarket_open_utc.timestamp() * 1000))
-        request_date_end = str(int(aftermarket_close_utc.timestamp() * 1000))
-        data = polygon_service.request_aggregate_bars(ticker=ticker, timeframe="minute", multiplier=1, date_start=request_date_start, date_end=request_date_end, limit=50000)
-        ohlcv_list = data['results']
-        for ohlcv_dict in ohlcv_list:
-            bar_datetime = datetime.fromtimestamp(ohlcv_dict['t'] / 1000, timezone.utc).replace(tzinfo=None)
-            insert_dict = _build_bar_dict(ohlcv_dict, share_id, bar_datetime, market_open_utc, market_close_utc)
-            insert_list.append(insert_dict)
+        if date_iter.weekday() <= 4:
+            # UTC market hours schedule
+            premarket_open_utc, market_open_utc, market_close_utc, aftermarket_close_utc = _get_utc_market_hours(date_iter)
+            request_date_start = str(int(premarket_open_utc.timestamp() * 1000))
+            request_date_end = str(int(aftermarket_close_utc.timestamp() * 1000))
+            # Request data
+            data = polygon_service.request_aggregate_bars(ticker=ticker, timeframe="minute", multiplier=1, date_start=request_date_start, date_end=request_date_end, limit=50000)
+            if isinstance(data, dict) and 'results' in data:
+                for ohlcv_dict in data['results']:
+                    bar_datetime = datetime.fromtimestamp(ohlcv_dict['t'] / 1000, timezone.utc).replace(tzinfo=None)
+                    insert_dict = _build_bar_dict(ohlcv_dict, share_id, bar_datetime, market_open_utc, market_close_utc)
+                    insert_list.append(insert_dict)
         date_iter = date_iter + timedelta(days=1)
-    upsert_data_smart(insert_list,'timeframe_1m',{'share_id','datetime'})
+    # Insert data
+    if insert_list:
+        upsert_data_smart(insert_list,'timeframe_1m', {'share_id','datetime'})
 
 
 def run_aggregates_stream(subscription: str):
@@ -369,10 +370,3 @@ def run_aggregates_stream(subscription: str):
     # Run stream
     ws = polygon_service.create_ws_client([subscription], Feed.Delayed, Market.Stocks, False)
     ws.run(handle_msg=_handle_aggregates)
-
-
-
-
-
-
-
