@@ -344,7 +344,7 @@ def insert_minute_bars_for_ticker(ticker: str, share_id: int, date_start: date, 
 
 
 def run_aggregates_stream(subscription: str):
-    agg_dict = dict()
+    agg_dict = {}
     last_flush_time = datetime.now(timezone.utc)
     premarket_open_utc, market_open_utc, market_close_utc, aftermarket_close_utc = _get_utc_market_hours(get_utc_date(days=0,as_str=False))
     existing_tickers = db_ops.get_existing_tickers()
@@ -354,7 +354,7 @@ def run_aggregates_stream(subscription: str):
         for m in msgs:
             share_id =  existing_tickers.get(m.symbol)
             if share_id is None: continue
-            ts = m.end_timestamp // 1000
+            ts = m.start_timestamp // 1000
             bar_datetime = datetime.fromtimestamp(ts, timezone.utc).replace(tzinfo=None)
             insert_dict = _build_bar_dict({'o': m.open, 'h': m.high, 'l': m.low, 'c': m.close, 'v': m.volume, 'vw': m.vwap}, share_id, bar_datetime, market_open_utc, market_close_utc)
             agg_dict[(share_id, ts)] = insert_dict
