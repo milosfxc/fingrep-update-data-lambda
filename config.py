@@ -5,22 +5,22 @@ from ConnType import DBLocation
 import logging
 from edgar import set_identity
 # stock market data config
-days = 82 # Offset from current date
+days = 0 # Offset from current date
 years = 5 # OHLCV daily data
 days_1m = 5 # OHLCV 1m data
 date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * years)
 update_existing_tickers_1m_timeframe = False
-insert_new_tickers_1m_timeframe = False
-insert_new_tickers = False
-mb_historical = False # false updates market breadth for the current day, true updates for the last 100 days
-market_metrics = False
-insert_fundamentals = False # Insert fundamentals for new tickers
-update_fundamentals = False # Update fundamentals for existing tickers
+insert_new_tickers_1m_timeframe = True
+insert_new_tickers = True
+insert_new_tickers_limit = 100 # insertion limit
+mb_historical = True # false updates market breadth for the current day, true updates for the last 100 days
+market_metrics = True
+insert_fundamentals = True # Insert fundamentals for new tickers
+update_fundamentals = True # Update fundamentals for existing tickers
 s3_upload = False
 s3_upload_limit = 70
 last_s3_upload = datetime.now(timezone.utc)
 report_start_date = '2020-12-31'
-limit = 100 # insertion limit
 multi_threaded = False
 threads_number = 10
 thread_delay = 0.3 # Time delay between submitting a task

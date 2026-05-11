@@ -62,8 +62,10 @@ def get_and_insert_aggregated_bars(ticker, ticker_id, date_from, limit):
     df_aggregated_daily['volume'] = df_aggregated_daily['volume'].fillna(0)
     df_aggregated_daily['date'] = pd.to_datetime(df_aggregated_daily['date'], unit='ms').dt.date
     df_aggregated_daily['rsi'] = rsi_tv_new_tickers(df_aggregated_daily.copy())
-    df_aggregated_daily[utils.magnified_columns_new] = df_aggregated_daily[utils.magnified_columns_new] * 10000
-
+    cols = [c for c in utils.magnified_columns_new if c in df_aggregated_daily.columns]
+    df_aggregated_daily[cols] = df_aggregated_daily[cols] * 10000
+    if len(cols) < 7:
+        logger.warning(f"Ticker {ticker} had only the following columns: {cols}")
     # Insert into database
     db_ops.upsert_dataframe_v2(df_aggregated_daily, 'd_timeframe')
 
@@ -84,6 +86,7 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
     try:
         ticker_data = polygon_service.request_ticker_details_v3(ticker)
     except requests.RequestException:
+        db_ops.insert_banned_ticker(ticker)
         logger.warning(f"{method_name} - Couldn't obtain ticker details.")
         return
 
@@ -99,6 +102,7 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
     shares_data, shares_info_data = extract_ticker_details_v3(ticker_data, finviz_data)
     # Check if ticker type is allowed
     if shares_data.get("share_type_id") is None:
+        logger.warning(f"NO share_type_id for ticker {ticker}")
         return
     elif shares_data.get("share_type_id") not in utils.allowed_share_type_ids:
         db_ops.insert_banned_ticker(ticker)
@@ -359,7 +363,7 @@ def run_aggregates_stream(subscription: str):
             insert_dict = _build_bar_dict({'o': m.open, 'h': m.high, 'l': m.low, 'c': m.close, 'v': m.volume, 'vw': m.vwap}, share_id, bar_datetime, market_open_utc, market_close_utc)
             agg_dict[(share_id, ts)] = insert_dict
         # Insert into database
-        if (datetime.now(timezone.utc) - last_flush_time).total_seconds() > 10 and agg_dict:
+        if (datetime.now(timezone.utc) - last_flush_time).total_seconds() > 30 and agg_dict:
             insert_list = sorted(agg_dict.values(), key=lambda r: r['datetime'])
             start_time = datetime.now(timezone.utc)
             upsert_data_smart(insert_list,'timeframe_1m',{'share_id','datetime'})

@@ -91,7 +91,8 @@ def insert_banned_ticker(ticker: str):
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 # execute a parameterized statement
-                cur.execute("INSERT INTO banned_tickers (ticker, ban_date) VALUES (%s, NOW());", (ticker,))
+                cur.execute("INSERT INTO banned_tickers (ticker, ban_date) VALUES (%s, NOW()) "
+                            "ON CONFLICT (ticker) DO UPDATE SET ban_date = EXCLUDED.ban_date;", (ticker,))
                 conn.commit()  # Commit the transaction
     except (Exception, psycopg2.DatabaseError) as error:
         logger.error(f"#insert_banned_ticker: {error}")
@@ -229,7 +230,6 @@ def update_market_breadth(date: str):
 def upsert_dataframe_v2(df: pd.DataFrame, table_name: str):
     # Replace NaN with None
     df = df.astype(object).where(pd.notnull(df), None)
-    shs_id = df['share_id'].to_list()
     # Create a list of column update expressions for ON CONFLICT
     update_columns = ', '.join([f"{col} = EXCLUDED.{col}" for col in df.columns if col not in ['share_id', 'date']])
     # Create the SQL query for upserting
@@ -239,6 +239,7 @@ def upsert_dataframe_v2(df: pd.DataFrame, table_name: str):
         ON CONFLICT (share_id, date) DO UPDATE SET
         {update_columns};
     """
+
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
@@ -468,7 +469,7 @@ def upsert_latest_filings(filings: list[dict]) -> bool:
 def get_latest_filings_for_insert():
     sql_select = """SELECT sh.id AS share_id, sh.ticker, lf.cik, lf.accession_number, lf.filing_date, lf.form FROM latest_filings lf INNER JOIN shares_info si ON lf.cik = si.cik 
     INNER JOIN shares sh ON sh.id = si.share_id 
-    WHERE inserted = FALSE 
+    WHERE lf.inserted = FALSE 
     AND lf.filing_date < NOW() - INTERVAL '5 DAYS'
     AND ((lf.attempt_date BETWEEN NOW() - INTERVAL '30 DAYS' AND NOW() - INTERVAL '7 DAYS') OR lf.attempt_date IS NULL)
     """
@@ -500,21 +501,20 @@ def delete_fillings_older_than_month():
 
 
 
-def get_accession_numbers() -> set[str] | None:
+def get_accession_numbers(start_date: str, end_date: str) -> set[str] | None:
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                query = 'SELECT accession_number FROM latest_filings'
-                cur.execute(query)
-                if rows := cur.fetchall():
-                    return {row[0] for row in rows}
-                else:
-                    return None
+                query = f'SELECT accession_number FROM latest_filings WHERE filing_date BETWEEN %s AND %s;'
+                cur.execute(query,(start_date, end_date))
+                rows = cur.fetchall()
+                return {row[0] for row in rows}
+
     except Exception as e:
         tb = traceback.extract_tb(e.__traceback__)
         file_path, line_no, func_name, text = tb[-1]
-        logger.warning(f"{file_path}:{line_no} - Error occurred during data retrieval from latest_filings table: \n{e}")
-        return None
+        logger.error(f"{file_path}:{line_no} - Error occurred during data retrieval from latest_filings table: \n{e}")
+        return set()
 
 
 def query_previous_cash_flow_statement(share_id: int, start_date:str, end_date:str) -> Optional[dict[str,Union[int,float,None]]]:

@@ -71,35 +71,40 @@ FROM
 SELECT CASE WHEN _abs_atr IS NOT NULL AND NEW.close <> 0 THEN _abs_atr * _magn / NEW.close * 100 END INTO _rel_atr;
 
 --DOLLAR VOLUME
-IF NEW.volume IS NOT NULL AND NEW.vwap IS NOT NULL THEN
-    _dollar_volume := NEW.volume * NEW.vwap / _magn;
-ELSE
-    _dollar_volume := 0;
-END IF;
+BEGIN
+	IF NEW.volume IS NOT NULL AND NEW.vwap IS NOT NULL THEN
+		_dollar_volume := NEW.volume * NEW.vwap / _magn;
+	ELSE
+		_dollar_volume := 0;
+	END IF;
 
---SMA20 & ADR & AVGVOL & TWENTY DAY HIGH/LOW
-WITH last_20 AS (
-	SELECT high, low, close, volume, vwap
-	FROM d_timeframe
-	WHERE share_id = NEW.share_id
-	AND date <= NEW.date
-	ORDER BY date DESC
-	LIMIT 20
-),
-row_count AS (
-    SELECT COUNT(*) AS cnt FROM last_20
-)
-SELECT
-	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN 100 * (AVG(high * _magn / NULLIF(low,0)) - 10000) END AS _rel_adr,
-	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(high - low) END AS _abs_adr,
-	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(close) END AS _sma20,
-	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(volume) END AS _avg_volume,
-	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(volume * vwap / _magn) END AS _avg_dollar_volume,
-	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN MIN(low) END AS _twenty_day_low,
-	CASE WHEN (SELECT cnt FROM row_count) = 20 THEN MAX(high) END AS _twenty_day_high
-INTO
-	_rel_adr, _abs_adr, _sma20, _avg_volume, _avg_dollar_volume, _twenty_day_low, _twenty_day_high
-FROM last_20;
+    --SMA20 & ADR & AVGVOL & TWENTY DAY HIGH/LOW
+    WITH last_20 AS (
+        SELECT high, low, close, volume, vwap
+        FROM d_timeframe
+        WHERE share_id = NEW.share_id
+        AND date <= NEW.date
+        ORDER BY date DESC
+        LIMIT 20
+    ),
+    row_count AS (
+        SELECT COUNT(*) AS cnt FROM last_20
+    )
+    SELECT
+        CASE WHEN (SELECT cnt FROM row_count) = 20 THEN 100 * (AVG(high * _magn / NULLIF(low,0)) - 10000) END AS _rel_adr,
+        CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(high - low) END AS _abs_adr,
+        CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(close) END AS _sma20,
+        CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(volume) END AS _avg_volume,
+        CASE WHEN (SELECT cnt FROM row_count) = 20 THEN AVG(volume * vwap / _magn) END AS _avg_dollar_volume,
+        CASE WHEN (SELECT cnt FROM row_count) = 20 THEN MIN(low) END AS _twenty_day_low,
+        CASE WHEN (SELECT cnt FROM row_count) = 20 THEN MAX(high) END AS _twenty_day_high
+    INTO
+        _rel_adr, _abs_adr, _sma20, _avg_volume, _avg_dollar_volume, _twenty_day_low, _twenty_day_high
+    FROM last_20;
+EXCEPTION WHEN numeric_value_out_of_range THEN
+    -- skip the rest of trigger logic
+    RETURN NEW;
+END;
 --DENSE VOLUME
 WITH last_40 AS (
 	SELECT volume
