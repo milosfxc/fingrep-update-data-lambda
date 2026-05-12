@@ -363,7 +363,7 @@ def run_aggregates_stream(subscription: str):
             insert_dict = _build_bar_dict({'o': m.open, 'h': m.high, 'l': m.low, 'c': m.close, 'v': m.volume, 'vw': m.vwap}, share_id, bar_datetime, market_open_utc, market_close_utc)
             agg_dict[(share_id, ts)] = insert_dict
         # Insert into database
-        if (datetime.now(timezone.utc) - last_flush_time).total_seconds() > 30 and agg_dict:
+        if (datetime.now(timezone.utc) - last_flush_time).total_seconds() > 30 and agg_dict: # instead of checking for 30 seconds can set a defuse timer to execute function within 10 seconds if it's not already started to defuse?
             insert_list = sorted(agg_dict.values(), key=lambda r: r['datetime'])
             start_time = datetime.now(timezone.utc)
             upsert_data_smart(insert_list,'timeframe_1m',{'share_id','datetime'})
