@@ -7,7 +7,6 @@ DECLARE
     _timeframe_3h_start TIMESTAMP;
 	_timeframe_3h_end TIMESTAMP;
 BEGIN
-
 -- TIMEFRAME 2h CALCULATION
 _timeframe_2h_start := timeframe_hour_start(NEW.datetime, 120);
 _timeframe_2h_end := _timeframe_2h_start + INTERVAL '120 minutes';
@@ -55,7 +54,6 @@ SET
     vwap    = EXCLUDED.vwap,
     session = EXCLUDED.session,
     time    = EXCLUDED.time;
-
 -- TIMEFRAME 3h CALCULATION
 _timeframe_3h_start := timeframe_hour_start(NEW.datetime, 180);
 _timeframe_3h_end := _timeframe_3h_start + INTERVAL '180 minutes';

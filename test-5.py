@@ -42,4 +42,5 @@ if __name__ == "__main__":
     #     print(index)
     # processed_filings = db_ops.get_accession_numbers(start_date, end_date)
     # print(isinstance(processed_filings, set))
-    fundamentals_service.update_fundamentals()
+    db_ops.alter_d_timeframe_triggers(full='DISABLE', compact='ENABLE')
+    # db_ops.alter_d_timeframe_triggers(full='ENABLE', compact='DISABLE')

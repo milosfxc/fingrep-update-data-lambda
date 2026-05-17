@@ -11,7 +11,7 @@ import db_ops
 import fingrep_service
 from ConnType import DBLocation
 from SSHTunnelManager import SSHTunnelManager
-from db_ops import get_existing_tickers, get_banned_tickers, insert_new_ticker
+from db_ops import get_existing_tickers, get_banned_tickers, insert_new_ticker, alter_d_timeframe_triggers
 from fingrep_service import fetch_and_update_market_metrics
 from utils import get_utc_date
 from fundamentals_service import update_fundamentals
@@ -20,6 +20,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 def get_stock_data():
     print(get_utc_date(days=config.days))
+    alter_d_timeframe_triggers(full='ENABLE', compact='DISABLE')
     # Get existing tickers, banned tickers and new daily data
     existing_tickers = get_existing_tickers()
     banned_tickers = get_banned_tickers()
@@ -109,17 +110,13 @@ def get_stock_data():
         aws_service.update_s3_bucket()
 
 
+
 if __name__ == "__main__":
-    # start_time = time.perf_counter()
-    if config.db_location == DBLocation.REMOTE:
-        try:
-            with SSHTunnelManager():
-                get_stock_data()
-        except BaseSSHTunnelForwarderError as ssh_error:
-            logger.error(f"SSH tunnel error occurred: {ssh_error}")
-            raise
-    else:
+    try:
         get_stock_data()
-    # end_time = time.perf_counter()
-    # execution_time = end_time - start_time
-    # print(f"Execution time {execution_time} seconds.")
+    except Exception as e:
+        logger.error(f"get_stock_market_data error occurred: {e}")
+    finally:
+        alter_d_timeframe_triggers(full='DISABLE', compact='ENABLE')
+
+

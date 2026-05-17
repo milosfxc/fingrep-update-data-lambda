@@ -183,18 +183,18 @@ WITH last_200 AS (
 )
 SELECT CASE WHEN (SELECT COUNT(*) FROM last_200) = 200 THEN AVG(close) END INTO _sma200 FROM last_200;
 
---CHANGE FROM PREVIOUS DAY
-WITH last_2 AS (
-	SELECT date, close, open
+--CHANGES FROM PREVIOUS DAY
+WITH prev_1 AS (
+	SELECT close, open
 	FROM d_timeframe
 	WHERE share_id = NEW.share_id
-	AND date <= NEW.date
-	ORDER BY date DESC LIMIT 2
+	AND date < NEW.date
+	ORDER BY date DESC LIMIT 1
 )
-SELECT close - LAG(close, 1) OVER (ORDER BY date ASC) AS _abs_change,
-((close * _magn / LAG(NULLIF(close,0), 1) OVER (ORDER BY date ASC)) - 10000) * 100 AS _rel_change,
-((open * _magn / LAG(NULLIF(close,0), 1) OVER (ORDER BY date ASC)) - 10000) * 100 AS _rel_gap
-INTO _abs_change, _rel_change, _rel_gap FROM last_2 ORDER BY date DESC LIMIT 1;
+SELECT NEW.close - p_1.close AS _abs_change,
+((NEW.close * _magn / NULLIF(p_1.close,0)) - 10000) * 100 AS _rel_change,
+((NEW.open * _magn / NULLIF(p_1.close,0)) - 10000) * 100 AS _rel_gap
+INTO _abs_change, _rel_change, _rel_gap FROM prev_1 p_1;
 
 --AFTER HOURS CHANGE
 IF _rel_change IS NOT NULL AND _rel_gap IS NOT NULL THEN

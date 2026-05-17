@@ -10,7 +10,7 @@ years = 5 # OHLCV daily data
 days_1m = 5 # OHLCV 1m data
 date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * years)
 update_existing_tickers_1m_timeframe = False
-insert_new_tickers_1m_timeframe = True
+insert_new_tickers_1m_timeframe = False
 insert_new_tickers = True
 insert_new_tickers_limit = 100 # insertion limit
 mb_historical = True # false updates market breadth for the current day, true updates for the last 100 days
