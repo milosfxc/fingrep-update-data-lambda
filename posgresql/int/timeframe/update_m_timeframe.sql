@@ -42,7 +42,6 @@ SET
     volume = EXCLUDED.volume,
     vwap = EXCLUDED.vwap;
 
-
 RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

@@ -499,11 +499,13 @@ def delete_fillings_older_than_month():
     except psycopg2.DatabaseError as e:
         logger.error(f"delete_old_fillings: {e}")
 
+
 def alter_d_timeframe_triggers(full: str, compact: str):
     sql_enable_compact = f"""
     ALTER TABLE d_timeframe {compact} TRIGGER update_d_timeframe_compact_trigger;
     ALTER TABLE d_timeframe {full} TRIGGER update_d_timeframe_trigger;                        
     """
+
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
@@ -512,9 +514,6 @@ def alter_d_timeframe_triggers(full: str, compact: str):
     except psycopg2.DatabaseError as e:
         logger.error(f"alter_d_timeframe_triggers: {e}")
         raise
-
-
-
 
 
 def get_accession_numbers(start_date: str, end_date: str) -> set[str] | None:
