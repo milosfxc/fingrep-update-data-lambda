@@ -125,9 +125,7 @@ def request_ticker_details_v3(ticker):
 def request_splits():
     global retry_counter
 
-    url = (f"https://api.polygon.io/v3/reference/splits?execution_date={get_utc_date(days=config.days)}"
-           f"&reverse_split=true&limit=25")
-
+    url = f'https://api.massive.com/stocks/v1/splits?execution_date={get_utc_date(days=config.days)}&sort=execution_date.desc'
     params = {
         "apiKey": os.getenv("POLYGON_API_KEY")
     }

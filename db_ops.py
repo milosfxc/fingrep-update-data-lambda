@@ -13,13 +13,10 @@ from config import DB_NAME, DB_USER, LOCAL_DB_HOST, DB_PORT, DB_PASSWORD
 import config
 from ConnType import DBLocation
 from contextlib import contextmanager
-
 # Logger
 logger = logging.getLogger(__name__)
 
-
 # Connections
-
 @contextmanager
 def get_db_connection():
     if config.db_location == DBLocation.REMOTE:
@@ -54,8 +51,7 @@ def postgresql_remote_connection():
 
 
 # CRUD functions for fingrep db
-
-def get_existing_tickers():
+def get_existing_tickers() -> Dict[str, int]:
     try:
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=DictCursor) as cur:
@@ -67,6 +63,36 @@ def get_existing_tickers():
                 return ticker_dict
     except (Exception, psycopg2.DatabaseError) as error:
         logger.error(f"#get_existing_tickers: {error}")
+        raise
+
+
+def fetch_ticker_id_map(sql: str, params: dict) -> Dict[str, int]:
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor(cursor_factory=DictCursor) as cur:
+                # execute a statement
+                cur.execute(sql, params)
+                ticker_dict = {}
+                for record in cur:
+                    ticker_dict[record['ticker']] = record['id']
+                return ticker_dict
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f"#query_method: {error}")
+        raise
+
+
+def get_max_temporal(table_name: str, temporal_column: str, offset: int = 0):
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                # execute a statement
+                sql = f"SELECT MAX({temporal_column}) FROM {table_name}"
+                if offset > 0:
+                    sql += f" GROUP BY {temporal_column} ORDER BY {temporal_column} DESC LIMIT 1 OFFSET {offset};"
+                cur.execute(sql)
+                return cur.fetchone()[0]
+    except (Exception, psycopg2.DatabaseError) as error:
+        logger.error(f"#query_method: {error}")
         raise
 
 
@@ -130,13 +156,13 @@ foreign_keys_cache = None
 
 def get_foreign_keys():
     global foreign_keys_cache
+    ans = {'countries': {}, 'sectors': {}, 'industries': {}, 'share_types': {}, 'exchanges': {},
+           'currencies': {}, 'ticker_and_share_id_by_cik': {}}
     try:
         with get_db_connection() as conn:
             with conn.cursor(cursor_factory=DictCursor) as cur:
                 # Countries
                 cur.execute('SELECT name, id FROM countries;')
-                ans = {'countries': {}, 'sectors': {}, 'industries': {}, 'share_types': {}, 'exchanges': {},
-                       'currencies': {}, 'ticker_and_share_id_by_cik': {}}
                 for record in cur:
                     ans['countries'][record['name']] = record['id']
                 # Sectors

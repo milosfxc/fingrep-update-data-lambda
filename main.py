@@ -1,16 +1,13 @@
 import concurrent
-import sys
 import time
 import aws_service
+import clickhouse_service
 from config import logger, update_fundamentals, update_existing_tickers_1m_timeframe
 import pandas as pd
 from datetime import datetime, timezone, timedelta, UTC
-from sshtunnel import BaseSSHTunnelForwarderError
 import config
 import db_ops
 import fingrep_service
-from ConnType import DBLocation
-from SSHTunnelManager import SSHTunnelManager
 from db_ops import get_existing_tickers, get_banned_tickers, insert_new_ticker, alter_d_timeframe_triggers
 from fingrep_service import fetch_and_update_market_metrics
 from utils import get_utc_date
@@ -20,7 +17,6 @@ from concurrent.futures import ThreadPoolExecutor
 
 def get_stock_data():
     print(get_utc_date(days=config.days))
-    alter_d_timeframe_triggers(full='ENABLE', compact='DISABLE')
     # Get existing tickers, banned tickers and new daily data
     existing_tickers = get_existing_tickers()
     banned_tickers = get_banned_tickers()
@@ -72,42 +68,32 @@ def get_stock_data():
                     counter += 1
                     if config.s3_upload and counter % config.s3_upload_limit == 0:
                         aws_service.update_s3_bucket()
-        # Update RSI for existing tickers
-        fingrep_service.update_rsi_existing_tickers()
-
-        # Update market breadth
-        if not config.mb_historical:
-            db_ops.update_market_breadth(get_utc_date(days=config.days))
-        else:
-            for i in range(100, 0, -1):
-                date_str = datetime.now(timezone.utc) - timedelta(days=i)
-                date_str = date_str.strftime("%Y-%m-%d")
-                db_ops.update_market_breadth(date_str) # todo s3 bucket
-
-        # Stock splits check
-        tickers_split = fingrep_service.get_splits()
-        if tickers_split:
-            existing_tickers_set = set(existing_tickers)
-            common_tickers = [ticker for ticker in tickers_split if ticker in existing_tickers_set]
-            for ticker in common_tickers:
-                ticker_id = existing_tickers[ticker]
-                if db_ops.delete_aggregate_bars(ticker_id):
-                    date_from = datetime.now(UTC).date() - timedelta(days=365 * config.years)
-                    fingrep_service.get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
-                    fingrep_service.update_market_metrics_shares_outstanding(ticker, ticker_id)
-                    aws_service.add_share_id(ticker_id, 'split')
-                else:
-                    logger.error(f"Couldn't delete and reinsert ticker {ticker} for stock split.")
-
+    # Update market breadth
+    if not config.mb_historical:
+        db_ops.update_market_breadth(get_utc_date(days=config.days))
+    else:
+        for i in range(100, 0, -1):
+            date_str = datetime.now(timezone.utc) - timedelta(days=i)
+            date_str = date_str.strftime("%Y-%m-%d")
+            db_ops.update_market_breadth(date_str) # todo s3 bucket
+    # Stock splits
+    for ticker in fingrep_service.get_splits():
+        if ticker_id := existing_tickers.get(ticker):
+            date_end = datetime.now(UTC).date()
+            date_start = date_end  - timedelta(days=365 * config.years)
+            fingrep_service.get_and_insert_aggregated_bars(ticker, ticker_id, date_start, 5000)
+            fingrep_service.insert_minute_bars_for_ticker(ticker, ticker_id, date_end - timedelta(days=config.days_1m), date_end)
+            if config.market_metrics:  # todo remove this line when you implement the clickhouse market metrics solution.
+                fingrep_service.update_market_metrics_shares_outstanding(ticker, ticker_id)
     # Update fundamentals
     if update_fundamentals:
         update_fundamentals()
-    # Add missing shares to the remote
-    if config.missing_remote_shares:
-        [aws_service.add_share_id(i, 'new') for i in config.missing_remote_shares]
-    # Upload data to S3
-    if config.s3_upload:
-        aws_service.update_s3_bucket()
+    # # Add missing shares to the remote
+    # if config.missing_remote_shares:
+    #     [aws_service.add_share_id(i, 'new') for i in config.missing_remote_shares]
+    # # Upload data to S3
+    # if config.s3_upload:
+    #     aws_service.update_s3_bucket()
 
 
 

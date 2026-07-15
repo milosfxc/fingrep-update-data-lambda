@@ -63,6 +63,8 @@ def _upsert_small_dataset(data: List[Dict[str, Any]], table_name: str, conflict_
         raise
 
 
+
+
 def _upsert_large_dataset(data: List[Dict[str, Any]], table_name: str, conflict_columns: set) -> bool:
     """For large datasets - uses COPY + temp table"""
     try:
