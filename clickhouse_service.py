@@ -1,17 +1,18 @@
-import numpy as np
 import pandas as pd
-from pyarrow import chunked_array
-
+import config
 from config import logger
 from clickhouse_driver import Client
 from datetime import date, timedelta
+from config import DB_PASSWORD, DB_NAME
+
+
 def clickhouse_local_connection():
     return Client(
         host='localhost',
         port=9000,
-        user='fingrep_admin',
-        password='leo',
-        database='fingrep'
+        user='fingrep_writer',
+        password=DB_PASSWORD,
+        database= DB_NAME
     )
 
 
@@ -22,8 +23,8 @@ def upsert_grouped_daily(df: pd.DataFrame, table_name: str):
     df = df.where(pd.notnull(df), None)
     try:
         with clickhouse_local_connection() as conn:
-            filter_keys = ', '.join(f"({share_id}, '{date}')"
-                for share_id, date in zip(df['share_id'], df['date']))
+            filter_keys = ', '.join(f"({share_id}, '{date_obj}')"
+                for share_id, date_obj in zip(df['share_id'], df['date']))
             # Check if any rows already exist
             check_query = f"""
                 SELECT 1
@@ -68,7 +69,7 @@ def repair_d_aggregates(df: pd.DataFrame, timeframes: list[str]):
         logger.exception(f"#repair_timeframe: {e}")
 
 
-def upsert_list(data: list[dict], table_name: str):
+def upsert_daily_aggregates(data: list[dict], table_name: str, share_id: int):
     if not data:
         return
 
@@ -90,12 +91,13 @@ def upsert_list(data: list[dict], table_name: str):
 
             # Delete duplicates
             if is_duplicate:
-                conn.execute("SET mutations_sync = 1")
-                delete_query = f"""
-                    ALTER TABLE {table_name}
-                    DELETE WHERE (share_id, date) IN ({','.join(keys)})
-                """
-                conn.execute(delete_query)
+                # conn.execute("SET mutations_sync = 1")
+                # delete_query = f"""
+                #     ALTER TABLE {table_name}
+                #     DELETE WHERE (share_id, date) IN ({','.join(keys)})
+                # """
+                # conn.execute(delete_query)
+                delete_aggregate_bars(share_id, ['timeframe_d', 'timeframe_w_states', 'timeframe_m_states', 'timeframe_q_states'])
 
             # Insert rows
             columns = list(data[0].keys())
@@ -125,15 +127,16 @@ def delete_aggregate_bars(share_id: int, table_name: str | list[str]) -> bool:
         )
         return False
 
-def insert_timeframe_1m(insert_list:list[dict], date_obj: date = None, share_id: int = None):
+def insert_timeframe_1m(insert_list:list[dict], date_obj: date = None, share_id: int = None, check_duplicates: bool = True):
     if not insert_list:
         return
     try:
         with clickhouse_local_connection() as conn:
             # Check existing rows
-            is_duplicated = conn.execute(f'SELECT 1 FROM timeframe_1m WHERE {f"toDate(datetime) = '{date_obj}'" if date_obj else f"share_id = {share_id}"} LIMIT 1')
-            if is_duplicated:
-                repair_1m_aggregates(date_obj, share_id)
+            if check_duplicates:
+                is_duplicated = conn.execute(f'SELECT 1 FROM timeframe_1m WHERE {f"toDate(datetime) = '{date_obj}'" if date_obj else f"share_id = {share_id}"} LIMIT 1')
+                if is_duplicated:
+                    repair_1m_aggregates(date_obj, share_id)
             # Insert timeframes in batches
             for i in range(0, len(insert_list), 5000):
                 insert_list_chunk = insert_list[i:i + 5000]
@@ -158,6 +161,7 @@ def insert_timeframe_1m(insert_list:list[dict], date_obj: date = None, share_id:
         logger.error(f"#insert_timeframe_1m: {error}")
         raise
 
+
 def repair_1m_aggregates(date_obj: date = None, share_id: int = None):
     try:
         with clickhouse_local_connection() as conn:
@@ -166,7 +170,7 @@ def repair_1m_aggregates(date_obj: date = None, share_id: int = None):
             if date_obj:
                 datetime_start = f'{date_obj} 00:00:00'
                 datetime_end = f'{date_obj + timedelta(days=1)} 00:00:00'
-                for tf in ['1m', '5m', '15m', '30m', '1h', 'da']:
+                for tf in ['1m', '2m', '3m', '5m', '10m', '15m', '30m', '1h', '2h', '3h', '4h', 'da']:
                     if tf.endswith(('m', 'h')):
                         table_suffix, datetime_col = ('1m', 'datetime') if tf == '1m' else (f'{tf}_states', 'timeframe_start')
                         conn.execute(f"ALTER TABLE timeframe_{table_suffix} DELETE WHERE {datetime_col} >= '{datetime_start}' AND {datetime_col} < '{datetime_end}'")
@@ -183,7 +187,6 @@ def repair_1m_aggregates(date_obj: date = None, share_id: int = None):
 
     except Exception as e:
         logger.exception(f"#repair_timeframe: {e}")
-
 
 
 def delete_duplicate_keys(table_name: str, share_ids: list[int], date: str):
@@ -211,14 +214,56 @@ def delete_duplicate_keys(table_name: str, share_ids: list[int], date: str):
         logger.error(f"#delete_duplicate_keys: {e}")
 
 
-# conn.execute("SET mutations_sync = 1")
-# # Remove old timeframes to prevent duplicates
-# datetime_start = f'{date_obj} 00:00:00'
-# datetime_end = f'{date_obj + timedelta(days=1)} 00:00:00'
-# for tf in ['1m', '2m', '3m', '5m', '10m', '15m', '30m', '1h', '2h', '3h', '4h', 'da']:  # todo 'wa', 'ma', 'qa'
-#     if tf.endswith(('m', 'h')):
-#         table_suffix, datetime_col = ('1m', 'datetime') if tf == '1m' else (f'{tf}_states', 'timeframe_start')
-#         conn.execute(
-#             f"ALTER TABLE timeframe_{table_suffix} DELETE WHERE {datetime_col} >= '{datetime_start}' AND {datetime_col} < '{datetime_end}'")
-#     else:
-#         conn.execute(f"ALTER TABLE timeframe_{tf}_states DELETE WHERE timeframe_start = '{date_obj}'")
+def refresh_shares_info_from_postgres():
+    try:
+        insert_stmt = f"""
+        INSERT INTO fingrep.shares_info
+        SELECT
+            share_id,
+            cik,
+            composite_figi,
+            homepage_url,
+            ipo_date,
+            shares_outstanding,
+            weighted_shares_outstanding
+        FROM postgresql(
+            'localhost:{config.DB_PORT}',
+            '{config.DB_NAME}',
+            'shares_info',
+            '{config.DB_USER}',
+            '{config.DB_PASSWORD}'
+        );
+        """
+        with clickhouse_local_connection() as conn:
+            conn.execute('TRUNCATE TABLE fingrep.shares_info')
+            conn.execute(insert_stmt)
+    except Exception as e:
+        logger.error(f"#refresh_shares_info_from_postgres: {e}")
+
+def refresh_shares_from_postgres():
+    try:
+        insert_stmt = f"""
+        INSERT INTO fingrep.shares
+        SELECT
+            id,
+            name,
+            ticker,
+            country_id,
+            exchange_id,
+            industry_id,
+            sector_id,
+            share_type_id
+        FROM postgresql(
+            'localhost:{config.DB_PORT}',
+            '{config.DB_NAME}',
+            'shares',
+            '{config.DB_USER}',
+            '{config.DB_PASSWORD}'
+        );
+        """
+        with clickhouse_local_connection() as conn:
+            conn.execute('TRUNCATE TABLE fingrep.shares')
+            conn.execute(insert_stmt)
+    except Exception as e:
+        logger.error(f"#refresh_shares_info_from_postgres: {e}")
+

@@ -389,7 +389,7 @@ def insert_new_ticker(shares, shares_info):
                 return shares_info['share_id']
     except psycopg2.Error as e:
         # Rollback will happen automatically if an error occurs
-        logger.error(f"insert_new_ticker_exception_block_1 - for ticker {shares.get('ticker')}: {e}")
+        logger.error(f"insert_new_ticker_exception_postgres - for ticker {shares.get('ticker')}: {e}")
 
 
 def update_rsi(data):

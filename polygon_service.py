@@ -1,7 +1,7 @@
 import inspect
 import os
 import urllib
-from typing import List
+from dis import code_info
 
 import requests
 from retry import retry
@@ -20,7 +20,7 @@ def request_grouped_daily_bars(date: str):
     params = {
         "adjusted": "true",
         "include_otc": "false",
-        "apiKey": os.getenv("POLYGON_API_KEY")
+        "apiKey": config.MASSIVE_API_KEY
     }
 
     try:
@@ -42,7 +42,7 @@ def request_all_tickers(date: str):
     all_tickers = []
     url = f"https://api.polygon.io/v3/reference/tickers?market=stocks&date={date}&active=true&order=asc&limit=1000&sort=ticker"
     params = {
-        "apiKey": os.getenv("POLYGON_API_KEY")
+        "apiKey": config.MASSIVE_API_KEY
     }
     while url:
         try:
@@ -69,7 +69,7 @@ def request_aggregate_daily_bars(ticker, date_from, limit):
     url = (f"https://api.massive.com/v2/aggs/ticker/{ticker}/range/1/day/{date_from}/{get_utc_date(days=config.days)}"
            f"?adjusted=true&sort=asc&limit={limit}")
     params = {
-        "apiKey": os.getenv("POLYGON_API_KEY")
+        "apiKey": config.MASSIVE_API_KEY
     }
 
 
@@ -98,7 +98,7 @@ def request_ticker_details_v3(ticker):
     url = f"https://api.polygon.io/v3/reference/tickers/{ticker}"
 
     params = {
-        "apiKey": os.getenv("POLYGON_API_KEY")
+        "apiKey": config.MASSIVE_API_KEY
     }
 
     method_name = inspect.currentframe().f_code.co_name
@@ -116,7 +116,7 @@ def request_ticker_details_v3(ticker):
 
     except requests.RequestException as e:
         if retry_counter >= 3:  # Only log after the third attempt
-            logger.warning(f"{method_name} - Exception occurred on the third try: {str(e)}")
+            logger.warning(f"{method_name} - Exception occurred on the third try for ticker {ticker}: {str(e)}")
             retry_counter = 0  # Reset the counter after third attempt
         raise
 
@@ -127,7 +127,7 @@ def request_splits():
 
     url = f'https://api.massive.com/stocks/v1/splits?execution_date={get_utc_date(days=config.days)}&sort=execution_date.desc'
     params = {
-        "apiKey": os.getenv("POLYGON_API_KEY")
+        "apiKey": config.MASSIVE_API_KEY
     }
     try:
         response = requests.get(url, params=params)
@@ -152,7 +152,7 @@ def request_short_interest(tickers: list, date:str, date_operator:str = ''):
     tickers_encoded = urllib.parse.quote(','.join(tickers))
     url = f"https://api.polygon.io/stocks/v1/short-interest?settlement_date{date_operator}={date}&ticker.any_of={tickers_encoded}&limit=25000&sort=settlement_date.asc"
     params = {
-        "apiKey": os.getenv("POLYGON_API_KEY")
+        "apiKey": config.MASSIVE_API_KEY
     }
     try:
         response = requests.get(url, params=params)
@@ -179,7 +179,7 @@ def request_short_volume(tickers: list, date:str, date_operator:str = ''):
     tickers_encoded = urllib.parse.quote(','.join(tickers))
     url = f"https://api.massive.com/stocks/v1/short-volume?ticker.any_of={tickers_encoded}&date{date_operator}={date}&limit=25000&sort=date.asc"
     params = {
-        "apiKey": os.getenv("POLYGON_API_KEY")
+        "apiKey": config.MASSIVE_API_KEY
     }
     try:
         response = requests.get(url, params=params)
@@ -224,7 +224,7 @@ def request_aggregate_bars(ticker: str, timeframe: str, multiplier: int, date_st
     )
 
     params = {
-        "apiKey": os.getenv("POLYGON_API_KEY")
+        "apiKey": config.MASSIVE_API_KEY
     }
 
     method_name = inspect.currentframe().f_code.co_name
@@ -251,4 +251,9 @@ def request_aggregate_bars(ticker: str, timeframe: str, multiplier: int, date_st
 
 
 def create_ws_client(subscriptions: list,feed: Feed, market: Market, raw: bool) -> WebSocketClient:
-    return WebSocketClient(api_key= os.getenv("POLYGON_API_KEY"), subscriptions = subscriptions, feed=feed, market=market,raw=raw)
+    return WebSocketClient(api_key= config.MASSIVE_API_KEY, subscriptions = subscriptions, feed=feed, market=market,raw=raw)
+
+
+
+
+

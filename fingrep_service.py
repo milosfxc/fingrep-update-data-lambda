@@ -3,12 +3,15 @@ from datetime import datetime, date, timezone, timedelta
 import inspect
 from time import perf_counter
 from typing import List
+
+import numpy as np
 from massive.websocket.models import WebSocketMessage, Feed, Market
 import pandas as pd
 import requests
 import aws_service
 import clickhouse_service
 import config
+import polars as pl
 import db_ops
 import finviz
 from fundamentals_service import get_company_fundamentals
@@ -52,22 +55,23 @@ def get_and_insert_aggregated_bars(ticker, ticker_id, date_from, limit):
 
     data = polygon_service.request_aggregate_daily_bars(ticker, date_from, limit)
     df_aggregated_daily = pd.DataFrame(data['results'])
-
     # Prepare for insert
     df_aggregated_daily['v'] = df_aggregated_daily['v'].astype(int)
     df_aggregated_daily['share_id'] = ticker_id
+    # vwap is optional, but needs to be present for the clickhouse insert statement
+    if 'vw' not in df_aggregated_daily.columns: df_aggregated_daily['vw'] = np.nan
     df_aggregated_daily.drop(['n', 'otc'], axis=1, errors='ignore', inplace=True)
     df_aggregated_daily.rename(columns={'v': 'volume', 'o': 'open', 'c': 'close', 'h': 'high', 'l': 'low', 'vw': 'vwap', 't': 'date'}, inplace=True)
-    df_aggregated_daily.dropna(subset=['open', 'high', 'low'], inplace=True)
-    df_aggregated_daily['volume'] = df_aggregated_daily['volume'].fillna(0)
+    df_aggregated_daily.dropna(subset=['close'], inplace=True)
+    df_aggregated_daily[['open', 'high', 'low']] = df_aggregated_daily[['open', 'high', 'low']].fillna(df_aggregated_daily['close'])
     df_aggregated_daily['date'] = pd.to_datetime(df_aggregated_daily['date'], unit='ms').dt.date
-    cols = [c for c in utils.magnified_columns_new if c in df_aggregated_daily.columns]
+    if set(df_aggregated_daily.columns) != utils.timeframe_d_columns:
+        logger.critical(f'Ticker {ticker} had only the following columns: {df_aggregated_daily.columns}')
     if config.scale_factor > 1:
-        df_aggregated_daily[cols] = df_aggregated_daily[cols] * config.scale_factor
-    if len(cols) < 7:
-        logger.warning(f"Ticker {ticker} had only the following columns: {cols}")
-    # Insert into database
-    clickhouse_service.upsert_grouped_daily(df_aggregated_daily, 'timeframe_d')
+        df_aggregated_daily[utils.scaled_columns] = df_aggregated_daily[utils.scaled_columns] * config.scale_factor
+    else:
+        # Insert into database
+        clickhouse_service.upsert_daily_aggregates(df_aggregated_daily.to_dict(orient='records'), 'timeframe_d', ticker_id)
 
 
 def insert_grouped_daily_bars(df):
@@ -76,7 +80,7 @@ def insert_grouped_daily_bars(df):
     df['id'] = df['id'].astype(int)
     df.rename(columns={'v': 'volume', 'o': 'open', 'c': 'close', 'h': 'high', 'l': 'low', 'id': 'share_id', 'vw': 'vwap'}, inplace=True)
     if config.scale_factor > 1:
-        df[utils.magnified_columns_existing] = df[utils.magnified_columns_existing] * config.scale_factor
+        df[utils.scaled_columns] = df[utils.scaled_columns] * config.scale_factor
     clickhouse_service.upsert_grouped_daily(df, 'timeframe_d')
 
 
@@ -108,20 +112,20 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
         return
     # Insert ticker
     ticker_id = db_ops.insert_new_ticker(shares_data, shares_info_data)
-    # Append to ids for s3
-    aws_service.add_share_id(ticker_id, 'new')
+    if not ticker_id: return
     # Starter plan required for 2+ years historical data
     date_from = datetime.utcnow().replace(tzinfo=timezone.utc).date() - timedelta(days=365 * config.years)
     # Daily timeframe data
     get_and_insert_aggregated_bars(ticker, ticker_id, date_from, 5000)
     # 1m timeframe data
-    if config.insert_new_tickers_1m_timeframe:
-        insert_minute_bars_for_ticker(ticker, ticker_id, get_utc_date(config.days + config.days_1m), get_utc_date(config.days))
+    if config.ENABLE_INSERT_NEW_TICKERS_1M_TIMEFRAME:
+        insert_minute_bars_for_ticker(ticker, ticker_id, get_utc_date(config.days + config.days_1m, as_str=False), get_utc_date(config.days, as_str=False))
     # Update market metrics
-    fetch_and_insert_market_metrics(ticker, ticker_id)
+    if config.ENABLE_MARKET_METRICS:
+        fetch_and_insert_market_metrics(ticker, ticker_id)
     # Fundamental data and trade info
     cik = shares_info_data.get('cik')
-    if config.insert_fundamentals and cik is not None and ticker_id is not None and shares_data.get('share_type_id') not in(6, 8):
+    if config.ENABLE_INSERT_FUNDAMENTALS and cik is not None and ticker_id is not None and shares_data.get('share_type_id') not in(6, 8):
         get_company_fundamentals(ticker, ticker_id, config.report_start_date)
 
 
@@ -129,6 +133,14 @@ def get_new_ticker_data_and_insert(ticker, finviz_df):
 def extract_ticker_details_v3(ticker_details, finviz_data):
     shares_outstanding = ticker_details.get('share_class_shares_outstanding')
     weighted_shares_outstanding = ticker_details.get('weighted_shares_outstanding')
+    # SIC
+    sector_id = db_ops.get_cached_foreign_keys()['sectors'].get(finviz_data.get('sector'))
+    industry_id = db_ops.get_cached_foreign_keys()['industries'].get(finviz_data.get('industry'))
+    country_id = db_ops.get_cached_foreign_keys()['countries'].get(finviz_data.get('country'))
+    if not sector_id and finviz_data.get('sector'): logger.error(f'Update sectors table for {finviz_data['sector']}')
+    if not industry_id and finviz_data.get('industry'): logger.error(f'Update industries table for {finviz_data['industry']}')
+    if not country_id and finviz_data.get('country'): logger.error(f'Update countries table for {finviz_data['country']}')
+
     ticker_data = {
         'ticker': ticker_details.get('ticker'),
         'cik': ticker_details.get('cik'),
@@ -140,9 +152,9 @@ def extract_ticker_details_v3(ticker_details, finviz_data):
         'composite_figi': ticker_details.get('composite_figi'),
         'shares_outstanding': shares_outstanding * config.scale_factor if is_number(shares_outstanding) else None,
         'weighted_shares_outstanding': weighted_shares_outstanding * config.scale_factor if is_number(weighted_shares_outstanding) else None,
-        'sector_id': db_ops.get_cached_foreign_keys()['sectors'].get(finviz_data.get('sector')),
-        'industry_id': db_ops.get_cached_foreign_keys()['industries'].get(finviz_data.get('industry')),
-        'country_id': db_ops.get_cached_foreign_keys()['countries'].get(finviz_data.get('country'))
+        'sector_id': sector_id,
+        'industry_id': industry_id,
+        'country_id': country_id
     }
 
     shares = {key: value for key, value in ticker_data.items() if
@@ -230,7 +242,7 @@ def fetch_and_insert_market_metrics(ticker:str, ticker_id:int):
                 keys_to_add={'share_id': ticker_id},
                 rename={'total_volume': 'f_volume'}
             )
-            clickhouse_service.upsert_list(sv_list,'market_metrics')
+            upsert_data_smart(sv_list,'market_metrics')
 
     except Exception as e:
         logger.error(f"insert_market_metrics couldn't insert market metrics for ticker/share_id {ticker}/{ticker_id}: {e}")
@@ -299,26 +311,49 @@ def _build_bar_dict(ohlcv_dict: dict, share_id: int, bar_datetime: datetime, mar
     }
 
 
-def insert_minute_bars_for_date(tickers: dict[str,int], date_obj: date):
+def insert_minute_bars_for_date(tickers: dict[str,int], date_obj: date, flat_file: bool):
     premarket_open_utc, market_open_utc, market_close_utc, aftermarket_close_utc = _get_utc_market_hours(date_obj)
-    date_start = str(int(premarket_open_utc.timestamp() * 1000))
-    date_end = str(int(aftermarket_close_utc.timestamp() * 1000))
+    date_start = int(premarket_open_utc.timestamp() * 1000)
+    date_end = int(aftermarket_close_utc.timestamp() * 1000)
     insert_list = []
-    for ticker, share_id in tickers.items():
-        data = polygon_service.request_aggregate_bars(ticker=ticker, timeframe="minute", multiplier=1, date_start=date_start, date_end=date_end, limit=50000)
-        if data is None or 'results' not in data: continue
-        for ohlcv_dict in data['results']:
-            bar_datetime = datetime.fromtimestamp(ohlcv_dict['t'] / 1000, timezone.utc).replace(tzinfo=None)
-            insert_dict = _build_bar_dict(ohlcv_dict, share_id,bar_datetime, market_open_utc, market_close_utc)
-            insert_list.append(insert_dict)
-    clickhouse_service.insert_timeframe_1m(insert_list, date_obj)
+    if flat_file:
+        df = aws_service.get_minute_aggregates(date_obj)
+        if df.is_empty():
+            logger.error(f'Could not obtain flat data for date {date_obj}.')
+            return
+        df = df.with_columns(pl.col('ticker').replace_strict(tickers, default=None).alias('share_id')).filter(pl.col('share_id').is_not_null())
+        df = df.with_columns(pl.from_epoch('window_start', time_unit='ns').alias('datetime'))
+        df = df.with_columns(
+            pl.col('datetime').dt.strftime("%H%M").cast(pl.UInt16).alias('time'),
+            pl.col('volume').cast(pl.UInt64),
+            pl.lit(0).cast(pl.Float32).alias('vwap'),
+            pl.when(pl.col('datetime') < market_open_utc.replace(tzinfo=None)).then(0).when(pl.col('datetime') < market_close_utc.replace(tzinfo=None)).then(1).otherwise(2).cast(pl.UInt8).alias('session')
+        )
+        df = df.drop(['ticker', 'window_start', 'transactions'])
+        df = df.sort(['share_id', 'datetime'])
+        clickhouse_service.insert_timeframe_1m(insert_list=df.to_dicts(), date_obj=date_obj, check_duplicates=True)
+    else:
+        check_duplicate = True
+        for ticker, share_id in tickers.items():
+            data = polygon_service.request_aggregate_bars(ticker=ticker, timeframe="minute", multiplier=1, date_start=date_start, date_end=date_end, limit=50000)
+            if data is None or 'results' not in data: continue
+            for ohlcv_dict in data['results']:
+                bar_datetime = datetime.fromtimestamp(ohlcv_dict['t'] / 1000, timezone.utc).replace(tzinfo=None)
+                insert_dict = _build_bar_dict(ohlcv_dict, share_id,bar_datetime, market_open_utc, market_close_utc)
+                insert_list.append(insert_dict)
+            if len(insert_list) > 10000:
+                clickhouse_service.insert_timeframe_1m(insert_list=insert_list, date_obj=date_obj,
+                                                       check_duplicates=check_duplicate)
+                check_duplicate = False
+                insert_list.clear()
+        clickhouse_service.insert_timeframe_1m(insert_list=insert_list, date_obj=date_obj, check_duplicates=check_duplicate)
 
 
 def insert_minute_bars_for_ticker(ticker: str, share_id: int, date_start: date, date_end: date):
     date_iter = date_start
     insert_list = []
     # Loop over working days
-    while date_iter <= date_end:
+    while date_iter < date_end:
         if date_iter.weekday() <= 4:
             # UTC market hours schedule
             premarket_open_utc, market_open_utc, market_close_utc, aftermarket_close_utc = _get_utc_market_hours(date_iter)
@@ -335,35 +370,6 @@ def insert_minute_bars_for_ticker(ticker: str, share_id: int, date_start: date, 
     # Insert data
     if insert_list:
         clickhouse_service.insert_timeframe_1m(insert_list=insert_list, share_id=share_id)
-
-
-# def run_aggregates_stream(subscription: str):
-#     agg_dict = {}
-#     last_flush_time = datetime.now(timezone.utc)
-#     premarket_open_utc, market_open_utc, market_close_utc, aftermarket_close_utc = _get_utc_market_hours(get_utc_date(days=0,as_str=False))
-#     existing_tickers = db_ops.get_existing_tickers()
-#
-#     def _handle_aggregates(msgs: List[WebSocketMessage]):
-#         nonlocal last_flush_time
-#         for m in msgs:
-#             share_id =  existing_tickers.get(m.symbol)
-#             if share_id is None: continue
-#             ts = m.start_timestamp // 1000
-#             bar_datetime = datetime.fromtimestamp(ts, timezone.utc).replace(tzinfo=None)
-#             insert_dict = _build_bar_dict({'o': m.open, 'h': m.high, 'l': m.low, 'c': m.close, 'v': m.volume, 'vw': m.vwap}, share_id, bar_datetime, market_open_utc, market_close_utc)
-#             agg_dict[(share_id, ts)] = insert_dict
-#         # Insert into database
-#         if (datetime.now(timezone.utc) - last_flush_time).total_seconds() > 30 and agg_dict: # instead of checking for 30 seconds can set a defuse timer to execute function within 10 seconds if it's not already started to defuse?
-#             insert_list = sorted(agg_dict.values(), key=lambda r: r['datetime'])
-#             start_time = datetime.now(timezone.utc)
-#             clickhouse_service.insert_timeframe_1m(insert_list)
-#             elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
-#             print(f"Inserted {len(insert_list)} rows in {elapsed:.2f} seconds")
-#             agg_dict.clear()
-#             last_flush_time = datetime.now(timezone.utc)
-#     # Run stream
-#     ws = polygon_service.create_ws_client([subscription], Feed.Delayed, Market.Stocks, False)
-#     ws.run(handle_msg=_handle_aggregates)
 
 
 def run_aggregates_stream(subscription: str):
@@ -385,7 +391,7 @@ def run_aggregates_stream(subscription: str):
             start = perf_counter()
 
             try:
-                clickhouse_service.insert_timeframe_1m(insert_list)
+                clickhouse_service.insert_timeframe_1m(insert_list=insert_list, check_duplicates=False)
                 elapsed = perf_counter() - start
                 print(f"Inserted {len(insert_list)} rows in {elapsed:.2f} seconds at {datetime.now()}")
                 agg_dict.clear()

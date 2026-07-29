@@ -4,7 +4,7 @@ from typing import List, Dict, Any
 import uuid
 from io import StringIO
 import csv
-from psycopg2.extras import execute_batch, execute_values
+from psycopg2.extras import execute_values
 from config import logger
 
 def upsert_data_smart(data: List[Dict[str, Any]], table_name: str, conflict_columns: set,

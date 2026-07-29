@@ -3,14 +3,18 @@ import io
 import os
 from datetime import timezone, datetime
 from typing import List, Dict, Any
-import boto3
-from botocore.exceptions import ClientError
 import config
 import db_ops
 import utils
 from config import logger, aws_logger
 from time import sleep
 from math import ceil
+import gzip
+import boto3
+from botocore.config import Config
+from botocore.client import BaseClient
+import polars as pl
+from botocore.exceptions import ClientError
 share_ids = {'new': set(), 'split': set(), 'fundamentals': set()}
 
 def get_s3_client():
@@ -36,7 +40,7 @@ def update_s3_bucket():
     fund_ids = list(fund_ids) if (fund_ids := share_ids['new'].union(share_ids['fundamentals'])) else None
     data = {'d_timeframe.bulk': db_ops.query_data_as_csv('d_timeframe', {'date': utils.get_utc_date(config.days)}),
             'market_metrics.bulk': db_ops.query_data_as_csv('market_metrics', {'date': utils.get_utc_date(config.days)}),
-            'market_breadth': db_ops.query_data_as_csv('market_breadth', None if config.mb_historical else {'date': utils.get_utc_date(config.days)}),
+            'market_breadth': db_ops.query_data_as_csv('market_breadth', None if config.ENABLE_MB_HISTORICAL else {'date': utils.get_utc_date(config.days)}),
             'shares': db_ops.query_data_as_csv('shares', {'id': new_ids}) if new_ids else None,
             'shares_info': db_ops.query_data_as_csv('shares_info', {'share_id': new_ids}) if new_ids else None,
             'd_timeframe': db_ops.query_data_as_csv('d_timeframe', {'share_id': list(ids)})  if (ids := share_ids['new'].union(share_ids['split'])) else None,
@@ -166,3 +170,41 @@ def read_csv_from_file(file_path: str) -> List[Dict[str, Any]]:
 
     except Exception as e:
         raise
+
+
+def get_s3_massive_client() -> BaseClient:
+
+    # Create a client with your session and specify the endpoint
+    return boto3.client(
+        aws_access_key_id=config.MASSIVE_S3_KEY_ID,
+        aws_secret_access_key=config.MASSIVE_S3_SECRET_KEY,
+        region_name='us-east-1',
+        service_name='s3',
+        endpoint_url='https://files.massive.com',
+        config=Config(signature_version='s3v4')
+    )
+
+def get_minute_aggregates(date_obj) -> pl.DataFrame:
+    try:
+        s3_client = get_s3_massive_client()
+        response = s3_client.get_object(
+            Bucket='flatfiles',
+            Key=f'us_stocks_sip/minute_aggs_v1/{date_obj.year}/{date_obj.strftime("%m")}/{date_obj}.csv.gz',
+        )
+        with gzip.GzipFile(fileobj=response['Body']) as file:
+            return pl.read_csv(source=file,
+                schema_overrides={
+                'ticker': pl.String,
+                'volume': pl.Float32,
+                'open': pl.Float32,
+                'close': pl.Float32,
+                'high': pl.Float32,
+                'low': pl.Float32,
+                'window_start': pl.Int64,
+                'transactions': pl.UInt32,
+                }
+            )
+
+    except ClientError as e:
+        logger.error(f'Could not read minute aggregates for date {date_obj} from S3: {e}')
+        return pl.DataFrame()

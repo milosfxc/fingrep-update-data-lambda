@@ -1,9 +1,7 @@
-import os
-
 import config
 from config import telegram_logger
 import requests
-BOT_TOKEN = "8814004485:AAFzEEresE2-w8tnCMjaeLFaiGEfZPV_lIo"
+import os
 
 
 def post_trade_alert(image_path: str | None, message: str, link: str, channel_id: str):

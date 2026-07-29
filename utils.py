@@ -24,14 +24,15 @@ def remove_stock_suffix(input_string):
     pattern = r'(Class A Common Stock|Common Stock|Class A Ordinary Shares|Ordinary Shares|Ordinary Share)\s*(\(.+?\))?$'
     return re.sub(pattern, '', input_string).strip()
 
-def get_utc_date(days: int = 0, as_str: bool = True) -> Union[str, datetime]:
-    current_utc_date = datetime.now(timezone.utc) - timedelta(days=days)
+def get_utc_date(days: int = 0, as_str: bool = True) -> Union[str, date]:
+    current_utc_date = (datetime.now(timezone.utc) - timedelta(days=days)).date()
     return current_utc_date.strftime("%Y-%m-%d") if as_str else current_utc_date
 
 
-# Magnification
-magnified_columns_existing = ['open', 'high', 'low', 'close', 'volume', 'vwap']
-magnified_columns_new = ['open', 'high', 'low', 'close', 'volume', 'vwap', 'rsi']
+# Scale
+scaled_columns = ['open', 'high', 'low', 'close', 'volume', 'vwap']
+# D timeframe columns
+timeframe_d_columns = {'share_id', 'date', 'open', 'high', 'low', 'close', 'volume', 'vwap'}
 
 # Non-monetary columns
 non_monetary_columns = ['share_id', 'date', 'report_type', 'filing_date', 'report_period_id', 'currency_id']

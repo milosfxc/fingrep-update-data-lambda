@@ -2,13 +2,13 @@ import concurrent
 import time
 import aws_service
 import clickhouse_service
-from config import logger, update_fundamentals, update_existing_tickers_1m_timeframe
+from config import logger, ENABLE_UPDATE_FUNDAMENTALS, ENABLE_UPDATE_EXISTING_TICKERS_1M_TIMEFRAME
 import pandas as pd
 from datetime import datetime, timezone, timedelta, UTC
 import config
 import db_ops
 import fingrep_service
-from db_ops import get_existing_tickers, get_banned_tickers, insert_new_ticker, alter_d_timeframe_triggers
+from db_ops import get_existing_tickers, get_banned_tickers, alter_d_timeframe_triggers
 from fingrep_service import fetch_and_update_market_metrics
 from utils import get_utc_date
 from fundamentals_service import update_fundamentals
@@ -30,10 +30,10 @@ def get_stock_data():
         fingrep_service.insert_grouped_daily_bars(df_grouped_daily_existing.copy())
         print(time.perf_counter() - startt_time)
         # Update 1m timeframe for existing tickers
-        if update_existing_tickers_1m_timeframe:
-            fingrep_service.insert_minute_bars_for_date(existing_tickers, get_utc_date(config.days))
+        if ENABLE_UPDATE_EXISTING_TICKERS_1M_TIMEFRAME:
+            fingrep_service.insert_minute_bars_for_date(existing_tickers, get_utc_date(config.days,as_str=False), config.ENABLE_FLAT_FILE_1M_TIMEFRAME)
         # Update market metrics existing tickers
-        if config.market_metrics:
+        if config.ENABLE_MARKET_METRICS:
             fetch_and_update_market_metrics(existing_tickers)
         # Data frame for new tickers
         df_grouped_daily_new = df_grouped_daily[df_grouped_daily['id'].isna()]
@@ -44,11 +44,11 @@ def get_stock_data():
         foreign_keys_db = db_ops.get_foreign_keys()
         finviz_df = pd.read_csv('data/finviz_sic.csv')
         # Get new tickers in threaded environment
-        if config.insert_new_tickers:
+        if config.ENABLE_INSERT_NEW_TICKERS:
             if config.multi_threaded:
                 with ThreadPoolExecutor(max_workers=config.threads_number) as executor:
                     futures = []
-                    for i, new_ticker in enumerate(tickers_list[:config.insert_new_tickers_limit]):
+                    for i, new_ticker in enumerate(tickers_list[:config.INSERT_NEW_TICKERS_LIMIT]):
                         future = executor.submit(fingrep_service.get_new_ticker_data_and_insert,new_ticker, finviz_df)
                         futures.append(future)
                         time.sleep(config.thread_delay)
@@ -56,22 +56,20 @@ def get_stock_data():
                     for i, future in enumerate(concurrent.futures.as_completed(futures)):
                         try:
                             future.result()  # This waits for completion and re-raises exceptions
-                            print(f"Completed {i + 1}/{config.insert_new_tickers_limit}")
+                            print(f"Completed {i + 1}/{config.INSERT_NEW_TICKERS_LIMIT}")
                         except Exception as e:
                             print(f"Task {i + 1} failed: {e}")
             else:
                 for new_ticker in tickers_list:
-                    if counter == config.insert_new_tickers_limit:
+                    if counter == config.INSERT_NEW_TICKERS_LIMIT:
                         break
                     fingrep_service.get_new_ticker_data_and_insert(new_ticker, finviz_df)
                     print(f'Inserted new ticker {counter}')
                     counter += 1
-                    if config.s3_upload and counter % config.s3_upload_limit == 0:
-                        aws_service.update_s3_bucket()
     # Update market breadth
-    if not config.mb_historical:
+    if config.ENABLE_MB and not config.ENABLE_MB_HISTORICAL:
         db_ops.update_market_breadth(get_utc_date(days=config.days))
-    else:
+    elif config.ENABLE_MB:
         for i in range(100, 0, -1):
             date_str = datetime.now(timezone.utc) - timedelta(days=i)
             date_str = date_str.strftime("%Y-%m-%d")
@@ -83,26 +81,20 @@ def get_stock_data():
             date_start = date_end  - timedelta(days=365 * config.years)
             fingrep_service.get_and_insert_aggregated_bars(ticker, ticker_id, date_start, 5000)
             fingrep_service.insert_minute_bars_for_ticker(ticker, ticker_id, date_end - timedelta(days=config.days_1m), date_end)
-            if config.market_metrics:  # todo remove this line when you implement the clickhouse market metrics solution.
+            if config.ENABLE_MARKET_METRICS:  # todo remove this line when you implement the clickhouse market metrics solution.
                 fingrep_service.update_market_metrics_shares_outstanding(ticker, ticker_id)
     # Update fundamentals
-    if update_fundamentals:
+    if ENABLE_UPDATE_FUNDAMENTALS:
         update_fundamentals()
-    # # Add missing shares to the remote
-    # if config.missing_remote_shares:
-    #     [aws_service.add_share_id(i, 'new') for i in config.missing_remote_shares]
-    # # Upload data to S3
-    # if config.s3_upload:
-    #     aws_service.update_s3_bucket()
+    # Refresh data from postgresql
+    clickhouse_service.refresh_shares_from_postgres()
+    clickhouse_service.refresh_shares_info_from_postgres()
 
 
 
 if __name__ == "__main__":
-    try:
-        get_stock_data()
-    except Exception as e:
-        logger.error(f"get_stock_market_data error occurred: {e}")
-    finally:
-        alter_d_timeframe_triggers(full='DISABLE', compact='ENABLE')
+
+    get_stock_data()
+
 
 
