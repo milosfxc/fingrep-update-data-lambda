@@ -1,3 +1,5 @@
+import datetime
+
 import pandas as pd
 import config
 from config import logger
@@ -181,10 +183,6 @@ def repair_1m_aggregates(date_obj: date = None, share_id: int = None):
                 for tf in ['1m', '5m', '15m', '30m', '1h', 'da']:
                     table_suffix = '1m' if tf == '1m' else f'{tf}_states'
                     conn.execute(f"ALTER TABLE timeframe_{table_suffix} DELETE WHERE share_id = {share_id}")
-
-
-
-
     except Exception as e:
         logger.exception(f"#repair_timeframe: {e}")
 
@@ -267,3 +265,11 @@ def refresh_shares_from_postgres():
     except Exception as e:
         logger.error(f"#refresh_shares_info_from_postgres: {e}")
 
+
+def query_by_template(template: str, template_params: dict):
+    try:
+        with clickhouse_local_connection() as conn:
+            template = template.format(**template_params)
+            return conn.execute(template)
+    except Exception as e:
+        logger.error(f'query_by_template: {e}')
