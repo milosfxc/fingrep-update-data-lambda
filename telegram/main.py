@@ -1,10 +1,10 @@
 import datetime
 
-import clickhouse_service
+import utils
+from clickhouse_service import query_by_template
 from config import FINGREP_1m_CHANNEL_ID
-from telegram.sql_templates import conv3_gap10
+from telegram.sql_templates import conv3_gap10, conv3, top_5p_change_conv3
 from telegram_service import post_trade_alert
-from sql_templates import conv3, top_5p_change_conv3
 from datetime import timedelta, timezone
 from db_ops import fetch_ticker_id_map, get_max_temporal
 
@@ -43,7 +43,7 @@ def top_5p_change_30m_conv3():
         dt_utc = dt_utc.replace(minute=00, second=0, microsecond=0)
     dt_start_str = (dt_utc - timedelta(days=60)).strftime("%Y-%m-%d %H:%M:%S")
     dt_end_str = dt_utc.strftime("%Y-%m-%d %H:%M:%S")
-    ticker_ids = clickhouse_service.query_by_template(template=top_5p_change_conv3, template_params={'timeframe': '30m', 'dt_start_str': dt_start_str, 'dt_end_str': dt_end_str})
+    ticker_ids = query_by_template(template=top_5p_change_conv3, template_params={'timeframe': '30m', 'dt_start_str': dt_start_str, 'dt_end_str': dt_end_str})
     if ticker_ids:
         link_text = f'{len(ticker_ids)} tickers found'
         for i in ticker_ids:

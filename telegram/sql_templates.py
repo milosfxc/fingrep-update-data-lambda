@@ -77,9 +77,9 @@ top_5p_change_conv3 = """
             lag(tf.close, 2) OVER (PARTITION BY tf.share_id ORDER BY tf.datetime) AS close_2,
             lag(tf.close, 3) OVER (PARTITION BY tf.share_id ORDER BY tf.datetime) AS close_3,
             tf.high,
-            tf.low,
             lag(tf.high, 1) OVER (PARTITION BY tf.share_id ORDER BY tf.datetime) AS high_1,
             lag(tf.high, 2) OVER (PARTITION BY tf.share_id ORDER BY tf.datetime) AS high_2,
+            tf.low,
             lag(tf.low, 1) OVER (PARTITION BY tf.share_id ORDER BY tf.datetime) AS low_1,
             lag(tf.low, 2) OVER (PARTITION BY tf.share_id ORDER BY tf.datetime) AS low_2,
             lag(tf.volume, 2) OVER (PARTITION BY tf.share_id ORDER BY tf.datetime) AS volume_2
